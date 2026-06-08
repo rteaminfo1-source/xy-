@@ -1,0 +1,12 @@
+# Включение модуля переопределения URL
+RewriteEngine On
+
+# Отключение кэширования
+<IfModule mod_headers.c>
+    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header always set Pragma "no-cache"
+    Header always set Expires "Thu, 01 Jan 1970 00:00:00 GMT"
+</IfModule>
+
+# Редирект всех запросов на rteam.info
+# RewriteRule ^ https://rteam.info

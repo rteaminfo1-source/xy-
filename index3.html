@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Электронный журнал и дневник — Главная</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f4f6f8; margin: 0; padding: 0; color: #333; }
+        
+        /* Шапка */
+        header { background-color: #006838; color: white; padding: 0; box-shadow: 0 2px 5px rgba(0,0,0,0.2); position: sticky; top: 0; z-index: 100; }
+        .header-main { max-width: 1200px; margin: 0 auto; padding: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 28px; font-weight: bold; display: flex; align-items: center; gap: 15px; text-transform: uppercase; letter-spacing: 1px; }
+        .logo span { color: #f1c40f; }
+        nav { display: flex; gap: 30px; }
+        nav a { color: white; text-decoration: none; font-weight: 600; font-size: 16px; text-transform: uppercase; padding-bottom: 5px; border-bottom: 2px solid transparent; transition: 0.3s; cursor: pointer; }
+        nav a:hover, nav a.active { border-bottom: 2px solid #f1c40f; color: #f1c40f; }
+
+        /* Баннер и карточки */
+        .hero { background: white; border-bottom: 1px solid #ddd; padding: 60px 20px; text-align: center; }
+        .hero h1 { color: #006838; margin: 0 0 15px 0; font-size: 32px; }
+        .hero p { font-size: 18px; color: #666; max-width: 800px; margin: 0 auto; }
+        .container { max-width: 1200px; margin: 40px auto; padding: 0 20px; display: flex; gap: 30px; flex-wrap: wrap; justify-content: center; }
+        .role-card { background: white; border-top: 4px solid #006838; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); padding: 30px; width: 100%; max-width: 500px; }
+        .role-card h2 { color: #006838; margin-top: 0; font-size: 22px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
+        .role-card ul { padding-left: 20px; color: #555; line-height: 1.8; margin-bottom: 25px; }
+        .btn-primary { display: inline-block; background-color: #006838; color: white; padding: 10px 25px; text-decoration: none; border-radius: 4px; font-weight: bold; transition: background 0.2s; text-align: center; width: 100%; }
+        .btn-primary:hover { background-color: #004d2a; }
+        .btn-gold { background-color: #f1c40f; color: #333; }
+        .btn-gold:hover { background-color: #d4ac0d; }
+        footer { text-align: center; padding: 30px; color: #666; font-size: 14px; background: white; border-top: 1px solid #ddd; margin-top: 40px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-main">
+            <div class="logo">Rteam <span>Журнал</span></div>
+            <nav>
+                <a href="index3.html" class="active">Главная</a>
+                <a href="subscribe.html">Подписка PLUS</a>
+                <a href="https://t.me/Roma_07b" target="_blank">Техподдержка</a>
+				<a href="https://telegra.ph/Politika-konfidencialnosti-04-01-26" target="_blank">Политика конфиденциальности</a>
+				<a href="https://telegra.ph/Polzovatelskoe-soglashenie-04-01-19" target="_blank">Пользовательское соглашение</a>
+				<a href="https://rteam.info" target="_blank">На сайт создателей</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="hero">
+        <h1>Единая образовательная платформа</h1>
+        <p>Система электронных журналов и дневников для учреждений образования. Удобный инструмент для педагогов, учащихся и их родителей.</p>
+    </div>
+
+    <div class="container">
+        <div class="role-card">
+            <h2>Учреждениям образования</h2>
+            <ul>
+                <li>Ведение классных журналов в электронном виде</li>
+                <li>Автоматический расчет среднего балла учащихся</li>
+                <li>Выставление четвертных и итоговых оценок</li>
+            </ul>
+            <a href="journal.html" class="btn-primary">Вход для педагогов</a>
+        </div>
+        <div class="role-card">
+            <h2>Учащимся и родителям</h2>
+            <ul>
+                <li>Просмотр расписания и домашних заданий</li>
+                <li>Контроль текущих и итоговых отметок</li>
+                <li>Расширенная статистика с подпиской PLUS</li>
+            </ul>
+            <a href="journal.html" class="btn-primary" style="margin-bottom: 10px;">Вход в дневник</a>
+            <a href="subscribe.html" class="btn-primary btn-gold">Узнать о подписке PLUS</a>
+        </div>
+    </div>
+
+    <footer>© 2026 Система электронных журналов. Все права защищены.</footer>
+
+</body>
+</html>

@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Школьный журнал — рейтинг класса</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, 'Segoe UI', 'Arial', sans-serif;
+        }
+        body {
+            background: #eef2f7;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            background: white;
+            border-radius: 28px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.1);
+            padding: 20px 25px 35px;
+            overflow-x: auto;
+        }
+        h1 {
+            color: #1e3c72;
+        }
+        .auth-panel, .teacher-panel {
+            background: #e9f0fa;
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .card {
+            background: white;
+            border-radius: 24px;
+            padding: 18px 22px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            flex: 1;
+            min-width: 250px;
+        }
+        input, button, select, textarea {
+            padding: 10px 14px;
+            margin: 6px 0;
+            border-radius: 60px;
+            border: 1px solid #ccc;
+            font-size: 1rem;
+        }
+        button {
+            background: #1e6f3f;
+            color: white;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0f5a34;
+        }
+        button:disabled {
+            background: #999;
+            cursor: not-allowed;
+        }
+        .logout-btn {
+            background: #8b5a2b;
+        }
+        .status {
+            background: #fff9e0;
+            border-left: 8px solid #ffb347;
+            padding: 10px 18px;
+            border-radius: 30px;
+            margin-bottom: 20px;
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+            position: relative;
+            border-radius: 16px;
+            border: 1px solid #cbd5e1;
+        }
+        table {
+            width: max-content;
+            min-width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        th, td {
+            border: 1px solid #cbd5e1;
+            padding: 10px 8px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        th {
+            background: #1e3c72;
+            color: white;
+        }
+        
+        th:first-child, td:first-child {
+            position: sticky;
+            left: 0;
+            background-color: #1e3c72;
+            z-index: 2;
+        }
+        td:first-child {
+            background-color: #f9f5e3;
+            font-weight: bold;
+            text-align: left;
+            min-width: 160px;
+        }
+        th:nth-child(2), td:nth-child(2) {
+            position: sticky;
+            left: 160px;
+            background-color: #1e3c72;
+            z-index: 2;
+        }
+        td:nth-child(2) {
+            background-color: #f0f0f0;
+        }
+        th:nth-child(3), td:nth-child(3) {
+            position: sticky;
+            left: 270px;
+            background-color: #1e3c72;
+            z-index: 2;
+        }
+        td:nth-child(3) {
+            background-color: #f9f9f9;
+        }
+        
+        .grade-select {
+            width: 80px;
+            padding: 5px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+        .grade-select:disabled {
+            background: #e0e0e0;
+            cursor: not-allowed;
+        }
+        .comment-input {
+            width: 120px;
+            font-size: 11px;
+            padding: 4px;
+            border-radius: 10px;
+            margin-top: 4px;
+        }
+        .comment-input:disabled {
+            background: #e0e0e0;
+        }
+        .topic-input, .hw-input {
+            width: 150px;
+            font-size: 11px;
+            padding: 5px;
+            border-radius: 12px;
+        }
+        .badge {
+            background: #2c7da0;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 50px;
+        }
+        .student-avg {
+            background: #e0f2e9;
+            border-radius: 20px;
+            padding: 3px 8px;
+            display: inline-block;
+        }
+        .quarter-grade {
+            background: #f3d382;
+            border-radius: 20px;
+            padding: 3px 10px;
+            display: inline-block;
+        }
+        .quarter-tabs {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        .quarter-tab {
+            padding: 8px 20px;
+            background: #e0e7f0;
+            border-radius: 40px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .quarter-tab.active {
+            background: #1e3c72;
+            color: white;
+        }
+        .success-msg {
+            background: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 20px;
+            margin-top: 10px;
+        }
+        .error-msg {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 20px;
+            margin-top: 10px;
+        }
+        .btn-primary {
+            background: #2c5f8a;
+        }
+        .btn-warning {
+            background: #c98b2e;
+        }
+        .locked-badge {
+            background: #b33;
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 20px;
+            margin-left: 5px;
+        }
+        .modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 25px;
+            border-radius: 28px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            z-index: 1000;
+            min-width: 400px;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+        .modal input, .modal textarea {
+            width: 100%;
+            margin: 10px 0;
+        }
+        .lesson-type-select {
+            width: 100%;
+            padding: 8px;
+            border-radius: 12px;
+            margin: 10px 0;
+        }
+        .lesson-type-badge {
+            display: inline-block;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 20px;
+            margin-left: 5px;
+        }
+        .lesson-type-контрольная { background: #ffcccc; color: #b00; }
+        .lesson-type-самостоятельная { background: #ccffcc; color: #070; }
+        .lesson-type-лабораторная { background: #ccccff; color: #00b; }
+        .lesson-type-диктант { background: #ffffcc; color: #880; }
+        .lesson-type-сочинение { background: #ffe0cc; color: #a50; }
+        .lesson-type-зачёт { background: #d4f1f9; color: #036; }
+        .lesson-type-обычный { background: #e0e0e0; color: #333; }
+        
+        .grade-cell-blue {
+            background-color: #e3f2fd !important;
+        }
+        
+        .grade-red {
+            color: #d32f2f;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .grade-yellow {
+            color: #f5a623;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .grade-green {
+            color: #2e7d32;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .grade-gray {
+            color: #888;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        /* Стили для рейтинга */
+        .rating-section {
+            margin-top: 25px;
+            background: #f0f4fa;
+            border-radius: 20px;
+            padding: 15px;
+        }
+        .rating-table {
+            width: 100%;
+            font-size: 13px;
+        }
+        .rating-table th, .rating-table td {
+            padding: 8px 12px;
+            text-align: center;
+        }
+        .rating-table .medal-1 { background: #ffd700; color: #333; font-weight: bold; }
+        .rating-table .medal-2 { background: #c0c0c0; color: #333; font-weight: bold; }
+        .rating-table .medal-3 { background: #cd7f32; color: #333; font-weight: bold; }
+        
+        footer {
+            margin-top: 30px;
+            font-size: 12px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<div class="container" id="app">
+    <h1>📚 Школьный журнал — рейтинг класса</h1>
+    <div id="authSection"></div>
+    <div id="mainContent"></div>
+    <footer>🏆 Рейтинг класса — внизу журнала у учителя, у ученика — рядом с четвертной</footer>
+</div>
+
+<script>
+    let schoolData = { teachers: [] };
+
+    function loadData() {
+        const raw = localStorage.getItem('schoolJournalRating');
+        if (raw) {
+            try {
+                schoolData = JSON.parse(raw);
+            } catch(e) { console.error(e); }
+        }
+        if (!schoolData.teachers) schoolData.teachers = [];
+    }
+    function saveData() {
+        localStorage.setItem('schoolJournalRating', JSON.stringify(schoolData));
+    }
+
+    let currentUser = null;
+
+    function saveSession() {
+        sessionStorage.setItem('journalSessionRating', JSON.stringify(currentUser));
+    }
+    function loadSession() {
+        const sess = sessionStorage.getItem('journalSessionRating');
+        if (sess) {
+            try {
+                currentUser = JSON.parse(sess);
+            } catch(e) { currentUser = null; }
+        }
+    }
+
+    function getCurrentTeacher() {
+        if (!currentUser || currentUser.type !== 'teacher') return null;
+        return schoolData.teachers.find(t => t.login === currentUser.teacherLogin);
+    }
+
+    function getCurrentClass() {
+        if (!currentUser) return null;
+        if (currentUser.type === 'teacher') {
+            const teacher = getCurrentTeacher();
+            return teacher?.classes.find(c => c.className === currentUser.className);
+        } else if (currentUser.type === 'student') {
+            for (let teacher of schoolData.teachers) {
+                const cls = teacher.classes.find(c => c.className === currentUser.className);
+                if (cls) return cls;
+            }
+        }
+        return null;
+    }
+
+    function getCurrentQuarterData() {
+        const currentClass = getCurrentClass();
+        if (!currentClass) return null;
+        const quarter = currentUser?.quarter || 1;
+        
+        if (!currentClass.quarters) {
+            currentClass.quarters = {
+                1: { lessons: [], students: [], locked: {} },
+                2: { lessons: [], students: [], locked: {} },
+                3: { lessons: [], students: [], locked: {} },
+                4: { lessons: [], students: [], locked: {} }
+            };
+            saveData();
+        }
+        
+        if (!currentClass.quarters[quarter]) {
+            currentClass.quarters[quarter] = { lessons: [], students: [], locked: {} };
+            saveData();
+        }
+        
+        if (!currentClass.quarters[quarter].locked) {
+            currentClass.quarters[quarter].locked = {};
+            saveData();
+        }
+        
+        return currentClass.quarters[quarter];
+    }
+
+    function roundHalfUp(num) {
+        return Math.round(num * 2) / 2;
+    }
+
+    function getDisplayValue(value) {
+        if (value === null || value === undefined) return '—';
+        if (value === 'cleared') return '❌';
+        if (value === 'absent') return 'Н';
+        return value;
+    }
+
+    function getGradeColorClass(value) {
+        if (value === null || value === undefined) return 'grade-gray';
+        if (value === 'cleared' || value === 'absent') return 'grade-gray';
+        const num = parseFloat(value);
+        if (isNaN(num)) return 'grade-gray';
+        if (num >= 1 && num <= 4) return 'grade-red';
+        if (num >= 5 && num <= 7) return 'grade-yellow';
+        if (num >= 8 && num <= 10) return 'grade-green';
+        return 'grade-gray';
+    }
+
+    function computeStudentStats(gradesArray) {
+        const valid = [];
+        for (let g of gradesArray) {
+            if (g !== null && g !== 'cleared' && g !== 'absent') {
+                const num = parseFloat(g);
+                if (!isNaN(num) && num >= 0 && num <= 10) {
+                    valid.push(num);
+                }
+            }
+        }
+        const avg = valid.length === 0 ? null : valid.reduce((a,b)=>a+b,0)/valid.length;
+        const count = valid.length;
+        let quarter = null;
+        if (avg !== null) {
+            quarter = Math.round(roundHalfUp(avg));
+        }
+        return { avg: avg === null ? '—' : avg.toFixed(1), count, quarter: quarter === null ? '—' : quarter, avgRaw: avg };
+    }
+
+    // Функция для получения рейтинга класса (массив учеников, отсортированных по среднему баллу)
+    function getClassRating(qData) {
+        if (!qData || qData.students.length === 0) return [];
+        
+        const studentsWithAvg = [];
+        for (let student of qData.students) {
+            const grades = qData.lessons.map(l => l.grades[student.name]);
+            const { avgRaw } = computeStudentStats(grades);
+            studentsWithAvg.push({
+                name: student.name,
+                avg: avgRaw,
+                avgDisplay: avgRaw === null ? '—' : avgRaw.toFixed(1)
+            });
+        }
+        
+        // Сортируем по убыванию среднего балла (null в конец)
+        studentsWithAvg.sort((a, b) => {
+            if (a.avg === null && b.avg === null) return 0;
+            if (a.avg === null) return 1;
+            if (b.avg === null) return -1;
+            return b.avg - a.avg;
+        });
+        
+        // Добавляем место
+        let currentRank = 1;
+        let prevAvg = null;
+        for (let i = 0; i < studentsWithAvg.length; i++) {
+            if (i > 0 && studentsWithAvg[i].avg !== prevAvg) {
+                currentRank = i + 1;
+            }
+            studentsWithAvg[i].rank = currentRank;
+            prevAvg = studentsWithAvg[i].avg;
+        }
+        
+        return studentsWithAvg;
+    }
+
+    function isControlLesson(lessonType) {
+        return lessonType === 'контрольная';
+    }
+
+    function getLessonTypeIcon(type) {
+        const icons = {
+            'контрольная': '📝',
+            'самостоятельная': '✏️',
+            'лабораторная': '🔬',
+            'диктант': '📄',
+            'сочинение': '✍️',
+            'зачёт': '📋',
+            'обычный': '📖'
+        };
+        return icons[type] || '📖';
+    }
+
+    function getLessonTypeName(type) {
+        const names = {
+            'контрольная': 'Контрольная',
+            'самостоятельная': 'Самостоятельная',
+            'лабораторная': 'Лабораторная',
+            'диктант': 'Диктант',
+            'сочинение': 'Сочинение',
+            'зачёт': 'Зачёт',
+            'обычный': 'Урок'
+        };
+        return names[type] || 'Урок';
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    function getGradeSelect(lessonDate, studentName, currentValue, isLocked) {
+        let selectHtml = `<select class="grade-select" data-date="${lessonDate}" data-student="${studentName}" ${isLocked ? 'disabled' : ''} style="width:85px;">`;
+        selectHtml += `<option value="__empty__" ${(currentValue === null || currentValue === undefined || currentValue === '') ? 'selected' : ''}>—</option>`;
+        selectHtml += `<option value="__cleared__" ${currentValue === 'cleared' ? 'selected' : ''}>❌ X</option>`;
+        selectHtml += `<option value="__absent__" ${currentValue === 'absent' ? 'selected' : ''}>Н</option>`;
+        for(let g = 0; g <= 10; g++) {
+            selectHtml += `<option value="${g}" ${currentValue === g ? 'selected' : ''}>${g}</option>`;
+        }
+        selectHtml += `</select>`;
+        return selectHtml;
+    }
+
+    function showAddLessonModal() {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <h3>📅 Добавить урок</h3>
+            <label>Дата:</label>
+            <input type="date" id="lessonDate" value="${new Date().toISOString().slice(0,10)}">
+            <label>Тип урока:</label>
+            <select id="lessonType" class="lesson-type-select">
+                <option value="обычный">📖 Обычный урок</option>
+                <option value="контрольная">📝 Контрольная работа</option>
+                <option value="самостоятельная">✏️ Самостоятельная работа</option>
+                <option value="лабораторная">🔬 Лабораторная работа</option>
+                <option value="диктант">📄 Диктант</option>
+                <option value="сочинение">✍️ Сочинение/изложение</option>
+                <option value="зачёт">📋 Зачёт</option>
+            </select>
+            <label>Тема урока:</label>
+            <textarea id="lessonTopic" rows="2" placeholder="Введите тему урока..."></textarea>
+            <label>Домашнее задание:</label>
+            <textarea id="lessonHomework" rows="2" placeholder="Введите домашнее задание..."></textarea>
+            <div style="display:flex; gap:10px; margin-top:15px;">
+                <button id="modalConfirmBtn" style="flex:1;">✅ Добавить</button>
+                <button id="modalCancelBtn" style="flex:1; background:#8b5a2b;">❌ Отмена</button>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        document.body.appendChild(modal);
+        
+        const confirmBtn = document.getElementById('modalConfirmBtn');
+        const cancelBtn = document.getElementById('modalCancelBtn');
+        
+        const closeModal = () => {
+            overlay.remove();
+            modal.remove();
+        };
+        
+        confirmBtn.onclick = () => {
+            const date = document.getElementById('lessonDate').value;
+            const lessonType = document.getElementById('lessonType').value;
+            const topic = document.getElementById('lessonTopic').value;
+            const homework = document.getElementById('lessonHomework').value;
+            if (!date) { alert("Выберите дату"); return; }
+            const qd = getCurrentQuarterData();
+            if (!qd) return;
+            if (qd.lessons.find(l => l.date === date)) { alert("Урок на эту дату уже есть!"); closeModal(); return; }
+            const newLesson = { date, lessonType, topic, homework, grades: {}, comments: {} };
+            for (let s of qd.students) newLesson.grades[s.name] = null;
+            qd.lessons.push(newLesson);
+            qd.lessons.sort((a,b) => new Date(a.date) - new Date(b.date));
+            saveData();
+            closeModal();
+            render();
+        };
+        cancelBtn.onclick = closeModal;
+    }
+
+    function unlockStudent(studentName) {
+        const qd = getCurrentQuarterData();
+        if (!qd) return;
+        qd.locked[studentName] = false;
+        saveData();
+        render();
+    }
+
+    function unlockAll() {
+        const qd = getCurrentQuarterData();
+        if (!qd) return;
+        for (let student of qd.students) qd.locked[student.name] = false;
+        saveData();
+        render();
+        alert("✅ Блокировка снята со всех учеников");
+    }
+
+    function calcSingleQuarter(studentName) {
+        const qd = getCurrentQuarterData();
+        if (!qd) return;
+        const student = qd.students.find(s => s.name === studentName);
+        if (!student) return;
+        const grades = qd.lessons.map(l => l.grades[student.name]);
+        const { quarter } = computeStudentStats(grades);
+        if (quarter !== '—') {
+            qd.locked[student.name] = true;
+            saveData();
+            alert(`✅ Четвертная оценка для ${studentName}: ${quarter}. Отметки заблокированы!`);
+        } else {
+            alert(`❌ У ученика ${studentName} недостаточно оценок`);
+        }
+        render();
+    }
+
+    function calcAllQuarters() {
+        const qd = getCurrentQuarterData();
+        if (!qd) return;
+        let msg = "📊 Четвертные оценки:\n\n";
+        for (let student of qd.students) {
+            const grades = qd.lessons.map(l => l.grades[student.name]);
+            const { quarter } = computeStudentStats(grades);
+            msg += `${student.name}: ${quarter}\n`;
+            if (quarter !== '—') qd.locked[student.name] = true;
+        }
+        saveData();
+        alert(msg + "\n\n🔒 Отметки заблокированы!");
+        render();
+    }
+
+    function render() {
+        const authDiv = document.getElementById('authSection');
+        const mainDiv = document.getElementById('mainContent');
+        
+        if (!currentUser) {
+            authDiv.innerHTML = `
+                <div class="auth-panel">
+                    <div class="card">
+                        <h3>👩‍🏫 Регистрация учителя</h3>
+                        <input type="text" id="teacherLogin" placeholder="Логин">
+                        <input type="password" id="teacherPass" placeholder="Пароль">
+                        <button id="regTeacherBtn">Зарегистрировать</button>
+                    </div>
+                    <div class="card">
+                        <h3>🧑‍🎓 Вход ученика</h3>
+                        <input type="text" id="studentName" placeholder="Имя и фамилия">
+                        <input type="text" id="classCodeInput" placeholder="Код класса">
+                        <button id="joinStudentBtn">Войти</button>
+                        <div id="studentLoginMsg"></div>
+                    </div>
+                    <div class="card">
+                        <h3>🔐 Вход учителя</h3>
+                        <input type="text" id="teacherLoginExisting" placeholder="Логин">
+                        <input type="password" id="teacherPassExisting" placeholder="Пароль">
+                        <button id="loginTeacherBtn">Войти</button>
+                    </div>
+                </div>
+            `;
+            mainDiv.innerHTML = `<div class="status">⭐ Создайте класс, затем выберите его в списке</div>`;
+            attachAuthEvents();
+            return;
+        }
+        
+        if (currentUser.type === 'teacher') {
+            renderTeacherPanel();
+        } else {
+            renderStudentPanel();
+        }
+    }
+
+    function renderTeacherPanel() {
+        const authDiv = document.getElementById('authSection');
+        const mainDiv = document.getElementById('mainContent');
+        const teacher = getCurrentTeacher();
+        
+        authDiv.innerHTML = `
+            <div class="teacher-panel">
+                <div><span class="badge">👩‍🏫 ${escapeHtml(currentUser.teacherLogin)}</span></div>
+                <div>
+                    <select id="classSelectTeacher">
+                        <option value="">-- Выберите класс --</option>
+                        ${teacher?.classes.map(c => `<option value="${escapeHtml(c.className)}" ${currentUser.className === c.className ? 'selected' : ''}>${escapeHtml(c.className)} (код: ${c.classCode})</option>`).join('')}
+                    </select>
+                    <button id="createClassBtn">➕ Новый класс</button>
+                    <button id="logoutBtn" class="logout-btn">Выйти</button>
+                </div>
+            </div>
+        `;
+        
+        const currentClass = getCurrentClass();
+        if (!currentClass) {
+            mainDiv.innerHTML = `<div class="status">📌 Создайте класс или выберите существующий из списка</div>`;
+            attachTeacherEvents();
+            return;
+        }
+        
+        const quarter = currentUser.quarter || 1;
+        let qData = getCurrentQuarterData();
+        
+        let tabs = `<div class="quarter-tabs">`;
+        for (let q of [1,2,3,4]) {
+            tabs += `<div class="quarter-tab ${quarter === q ? 'active' : ''}" data-quarter="${q}">${q} четверть</div>`;
+        }
+        tabs += `</div>`;
+        
+        let header = `<tr><th>Ученик</th><th>Средний балл</th><th>Четвертная<br>
+            <button id="calcAllQuarterBtn" class="btn-primary" style="font-size:11px; padding:4px 8px;">🎓 Выставить всем</button>
+            <button id="unlockAllBtn" class="btn-warning" style="font-size:11px; padding:4px 8px; margin-top:5px;">🔓 Отменить всем</button>
+        </th>`;
+        for (let lesson of qData.lessons) {
+            const typeIcon = getLessonTypeIcon(lesson.lessonType);
+            const typeName = getLessonTypeName(lesson.lessonType);
+            const isControl = isControlLesson(lesson.lessonType);
+            const thStyle = isControl ? 'background-color:#90caf9; color:#000;' : '';
+            header += `<th style="min-width:200px; ${thStyle}">
+                        ${typeIcon} ${lesson.date}<br>
+                        <span style="font-size:10px;">${typeName}</span><br>
+                        <textarea class="topic-input" data-date="${lesson.date}" rows="2" style="width:150px;" placeholder="Тема урока">${escapeHtml(lesson.topic)}</textarea><br>
+                        <textarea class="hw-input" data-date="${lesson.date}" rows="2" style="width:150px;" placeholder="Домашнее задание">${escapeHtml(lesson.homework)}</textarea>
+                       </th>`;
+        }
+        header += `</tr>`;
+        
+        let rows = '';
+        for (let student of qData.students) {
+            const allGrades = qData.lessons.map(l => l.grades[student.name]);
+            const { avg, count, quarter: qGrade } = computeStudentStats(allGrades);
+            const isLocked = qData.locked[student.name] === true;
+            
+            rows += `<tr>
+                        <td>📖 ${escapeHtml(student.name)}${isLocked ? '<span class="locked-badge">🔒</span>' : ''}</td>
+                        <td><span class="student-avg">${avg} (${count})</span></td>
+                        <td>
+                            <span class="quarter-grade">${qGrade}</span>
+                            <div style="display:flex; gap:5px; margin-top:5px; justify-content:center;">
+                                <button class="quarter-btn" data-student="${escapeHtml(student.name)}" style="font-size:10px; padding:3px 8px;">📊</button>
+                                <button class="unlock-btn" data-student="${escapeHtml(student.name)}" style="font-size:10px; padding:3px 8px; background:#c98b2e;">🔓</button>
+                            </div>
+                        </td>`;
+            for (let lesson of qData.lessons) {
+                const val = lesson.grades[student.name];
+                const comment = lesson.comments?.[student.name] || '';
+                const isControl = isControlLesson(lesson.lessonType);
+                const cellClass = isControl ? 'grade-cell-blue' : '';
+                rows += `<td class="${cellClass}" style="min-width:150px;">
+                            ${getGradeSelect(lesson.date, student.name, val, isLocked)}
+                            <input type="text" class="comment-input" data-date="${lesson.date}" data-student="${student.name}" 
+                                   placeholder="Комментарий" value="${escapeHtml(comment || '')}" ${isLocked ? 'disabled' : ''}>
+                            </td>`;
+            }
+            rows += `</tr>`;
+        }
+        
+        // ===== РЕЙТИНГ КЛАССА (ВНИЗУ ТАБЛИЦЫ) =====
+        const rating = getClassRating(qData);
+        let ratingHtml = `<div class="rating-section"><h3>🏆 Рейтинг класса (${currentClass.className})</h3>
+            <table class="rating-table" style="width:100%; border-collapse:collapse;">
+                <thead><tr style="background:#1e3c72; color:white;"><th>Место</th><th>Ученик</th><th>Средний балл</th></tr></thead>
+                <tbody>`;
+        for (let r of rating) {
+            let medalClass = '';
+            if (r.rank === 1) medalClass = 'medal-1';
+            else if (r.rank === 2) medalClass = 'medal-2';
+            else if (r.rank === 3) medalClass = 'medal-3';
+            ratingHtml += `<tr class="${medalClass}"><td><strong>${r.rank}</strong></td><td>${escapeHtml(r.name)}</td><td>${r.avgDisplay}</td></tr>`;
+        }
+        ratingHtml += `</tbody></table></div>`;
+        
+        mainDiv.innerHTML = `
+            ${tabs}
+            <div style="margin:10px 0;">
+                <strong>📖 ${escapeHtml(currentClass.className)}</strong>
+                <span style="background:#ffd966; padding:5px 12px; border-radius:30px;">🔑 КОД: ${currentClass.classCode}</span>
+                <button id="addLessonBtn" class="btn-primary">➕ Добавить урок</button>
+                <button id="addStudentBtn">➕ Ученик</button>
+                <button id="refreshBtn">🔄</button>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>${header}</thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+            ${ratingHtml}
+            <div class="status">💡 <strong>Меню:</strong> 0–10, Н (пропуск), ❌ (удалить)<br>
+            🔵 <strong>Синие ячейки</strong> — контрольные работы<br>
+            📌 <strong>Колонки "Ученик", "Средний балл", "Четвертная" закреплены</strong><br>
+            🏆 <strong>Рейтинг класса</strong> — отсортирован по среднему баллу</div>
+        `;
+        attachTeacherEvents();
+    }
+
+    function renderStudentPanel() {
+        const authDiv = document.getElementById('authSection');
+        const mainDiv = document.getElementById('mainContent');
+        
+        const currentClass = getCurrentClass();
+        if (!currentClass) {
+            authDiv.innerHTML = `<button id="logoutBtnStudent">Выйти</button>`;
+            mainDiv.innerHTML = `<div class="status error-msg">❌ Класс не найден</div>`;
+            if (document.getElementById('logoutBtnStudent')) {
+                document.getElementById('logoutBtnStudent').onclick = () => { currentUser = null; saveSession(); render(); };
+            }
+            return;
+        }
+        
+        const quarter = currentUser.quarter || 1;
+        let qData = getCurrentQuarterData();
+        
+        let student = qData?.students.find(s => s.name === currentUser.studentName);
+        if (!student) {
+            for (let q of [1,2,3,4]) {
+                const found = currentClass.quarters[q]?.students.find(s => s.name === currentUser.studentName);
+                if (found) {
+                    student = found;
+                    qData.students.push({ name: currentUser.studentName });
+                    for (let lesson of qData.lessons) {
+                        if (lesson.grades[currentUser.studentName] === undefined) lesson.grades[currentUser.studentName] = null;
+                    }
+                    saveData();
+                    break;
+                }
+            }
+        }
+        
+        if (!student) {
+            authDiv.innerHTML = `<button id="logoutBtnStudent">Выйти</button>`;
+            mainDiv.innerHTML = `<div class="status error-msg">❌ Вас нет в этом классе. Обратитесь к учителю.</div>`;
+            if (document.getElementById('logoutBtnStudent')) {
+                document.getElementById('logoutBtnStudent').onclick = () => { currentUser = null; saveSession(); render(); };
+            }
+            return;
+        }
+        
+        authDiv.innerHTML = `
+            <div class="teacher-panel">
+                <span class="badge">🧑‍🎓 ${escapeHtml(student.name)} (${escapeHtml(currentClass.className)})</span>
+                <button id="logoutBtnStudent" class="logout-btn">Выйти</button>
+            </div>
+        `;
+        
+        let tabs = `<div class="quarter-tabs">`;
+        for (let q of [1,2,3,4]) tabs += `<div class="quarter-tab ${quarter === q ? 'active' : ''}" data-quarter="${q}">${q} четверть</div>`;
+        tabs += `</div>`;
+        
+        const allGrades = qData.lessons.map(l => l.grades[student.name]);
+        const { avg, count, quarter: qGrade } = computeStudentStats(allGrades);
+        
+        // Получаем рейтинг ученика
+        const rating = getClassRating(qData);
+        const studentRating = rating.find(r => r.name === student.name);
+        const studentRank = studentRating ? studentRating.rank : '—';
+        
+        let rows = '';
+        if (qData.lessons.length === 0) {
+            rows = `<tr><td colspan="4">📭 Уроков пока нет</td><td></td><td></td><td></td></tr>`;
+        } else {
+            for (let lesson of qData.lessons) {
+                const val = lesson.grades[student.name];
+                const comment = lesson.comments?.[student.name] || '';
+                const typeIcon = getLessonTypeIcon(lesson.lessonType);
+                const typeName = getLessonTypeName(lesson.lessonType);
+                const displayValue = getDisplayValue(val);
+                const colorClass = getGradeColorClass(val);
+                rows += `<tr>
+                            <td style="background:#e8f0fe;"><strong>${lesson.date}</strong><br><span class="lesson-type-badge lesson-type-${lesson.lessonType}">${typeIcon} ${typeName}</span></td>
+                            <td style="text-align:left;">${escapeHtml(lesson.topic) || '—'}</td>
+                            <td style="text-align:left;">${escapeHtml(lesson.homework) || '—'}</td>
+                            <td style="text-align:center;"><span class="${colorClass}">${displayValue}</span>${comment ? `<div style="font-size:11px;">💬 ${escapeHtml(comment)}</div>` : ''}</td>
+                        </tr>`;
+            }
+        }
+        
+        mainDiv.innerHTML = `
+            ${tabs}
+            <div class="status" style="background:#d4edda;">
+                🧑‍🎓 ${escapeHtml(student.name)}<br>
+                📊 Средний балл: <strong>${avg}</strong> | Отметок: ${count}<br>
+                🎓 Четвертная: <strong style="font-size:1.5rem;">${qGrade}</strong> 
+                <span style="font-size:1rem;">🏆 Место в классе: <strong>${studentRank}</strong></span>
+                ${qData.locked[student.name] ? '<br><span style="color:#b33;">🔒 Оценки заблокированы</span>' : ''}
+            </div>
+            <h3>📚 ${quarter} четверть — Электронный дневник</h3>
+            <div class="table-wrapper">
+                <table style="min-width:500px;">
+                    <thead><tr><th>Дата / Тип</th><th>Тема урока</th><th>Д/З</th><th>Оценка</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('logoutBtnStudent').onclick = () => { currentUser = null; saveSession(); render(); };
+        attachStudentTabs();
+    }
+
+    function attachAuthEvents() {
+        document.getElementById('regTeacherBtn')?.addEventListener('click', () => {
+            const login = document.getElementById('teacherLogin').value.trim();
+            const pass = document.getElementById('teacherPass').value.trim();
+            if (!login || !pass) return alert("Введите логин и пароль");
+            if (schoolData.teachers.find(t => t.login === login)) return alert("Учитель уже есть");
+            schoolData.teachers.push({ login, password: pass, classes: [] });
+            saveData();
+            alert(`Учитель ${login} зарегистрирован! Теперь создайте класс.`);
+            currentUser = { type: 'teacher', teacherLogin: login, className: null, quarter: 1 };
+            saveSession();
+            render();
+        });
+        
+        document.getElementById('joinStudentBtn')?.addEventListener('click', () => {
+            const studentName = document.getElementById('studentName').value.trim();
+            let code = document.getElementById('classCodeInput').value.trim();
+            const msgDiv = document.getElementById('studentLoginMsg');
+            if (!studentName) { msgDiv.innerHTML = `<div class="error-msg">❌ Введите имя</div>`; return; }
+            if (!code) { msgDiv.innerHTML = `<div class="error-msg">❌ Введите код</div>`; return; }
+            code = code.replace(/\s/g, '');
+            let foundClass = null;
+            for (let teacher of schoolData.teachers) {
+                const cls = teacher.classes.find(c => c.classCode === code);
+                if (cls) { foundClass = cls; break; }
+            }
+            if (!foundClass) { msgDiv.innerHTML = `<div class="error-msg">❌ Код "${code}" не найден</div>`; return; }
+            msgDiv.innerHTML = `<div class="success-msg">✅ Код верный! Класс: ${foundClass.className}</div>`;
+            if (!foundClass.quarters) {
+                foundClass.quarters = { 1: { lessons: [], students: [], locked: {} }, 2: { lessons: [], students: [], locked: {} }, 3: { lessons: [], students: [], locked: {} }, 4: { lessons: [], students: [], locked: {} } };
+            }
+            for (let q of [1,2,3,4]) {
+                if (!foundClass.quarters[q]) foundClass.quarters[q] = { lessons: [], students: [], locked: {} };
+                if (!foundClass.quarters[q].students.find(s => s.name === studentName)) {
+                    foundClass.quarters[q].students.push({ name: studentName });
+                    for (let lesson of foundClass.quarters[q].lessons) {
+                        if (lesson.grades[studentName] === undefined) lesson.grades[studentName] = null;
+                    }
+                }
+            }
+            saveData();
+            currentUser = { type: 'student', studentName, className: foundClass.className, quarter: 1 };
+            saveSession();
+            render();
+        });
+        
+        document.getElementById('loginTeacherBtn')?.addEventListener('click', () => {
+            const login = document.getElementById('teacherLoginExisting').value.trim();
+            const pass = document.getElementById('teacherPassExisting').value.trim();
+            const teacher = schoolData.teachers.find(t => t.login === login && t.password === pass);
+            if (teacher) {
+                currentUser = { type: 'teacher', teacherLogin: login, className: null, quarter: 1 };
+                saveSession();
+                render();
+            } else { alert("Неверный логин или пароль"); }
+        });
+    }
+    
+    function attachTeacherEvents() {
+        const classSelect = document.getElementById('classSelectTeacher');
+        if (classSelect) classSelect.onchange = (e) => { currentUser.className = e.target.value || null; saveSession(); render(); };
+        
+        document.getElementById('createClassBtn').onclick = () => {
+            const className = prompt("Название класса (например, 9А):");
+            if (className) {
+                const teacher = getCurrentTeacher();
+                if (teacher.classes.find(c => c.className === className)) { alert("Класс уже есть"); return; }
+                const classCode = Math.floor(100000 + Math.random() * 900000).toString();
+                teacher.classes.push({ className, classCode, quarters: { 1: { lessons: [], students: [], locked: {} }, 2: { lessons: [], students: [], locked: {} }, 3: { lessons: [], students: [], locked: {} }, 4: { lessons: [], students: [], locked: {} } } });
+                saveData();
+                currentUser.className = className;
+                saveSession();
+                render();
+                alert(`Класс "${className}" создан! Код: ${classCode}`);
+            }
+        };
+        
+        document.getElementById('addStudentBtn').onclick = () => {
+            const qd = getCurrentQuarterData();
+            if (!qd) return;
+            const name = prompt("Имя ученика (Имя Фамилия):");
+            if (name && !qd.students.find(s => s.name === name)) {
+                qd.students.push({ name });
+                for (let lesson of qd.lessons) if (lesson.grades[name] === undefined) lesson.grades[name] = null;
+                saveData();
+                render();
+            } else if (name) alert("Ученик уже есть");
+        };
+        
+        document.getElementById('addLessonBtn').onclick = showAddLessonModal;
+        document.getElementById('refreshBtn').onclick = () => render();
+        document.getElementById('logoutBtn').onclick = () => { currentUser = null; saveSession(); render(); };
+        document.getElementById('calcAllQuarterBtn').onclick = calcAllQuarters;
+        document.getElementById('unlockAllBtn').onclick = unlockAll;
+        
+        document.querySelectorAll('.topic-input').forEach(el => {
+            el.onblur = () => {
+                const qd = getCurrentQuarterData();
+                if (!qd) return;
+                const lesson = qd.lessons.find(l => l.date === el.dataset.date);
+                if (lesson) { lesson.topic = el.value; saveData(); }
+            };
+        });
+        
+        document.querySelectorAll('.hw-input').forEach(el => {
+            el.onblur = () => {
+                const qd = getCurrentQuarterData();
+                if (!qd) return;
+                const lesson = qd.lessons.find(l => l.date === el.dataset.date);
+                if (lesson) { lesson.homework = el.value; saveData(); }
+            };
+        });
+        
+        document.querySelectorAll('.grade-select').forEach(sel => {
+            sel.onchange = () => {
+                const qd = getCurrentQuarterData();
+                if (!qd) return;
+                const lesson = qd.lessons.find(l => l.date === sel.dataset.date);
+                if (lesson) {
+                    const student = sel.dataset.student;
+                    let val = sel.value;
+                    if (val === "__empty__") val = null;
+                    else if (val === "__cleared__") val = 'cleared';
+                    else if (val === "__absent__") val = 'absent';
+                    else val = parseInt(val, 10);
+                    lesson.grades[student] = val;
+                    saveData();
+                    render();
+                }
+            };
+        });
+        
+        document.querySelectorAll('.comment-input').forEach(inp => {
+            inp.onblur = () => {
+                const qd = getCurrentQuarterData();
+                if (!qd) return;
+                const lesson = qd.lessons.find(l => l.date === inp.dataset.date);
+                if (lesson) {
+                    if (!lesson.comments) lesson.comments = {};
+                    lesson.comments[inp.dataset.student] = inp.value;
+                    saveData();
+                }
+            };
+        });
+        
+        document.querySelectorAll('.quarter-btn').forEach(btn => {
+            btn.onclick = () => calcSingleQuarter(btn.dataset.student);
+        });
+        
+        document.querySelectorAll('.unlock-btn').forEach(btn => {
+            btn.onclick = () => unlockStudent(btn.dataset.student);
+        });
+        
+        attachQuarterTabs();
+    }
+    
+    function attachQuarterTabs() {
+        document.querySelectorAll('.quarter-tab').forEach(tab => {
+            tab.onclick = (e) => {
+                const q = parseInt(e.target.dataset.quarter);
+                if (currentUser) { currentUser.quarter = q; saveSession(); render(); }
+            };
+        });
+    }
+    
+    function attachStudentTabs() {
+        document.querySelectorAll('.quarter-tab').forEach(tab => {
+            tab.onclick = (e) => {
+                const q = parseInt(e.target.dataset.quarter);
+                if (currentUser) { currentUser.quarter = q; saveSession(); render(); }
+            };
+        });
+    }
+    
+    loadData();
+    loadSession();
+    render();
+</script>
+</body>
+</html>

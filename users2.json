@@ -1,0 +1,10 @@
+[
+    {
+        "username": "Roma_07b",
+        "password": "98322268",
+        "role": "admin",
+        "privilege": "Vip",
+        "strikes": 5,
+        "ban_until": "2026-06-14 20:19:41"
+    }
+]

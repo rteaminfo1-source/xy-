@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Подписка PLUS — Электронный журнал</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f4f6f8; margin: 0; padding: 0; color: #333; }
+        
+        /* Шапка */
+        header { background-color: #006838; color: white; padding: 0; box-shadow: 0 2px 5px rgba(0,0,0,0.2); position: sticky; top: 0; z-index: 100; }
+        .header-main { max-width: 1200px; margin: 0 auto; padding: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 28px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+        .logo span { color: #f1c40f; }
+        nav { display: flex; gap: 30px; }
+        nav a { color: white; text-decoration: none; font-weight: 600; font-size: 16px; text-transform: uppercase; padding-bottom: 5px; border-bottom: 2px solid transparent; transition: 0.3s; cursor: pointer; }
+        nav a:hover, nav a.active { border-bottom: 2px solid #f1c40f; color: #f1c40f; }
+
+        .container { max-width: 1200px; margin: 40px auto; padding: 0 20px; text-align: center; }
+        h1.title { color: #006838; font-size: 32px; margin-bottom: 10px; }
+        p.subtitle { color: #666; font-size: 16px; margin-bottom: 40px; }
+
+        .pricing-grid { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin-top: 25px; }
+        .price-card { background: white; border-radius: 8px; padding: 30px 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); width: 260px; display: flex; flex-direction: column; border: 2px solid transparent; transition: transform 0.3s, border-color 0.3s; position: relative; text-align: left; }
+        .price-card:hover { transform: translateY(-5px); border-color: #006838; box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+        .price-card.popular { border-color: #f1c40f; background: #fffdf3; }
+        .popular-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #f1c40f; color: #333; font-size: 11px; font-weight: bold; padding: 4px 12px; border-radius: 20px; text-transform: uppercase; }
+        .price-card h3 { color: #006838; margin: 0 0 15px 0; font-size: 20px; }
+        .price-card .price { font-size: 34px; font-weight: bold; color: #333; margin: 10px 0; }
+        .price-card .currency { font-size: 18px; color: #666; }
+        .price-card ul { list-style: none; padding: 0; margin: 20px 0; flex-grow: 1; }
+        .price-card ul li { font-size: 14px; color: #555; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .price-card ul li::before { content: "✅"; font-size: 12px; }
+        .btn-pay { background-color: #006838; color: white; font-weight: bold; border: none; padding: 12px 0; border-radius: 4px; cursor: pointer; transition: 0.2s; width: 100%; font-size: 16px; text-align: center; }
+        .btn-pay:hover { background-color: #004d2a; }
+        .btn-pay.gold { background-color: #f1c40f; color: #333; }
+        .btn-pay.gold:hover { background-color: #d4ac0d; }
+
+        .payment-info { margin-top: 50px; background: #eaf5ef; border-radius: 6px; padding: 15px 25px; display: inline-flex; align-items: center; color: #006838; font-weight: bold; border-left: 4px solid #006838; }
+        .payment-info span { color: #27ae60; background: white; padding: 3px 10px; border-radius: 4px; margin-left: 10px; border: 1px solid #27ae60; }
+        footer { text-align: center; padding: 30px; color: #666; font-size: 14px; background: white; border-top: 1px solid #ddd; margin-top: 60px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-main">
+            <div class="logo">Электронный <span>Журнал</span></div>
+            <nav>
+                <a href="index3.html">Главная</a>
+                <a href="subscribe.html" class="active">Подписка PLUS</a>
+                <a href="https://t.me/Roma_07b" target="_blank">Техподдержка</a>
+				<a href="https://telegra.ph/Politika-konfidencialnosti-04-01-26" target="_blank">Политика конфиденциальности</a>
+				<a href="https://telegra.ph/Polzovatelskoe-soglashenie-04-01-19" target="_blank">Пользовательское соглашение</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="container">
+        <h1 class="title">Подписка PLUS</h1>
+        <p class="subtitle">Откройте скрытые функции ученика: темы уроков, типы занятий и средний балл.</p>
+
+        <div class="pricing-grid">
+            <div class="price-card">
+                <h3>1 Месяц</h3>
+                <div class="price">300 <span class="currency">₽</span></div>
+                <ul><li>Средний балл</li><li>Темы уроков</li><li>Типы занятий</li></ul>
+                <button class="btn-pay" onclick="payViaPlatega(300, '1 месяц')">Оплатить</button>
+            </div>
+            <div class="price-card popular">
+                <div class="popular-badge">Популярно</div>
+                <h3>1 Год</h3>
+                <div class="price">1300 <span class="currency">₽</span></div>
+                <ul><li>Все функции PLUS</li><li>Экономия средств</li><li>Приоритетная поддержка</li></ul>
+                <button class="btn-pay gold" onclick="payViaPlatega(1300, '1 год')">Оплатить</button>
+            </div>
+            <div class="price-card">
+                <h3>Навсегда</h3>
+                <div class="price">6000 <span class="currency">₽</span></div>
+                <ul><li>Безлимитный доступ</li><li>Все обновления</li><li>Статус основателя</li></ul>
+                <button class="btn-pay" style="background-color: #333;" onclick="payViaPlatega(6000, 'Навсегда')">Оплатить</button>
+            </div>
+        </div>
+
+        <div class="payment-info">
+            🛡️ Оплата производится через систему <span>PLATEGA</span>
+        </div>
+    </div>
+
+    <footer>© 2026 Система электронных журналов. Все права защищены.</footer>
+
+    <script>
+        // Функция отправки запроса на создание счета
+        async function payViaPlatega(amount, period) {
+            // Можно добавить визуальный лоадер на кнопку здесь
+            
+            try {
+                const response = await fetch('create_invoice.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        amount: amount,
+                        period: period
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.payment_url) {
+                    // Перенаправление на кассу Platega
+                    window.location.href = data.payment_url;
+                } else {
+                    alert('Ошибка при создании счета: ' + (data.error_message || 'Попробуйте позже.'));
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert('Сбой соединения с сервером.');
+            }
+        }
+    </script>
+</body>
+</html>

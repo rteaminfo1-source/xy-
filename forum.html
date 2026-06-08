@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rteam.info | Официальный Форум</title>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --panel-bg: rgba(22, 28, 45, 0.6);
+            --border-color: rgba(0, 242, 254, 0.2);
+            --text-color: #f0f4f8;
+            --accent-cyan: #00f2fe;
+            --accent-magenta: #4facfe;
+            --admin-color: #ff3366;
+            --blur-effect: blur(12px);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            background-image: radial-gradient(circle at 50% 0%, #1e2640 0%, #0b0f19 70%);
+            min-height: 100vh;
+            padding-bottom: 60px;
+        }
+
+        header {
+            background: rgba(11, 15, 25, 0.8);
+            backdrop-filter: var(--blur-effect);
+            border-bottom: 1px solid var(--border-color);
+            padding: 15px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo-link {
+            text-decoration: none;
+            font-size: 24px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            background: linear-gradient(45deg, var(--accent-cyan), var(--accent-magenta));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+        .logo-link:hover {
+            transform: scale(1.02);
+            opacity: 0.9;
+        }
+
+        .auth-block { display: flex; gap: 15px; align-items: center; }
+        .btn {
+            background: var(--panel-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            font-size: 11px;
+        }
+        .btn:hover {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 12px rgba(0, 242, 254, 0.4);
+            background: rgba(0, 242, 254, 0.1);
+        }
+        .btn-admin { border-color: var(--admin-color) !important; }
+        .btn-admin:hover { background: rgba(255, 51, 102, 0.1) !important; box-shadow: 0 0 12px rgba(255, 51, 102, 0.4) !important; }
+
+        .container { max-width: 1100px; margin: 40px auto; padding: 0 20px; }
+        .modal {
+            background: var(--panel-bg);
+            backdrop-filter: var(--blur-effect);
+            border: 1px solid var(--border-color);
+            padding: 30px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .hidden { display: none !important; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-size: 14px; color: #a0aec0; }
+        .form-group input, .form-group textarea {
+            width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); padding: 10px; color: #fff; border-radius: 4px; outline: none;
+        }
+        .form-group input:focus, .form-group textarea:focus { border-color: var(--accent-cyan); }
+
+        /* Стилизация инлайнового поля редактирования */
+        .edit-textarea {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--accent-cyan);
+            color: #fff;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 15px;
+            line-height: 1.6;
+            outline: none;
+            resize: vertical;
+            margin-bottom: 15px;
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.1);
+        }
+
+        .gemini-tip-link {
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 8px;
+            width: 100%;
+        }
+        .gemini-tip {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 242, 254, 0.05);
+            border: 1px dashed rgba(0, 242, 254, 0.3);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #a0aec0;
+            transition: all 0.3s ease;
+        }
+        .gemini-icon {
+            width: 16px;
+            height: 16px;
+            background: linear-gradient(45deg, #7a22ff, #00f2fe);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: #fff;
+            font-weight: bold;
+            box-shadow: 0 0 8px rgba(0, 242, 254, 0.6);
+            transition: transform 0.3s ease;
+        }
+        .gemini-tip b {
+            background: linear-gradient(45deg, #00f2fe, #4facfe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .gemini-tip-link:hover .gemini-tip {
+            border-color: var(--accent-cyan);
+            background: rgba(0, 242, 254, 0.1);
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.1);
+        }
+        .gemini-tip-link:hover .gemini-icon {
+            transform: rotate(15deg) scale(1.1);
+            box-shadow: 0 0 12px rgba(0, 242, 254, 0.9);
+        }
+
+        .post-card { background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 20px; margin-bottom: 20px; }
+        .post-card.pinned { border-left: 5px solid var(--accent-cyan); background: rgba(0, 242, 254, 0.03); }
+        .post-card.article { border-left: 5px solid var(--admin-color); background: rgba(255, 51, 102, 0.03); }
+        
+        .badge-pinned { color: var(--accent-cyan); font-size: 11px; font-weight: bold; text-transform: uppercase; display: inline-block; margin-bottom: 5px; }
+        .badge-article { color: var(--admin-color); font-size: 11px; font-weight: bold; text-transform: uppercase; display: inline-block; margin-bottom: 5px; }
+
+        .post-header { display: flex; justify-content: space-between; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; }
+        .post-title { font-size: 20px; color: #fff; }
+        .post-meta { font-size: 12px; color: #a0aec0; }
+
+        .post-content { font-size: 15px; line-height: 1.6; margin-bottom: 15px; white-space: pre-line; }
+        .post-media img, .post-media video { max-width: 100%; max-height: 350px; border-radius: 4px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.1); }
+
+        .comments-section { margin-top: 20px; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 4px; }
+        .comment-item { border-bottom: 1px solid rgba(255,255,255,0.05); padding: 10px 0; }
+        .comment-item:last-child { border-bottom: none; }
+        
+        .admin-panel { background: rgba(255, 51, 102, 0.05); border: 1px solid var(--admin-color); border-radius: 8px; padding: 20px; margin-bottom: 30px; }
+        .user-list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; background: rgba(0,0,0,0.2); margin-bottom: 5px; border-radius: 4px; }
+        .action-buttons { display: flex; gap: 10px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <a href="https://rteam.info" target="_blank" class="logo-link">Rteam.info</a>
+        <div class="auth-block" id="authBlock"></div>
+    </header>
+
+    <div class="container">
+        <div id="adminPanelToggle" class="hidden" style="margin-bottom: 20px;">
+            <button class="btn btn-admin" onclick="toggleAdminPanel()">⚙ Панель Управления Rteam</button>
+        </div>
+
+        <div id="adminPanelSection" class="admin-panel hidden">
+            <h3 style="color: var(--admin-color); margin-bottom: 15px;">Управление пользователями (Назначение новых администраторов)</h3>
+            <div id="usersListContainer"></div>
+        </div>
+
+        <div id="createPostBlock" class="modal hidden">
+            <h3 style="margin-bottom: 15px;">Создать публикацию</h3>
+            <div class="form-group"><label>Заголовок топика</label><input type="text" id="postTitleInput"></div>
+            
+            <div class="form-group">
+                <label>Текст сообщения</label>
+                <a href="https://gemini.google.com" target="_blank" class="gemini-tip-link">
+                    <div class="gemini-tip">
+                        <div class="gemini-icon">✦</div>
+                        <span>Не знаете как написать текст? <b>Gemini</b> поможет!</span>
+                    </div>
+                </a>
+                <textarea id="postContentInput" rows="5"></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>Прикрепить медиафайлы (Изображение, GIF, Видеоклип)</label>
+                <input type="file" accept="image/*,image/gif,video/*" onchange="encodeMedia(this)">
+            </div>
+            <div id="adminPostOptions" class="form-group hidden">
+                <label style="cursor:pointer;"><input type="checkbox" id="postIsPinned" style="width:auto; margin-right:5px;"> Закрепить этот топик вверху ленты</label><br><br>
+                <label style="cursor:pointer;"><input type="checkbox" id="postIsArticle" style="width:auto; margin-right:5px;"> Опубликовать как Административную Статью</label>
+            </div>
+            <button class="btn" onclick="saveNewPost()">Опубликовать на форуме</button>
+            <button class="btn" onclick="document.getElementById('createPostBlock').classList.add('hidden')">Отмена</button>
+        </div>
+
+        <div id="guestAlert" class="modal" style="text-align: center;">
+            <h2>Добро пожаловать на форум Rteam.info</h2>
+            <p style="margin: 10px 0 20px 0; color: #a0aec0;">Чтобы участвовать в обсуждениях, отвечать на темы, создавать новые топики и загружать медиаконтент, пожалуйста, авторизуйтесь.</p>
+            <button class="btn" onclick="window.location.href='auth.html'">Войти / Зарегистрироваться</button>
+        </div>
+
+        <div id="actionPanel" class="hidden" style="margin-bottom: 25px;">
+            <button class="btn" onclick="document.getElementById('createPostBlock').classList.remove('hidden')">+ Создать новую тему</button>
+        </div>
+
+        <h2>Лента обсуждений комьюнити</h2><br>
+        <div id="forumContainer"></div>
+    </div>
+
+    <script>
+        const SERVER_URL = 'server1.php';
+        let DB = { users: [], posts: [] };
+        let currentUser = null;
+        let currentEncodedMedia = "";
+
+        async function loadDBFromServer() {
+            try {
+                let response = await fetch(SERVER_URL);
+                DB = await response.json();
+                renderAuthBlock();
+                renderForum();
+                renderUsersList();
+            } catch (e) {
+                console.error("Критическая ошибка загрузки JSON: ", e);
+            }
+        }
+
+        async function saveDBToServer() {
+            try {
+                await fetch(SERVER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(DB)
+                });
+            } catch (e) {
+                console.error("Ошибка сохранения JSON на хостинг: ", e);
+            }
+        }
+
+        window.onload = loadDBFromServer;
+
+        function renderAuthBlock() {
+            const block = document.getElementById('authBlock');
+            const guestAlert = document.getElementById('guestAlert');
+            const actionPanel = document.getElementById('actionPanel');
+            const adminToggle = document.getElementById('adminPanelToggle');
+
+            currentUser = JSON.parse(localStorage.getItem('rteam_logged_user'));
+
+            if (currentUser) {
+                block.innerHTML = `<span>Вы вошли как: <b style="${currentUser.role==='admin'?'color:var(--admin-color)':''}">${currentUser.username}</b></span> <button class="btn" onclick="logout()">Выйти</button>`;
+                if(guestAlert) guestAlert.classList.add('hidden');
+                actionPanel.classList.remove('hidden');
+                if (currentUser.role === 'admin') {
+                    adminToggle.classList.remove('hidden');
+                    document.getElementById('adminPostOptions').classList.remove('hidden');
+                } else {
+                    adminToggle.classList.add('hidden');
+                    document.getElementById('adminPostOptions').classList.add('hidden');
+                    document.getElementById('adminPanelSection').classList.add('hidden');
+                }
+            } else {
+                block.innerHTML = `<button class="btn" onclick="window.location.href='auth.html'">Вход / Регистрация</button>`;
+                if(guestAlert) guestAlert.classList.remove('hidden');
+                actionPanel.classList.add('hidden');
+                adminToggle.classList.add('hidden');
+                document.getElementById('adminPanelSection').classList.add('hidden');
+            }
+        }
+
+        function logout() { 
+            localStorage.removeItem('rteam_logged_user');
+            currentUser = null; 
+            renderAuthBlock(); 
+            renderForum(); 
+        }
+
+        function encodeMedia(element) {
+            const file = element.files[0];
+            if(file) {
+                const reader = new FileReader();
+                reader.onloadend = () => { currentEncodedMedia = reader.result; };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        async function saveNewPost() {
+            const title = document.getElementById('postTitleInput').value.trim();
+            const content = document.getElementById('postContentInput').value.trim();
+            if(!title || !content) return alert("Заполните заголовок и текст!");
+
+            const newPost = {
+                id: Date.now(),
+                title: title,
+                content: content,
+                author: currentUser.username,
+                isAdminPost: currentUser.role === 'admin',
+                isPinned: currentUser.role === 'admin' && document.getElementById('postIsPinned').checked,
+                isArticle: currentUser.role === 'admin' && document.getElementById('postIsArticle').checked,
+                date: new Date().toLocaleString("ru-RU"),
+                media: currentEncodedMedia,
+                comments: []
+            };
+
+            DB.posts.unshift(newPost);
+            await saveDBToServer();
+            
+            document.getElementById('postTitleInput').value = "";
+            document.getElementById('postContentInput').value = "";
+            currentEncodedMedia = "";
+            document.getElementById('createPostBlock').classList.add('hidden');
+            renderForum();
+        }
+
+        async function sendComment(postId) {
+            const input = document.getElementById(`comInp_${postId}`);
+            const text = input.value.trim();
+            if(!text) return;
+
+            const post = DB.posts.find(p => p.id === postId);
+            if(post) {
+                post.comments.push({
+                    author: currentUser.username,
+                    isAdminComment: currentUser.role === 'admin',
+                    text: text,
+                    date: new Date().toLocaleString("ru-RU")
+                });
+                await saveDBToServer();
+                input.value = "";
+                renderForum();
+            }
+        }
+
+        // Инлайновое переключение режима редактирования текста публикации
+        async function editPostInline(postId) {
+            const contentDiv = document.getElementById(`postContent_${postId}`);
+            const btn = document.getElementById(`editBtn_${postId}`);
+            const post = DB.posts.find(p => p.id === postId);
+            if(!post || !contentDiv || !btn) return;
+
+            // Если режим редактирования еще не активирован
+            if (btn.getAttribute('data-mode') === 'view') {
+                btn.setAttribute('data-mode', 'edit');
+                btn.innerHTML = '💾 Сохранить';
+                btn.style.borderColor = 'var(--accent-cyan)';
+
+                // Заменяем обычный текст на поле ввода textarea
+                contentDiv.innerHTML = `<textarea id="editArea_${postId}" class="edit-textarea" rows="4">${post.content}</textarea>`;
+            } 
+            // Если нажали «Сохранить»
+            else {
+                const textarea = document.getElementById(`editArea_${postId}`);
+                if (textarea) {
+                    const updatedText = textarea.value.trim();
+                    if (!updatedText) return alert("Текст публикации не может быть пустым!");
+                    
+                    post.content = updatedText;
+                    await saveDBToServer();
+                }
+                
+                btn.setAttribute('data-mode', 'view');
+                btn.innerHTML = '✏ Редактировать';
+                btn.style.borderColor = '';
+                
+                renderForum();
+            }
+        }
+
+        async function deletePost(postId) {
+            if(confirm("Удалить выбранную тему безвозвратно?")) {
+                DB.posts = DB.posts.filter(p => p.id !== postId);
+                await saveDBToServer();
+                renderForum();
+            }
+        }
+
+        async function togglePinPost(postId) {
+            const post = DB.posts.find(p => p.id === postId);
+            if(post) {
+                post.isPinned = !post.isPinned;
+                await saveDBToServer();
+                renderForum();
+            }
+        }
+
+        function renderForum() {
+            const container = document.getElementById('forumContainer');
+            container.innerHTML = "";
+
+            const sorted = [...DB.posts].sort((a,b) => (b.isPinned - a.isPinned) || (b.id - a.id));
+
+            sorted.forEach(post => {
+                let card = document.createElement('div');
+                card.className = `post-card ${post.isPinned?'pinned':''} ${post.isArticle?'article':''}`;
+
+                let media = post.media ? (post.media.startsWith("data:video") ? `<div class="post-media"><video src="${post.media}" controls></video></div>` : `<div class="post-media"><img src="${post.media}"></div>`) : "";
+                
+                let adminBtns = (currentUser && currentUser.role === 'admin') ? `
+                    <div class="action-buttons">
+                        <button class="btn btn-admin" onclick="togglePinPost(${post.id})">${post.isPinned?'📌 Открепить':'📌 Закрепить'}</button>
+                        <button class="btn btn-admin" id="editBtn_${post.id}" data-mode="view" onclick="editPostInline(${post.id})">✏ Редактировать</button>
+                        <button class="btn btn-admin" style="border-color:#ff3333!important" onclick="deletePost(${post.id})">🗑 Удалить</button>
+                    </div>
+                ` : "";
+
+                let comments = post.comments.map(c => `
+                    <div class="comment-item">
+                        <span style="font-size:12px; ${c.isAdminComment?'color:var(--admin-color)':''}"><b>${c.author}</b> [${c.isAdminComment?'Админ':'Юзер'}] (${c.date})</span>
+                        <p style="margin-top:4px; font-size:14px; color:#e2e8f0; white-space: pre-line;">${c.text}</p>
+                    </div>
+                `).join('');
+
+                let replyForm = currentUser ? `
+                    <div style="margin-top:15px;">
+                        <a href="https://gemini.google.com" target="_blank" class="gemini-tip-link">
+                            <div class="gemini-tip" style="margin-bottom: 6px;">
+                                <div class="gemini-icon">✦</div>
+                                <span>Не знаете как написать текст? <b>Gemini</b> поможет!</span>
+                            </div>
+                        </a>
+                        <div style="display:flex; gap:10px;">
+                            <input type="text" id="comInp_${post.id}" placeholder="Написать ответ комьюнити..." style="flex:1; background:rgba(0,0,0,0.4); border:1px solid var(--border-color); padding:8px; color:#fff; border-radius:4px; outline:none;">
+                            <button class="btn" onclick="sendComment(${post.id})">Ответить</button>
+                        </div>
+                    </div>
+                ` : `<p style="font-size:12px; color:#a0aec0; text-align:center; margin-top:10px;">Авторизуйтесь, чтобы оставлять ответы.</p>`;
+
+                card.innerHTML = `
+                    ${post.isPinned?'<span class="badge-pinned">📌 Закреплено Администрацией</span>':''} ${post.isArticle?'<br><span class="badge-article">🔥 Официальный релиз Rteam</span>':''}
+                    <div class="post-header">
+                        <div>
+                            <h3 class="post-title">${post.title}</h3>
+                            <span class="post-meta">Автор: <b>${post.author}</b> | ${post.date}</span>
+                        </div>
+                    </div>
+                    <!-- Идентификатор для динамической замены текста на форму редактирования -->
+                    <div class="post-content" id="postContent_${post.id}">${post.content}</div>
+                    ${media} ${adminBtns}
+                    <div class="comments-section">
+                        <h5 style="color:var(--accent-cyan)">Ответы:</h5><br>
+                        ${comments || '<p style="color:#718096; font-size:12px; text-align:center;">В данной теме обсуждений пока нет.</p>'}
+                        ${replyForm}
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function toggleAdminPanel() { document.getElementById('adminPanelSection').classList.toggle('hidden'); }
+
+        function renderUsersList() {
+            const container = document.getElementById('usersListContainer');
+            if(!container) return; container.innerHTML = "";
+            DB.users.forEach(user => {
+                let div = document.createElement('div');
+                div.className = "user-list-item";
+                div.innerHTML = `<span>Пользователь: <b>${user.username}</b> Права: [${user.role}]</span> 
+                ${user.role!=='admin'?`<button class="btn btn-admin" onclick="promote('${user.username}')">Сделать Админом</button>`:'<span style="font-size:11px; color:var(--admin-color)"><i>Суперпользователь</i></span>'}`;
+                container.appendChild(div);
+            });
+        }
+
+        async function promote(username) {
+            let user = DB.users.find(u => u.username === username);
+            if(user) {
+                user.role = "admin";
+                await saveDBToServer();
+                alert(`Статус пользователя ${username} изменен на "admin".`);
+                renderUsersList(); renderForum(); renderAuthBlock();
+            }
+        }
+    </script>
+</body>
+</html>
