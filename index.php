@@ -309,6 +309,34 @@ if ($ny_active) {
         save_json("logs.json", $ny_logs);
     }
 }
+
+/* ==========================================
+   ОКТЯБРЬСКИЙ ПРАЗДНИК — красно-золотая тема, отсчёт, праздничные блоки
+   Управляется через settings.json:
+     "october_theme": "auto" | "on" | "off"  (auto — показывать за 14 дней до даты и 7 дней после)
+     "october_date":  "10-07"                (месяц-день праздника, формат MM-DD)
+========================================== */
+$oct_mode    = $settings["october_theme"] ?? "auto";
+$oct_date_md = preg_match('/^\d{2}-\d{2}$/', $settings["october_date"] ?? "") ? $settings["october_date"] : "10-07";
+$oct_target  = strtotime(date("Y") . "-" . $oct_date_md . " 00:00:00");
+// Праздник в этом году уже давно прошёл — считаем до следующего
+if ($oct_target !== false && time() > $oct_target + 7 * 86400) {
+    $oct_target = strtotime((date("Y") + 1) . "-" . $oct_date_md . " 00:00:00");
+}
+if ($oct_mode === "on") {
+    $oct_active = true;
+} elseif ($oct_mode === "off" || $oct_target === false) {
+    $oct_active = false;
+} else {
+    $oct_active = time() >= $oct_target - 14 * 86400 && time() <= $oct_target + 7 * 86400;
+}
+$oct_date_label = $oct_target ? (int)date("j", $oct_target) . " " . ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"][(int)date("n", $oct_target)] : "";
+
+/* Цифры для блока статистики на главной */
+$stat_members = count($users);
+$stat_posts   = count(array_filter($blog, fn($p) => empty($p["hidden"])));
+$stat_golden  = count(array_filter($users, fn($u) => !empty($u["golden"])));
+$stat_squid   = count($squid_winners);
 ?>
 
 <!DOCTYPE html>
@@ -317,6 +345,12 @@ if ($ny_active) {
 <meta charset="UTF-8">
 <title>RTeam — Команда программирования и IT-разработки | rteam.info</title>
 <meta name="description" content="RTeam — профессиональная команда программирования. Разрабатываем сайты, приложения и сложные IT-решения под ключ">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="<?= $oct_active ? '#140607' : '#07040f' ?>">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23<?= $oct_active ? 'b3141b' : '6d28d9' ?>'/%3E%3Cpath d='M32 10l6.2 13.3 14.6 1.7-10.8 10 2.9 14.4L32 42.2l-12.9 7.2 2.9-14.4-10.8-10 14.6-1.7z' fill='%23<?= $oct_active ? 'ffc93c' : 'ffffff' ?>'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
 :root {
     --accent: <?=$accent?>;
@@ -1110,9 +1144,257 @@ body.squid-theme-active .card:nth-of-type(3n+1)::after { content: "●"; color: 
 /* Дуэль */
 #squid-duel-score { color: #ccc; font-size: 13px; margin-bottom: 10px; }
 #squid-duel-btn { background: #ff2fa0; color:#fff; border:none; border-radius:8px; padding: 16px 26px; font-weight:700; font-size:15px; cursor:pointer; width: 100%; }
+
+/* =====================================================================
+   БОЛЬШОЕ ОБНОВЛЕНИЕ: новый логотип, меню, герой, новые блоки
+   ===================================================================== */
+body { font-family: "Inter", "Segoe UI", Arial, sans-serif; }
+h1, .box-title, .blog-title, .logo-word, .section-title, .hero-title { font-family: "Russo One", "Segoe UI", Arial, sans-serif; letter-spacing: .5px; }
+h1 { font-weight: 400; }
+
+/* ----- Логотип ----- */
+.logo {
+    display: inline-flex; align-items: center; gap: 10px;
+    text-decoration: none; filter: none;
+    background: none; -webkit-background-clip: initial; background-clip: initial; color: var(--text);
+}
+.logo-mark { width: 38px; height: 38px; flex: 0 0 auto; filter: drop-shadow(0 0 10px var(--accent-glow)); transition: transform .5s cubic-bezier(.2,1.4,.4,1); }
+.logo:hover .logo-mark { transform: rotate(72deg) scale(1.06); }
+.logo-word { font-size: 22px; line-height: 1; color: #fff; display: flex; flex-direction: column; }
+.logo-word b { font-weight: 400; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.logo-word small { font-family: "Inter", sans-serif; font-size: 9.5px; letter-spacing: 2.5px; color: var(--soft); text-transform: uppercase; margin-top: 3px; }
+.intro-star { position: absolute; top: calc(50% - 7vw - 90px); left: 50%; width: 90px; height: 90px; margin-left: -45px; opacity: 0; animation: introStar 1.6s ease .3s forwards; }
+@keyframes introStar { from { opacity: 0; transform: scale(.4) rotate(-144deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
+
+/* ----- Шапка и мобильное меню ----- */
+header { gap: 18px; }
+header .user-info { display: flex; align-items: center; flex-shrink: 0; white-space: nowrap; }
+@media (max-width: 1440px) { header .user-info { margin-left: 4px; } }
+@media (max-width: 520px) {
+    header { gap: 10px; }
+    .logo-word small { display: none; }
+    .logo-mark { width: 34px; height: 34px; }
+    .logo-word { font-size: 19px; }
+    header .nav-btn-solid { display: none; }
+    .nav-toggle { width: 38px; height: 38px; }
+}
+nav { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 0; }
+.nav-toggle {
+    display: none; width: 42px; height: 42px; border-radius: 10px;
+    background: rgba(255,255,255,.03); border: 1px solid var(--border); color: var(--text);
+    cursor: pointer; font-size: 20px; line-height: 1;
+}
+@media (max-width: 1440px) {
+    .nav-toggle { display: inline-flex; align-items: center; justify-content: center; margin-left: auto; }
+    header nav {
+        position: fixed; top: 64px; left: 0; right: 0; max-height: calc(100vh - 64px); overflow-y: auto;
+        flex-direction: column; align-items: stretch; gap: 0;
+        background: #0a060e; border-bottom: 1px solid var(--border);
+        padding: 8px 16px 18px; transform: translateY(-110%); opacity: 0; pointer-events: none;
+        transition: transform .35s ease, opacity .35s ease;
+    }
+    header nav.open { transform: translateY(0); opacity: 1; pointer-events: all; }
+    header nav a { margin: 0; padding: 12px 6px; border-bottom: 1px solid rgba(255,255,255,.05); font-size: 15px; }
+    header nav a::after { display: none; }
+}
+@media (max-width: 768px) { header nav { top: 60px; } }
+
+/* ----- Праздничная бегущая строка ----- */
+.oct-ribbon {
+    position: relative; z-index: 2; margin-top: 64px; overflow: hidden;
+    background: linear-gradient(90deg, #7a0a0f, #c8161d 50%, #7a0a0f);
+    border-top: 1px solid rgba(255,201,60,.4); border-bottom: 1px solid rgba(255,201,60,.4);
+    color: #ffe7a6; font-weight: 800; font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
+    padding: 9px 0; white-space: nowrap;
+}
+.oct-ribbon-track { display: inline-flex; gap: 40px; animation: goldStripScroll 38s linear infinite; }
+.oct-ribbon-track span::before { content: "★"; color: #ffc93c; margin-right: 40px; }
+
+/* ----- Герой ----- */
+#home { position: relative; min-height: 88vh; display: flex; align-items: center; justify-content: center; padding-top: 110px; overflow: hidden; }
+.oct-on #home { padding-top: 60px; }
+.hero-inner { position: relative; z-index: 2; text-align: center; width: 100%; max-width: 980px; margin: 0 auto; }
+.hero-kicker {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--accent-2); background: rgba(255,255,255,.03); border: 1px solid var(--border);
+}
+.hero-kicker i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 10px var(--accent-2); animation: blink 1.4s ease infinite; }
+#home #dynamicText { font-family: "Russo One", sans-serif; font-weight: 400 !important; font-size: clamp(30px, 6vw, 58px) !important; line-height: 1.1; min-height: 2.3em; display: flex; align-items: center; justify-content: center; margin: 22px 0 8px; background: none; -webkit-background-clip: initial; filter: none; }
+.hero-sub { margin: 0 auto; max-width: 620px; font-size: 16.5px; }
+.hero-cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 26px; }
+.hero-cta .btn { padding: 13px 24px; font-size: 15px; margin-top: 0; }
+.hero-glow { position: absolute; width: 620px; height: 620px; border-radius: 50%; left: 50%; top: 50%; transform: translate(-50%, -50%); background: radial-gradient(circle, var(--accent-glow), transparent 65%); opacity: .35; filter: blur(30px); pointer-events: none; z-index: 1; }
+.hero-rays { position: absolute; inset: -40%; z-index: 0; pointer-events: none; opacity: 0; background: repeating-conic-gradient(from 0deg at 50% 60%, rgba(224,38,43,.10) 0deg 6deg, transparent 6deg 18deg); animation: raysSpin 90s linear infinite; }
+.oct-on .hero-rays { opacity: 1; }
+@keyframes raysSpin { to { transform: rotate(360deg); } }
+
+/* Статистика */
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 38px auto 0; max-width: 880px; }
+.stat {
+    background: linear-gradient(160deg, var(--card-2), var(--card)); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px 12px; text-align: center;
+}
+.stat b { display: block; font-family: "Russo One", sans-serif; font-weight: 400; font-size: 30px; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stat span { font-size: 12.5px; color: var(--soft); }
+@media (max-width: 640px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+
+/* ----- Общие заголовки новых секций ----- */
+.section-head { max-width: 760px; margin-bottom: 26px; }
+.section-eyebrow { display: block; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--accent-2); margin-bottom: 6px; }
+.section-head p { margin: 4px 0 0; }
+
+/* ----- Октябрьский блок ----- */
+#october { position: relative; }
+.oct-poster {
+    position: relative; overflow: hidden; border-radius: 22px;
+    background:
+        linear-gradient(115deg, transparent 58%, rgba(255,201,60,.10) 58% 60%, transparent 60%),
+        linear-gradient(115deg, #3a0508 0%, #8e0e14 45%, #c8161d 100%);
+    border: 1px solid rgba(255,201,60,.35);
+    padding: 44px 40px; display: grid; grid-template-columns: 1.25fr 1fr; gap: 34px; align-items: center;
+    box-shadow: 0 30px 80px rgba(120,8,14,.45);
+}
+.oct-poster::before {
+    content: ""; position: absolute; right: -80px; top: -80px; width: 360px; height: 360px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 4l7.4 16 17.5 2-13 12 3.5 17.3L32 42.6l-15.4 8.7L20.1 34l-13-12 17.5-2z' fill='%23ffc93c' fill-opacity='.14'/%3E%3C/svg%3E") no-repeat center / contain;
+    animation: raysSpin 60s linear infinite; pointer-events: none;
+}
+.oct-poster h2 { font-family: "Russo One", sans-serif; font-weight: 400; font-size: clamp(28px, 4.2vw, 46px); line-height: 1.05; margin: 10px 0 12px; color: #fff; text-transform: uppercase; }
+.oct-poster h2 em { font-style: normal; color: #ffc93c; }
+.oct-poster p { color: #ffdcd0; margin: 0; }
+.oct-date-chip { display: inline-block; background: #ffc93c; color: #4a0306; font-weight: 800; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; padding: 5px 12px; border-radius: 6px; }
+.countdown { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; position: relative; z-index: 1; }
+.countdown div { background: rgba(20,2,4,.55); border: 1px solid rgba(255,201,60,.35); border-radius: 14px; padding: 16px 6px; text-align: center; }
+.countdown b { display: block; font-family: "Russo One", sans-serif; font-weight: 400; font-size: clamp(26px, 4vw, 42px); color: #ffc93c; text-shadow: 0 0 18px rgba(255,201,60,.35); font-variant-numeric: tabular-nums; }
+.countdown span { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: #ffd9c7; }
+.countdown-done { grid-column: 1 / -1; font-family: "Russo One", sans-serif; font-size: 24px; color: #ffc93c; }
+.oct-poster .btn { background: #ffc93c; color: #4a0306; box-shadow: 0 8px 22px rgba(255,201,60,.3); margin-top: 22px; }
+@media (max-width: 860px) { .oct-poster { grid-template-columns: 1fr; padding: 30px 20px; } }
+
+.oct-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; margin-top: 22px; }
+.feature {
+    position: relative; background: linear-gradient(160deg, var(--card-2), var(--card)); border: 1px solid var(--border);
+    border-radius: 16px; padding: 22px; transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+}
+.feature:hover { transform: translateY(-4px); border-color: var(--accent-2); box-shadow: 0 14px 34px rgba(0,0,0,.35); }
+.feature-icon { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; background: var(--grad); box-shadow: 0 6px 18px var(--accent-glow); margin-bottom: 14px; }
+.feature h3 { margin: 0 0 6px; color: #fff; font-size: 17px; }
+.feature p { margin: 0; font-size: 14px; }
+.feature-tag { position: absolute; top: 16px; right: 16px; font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--accent-2); border: 1px solid var(--border); padding: 2px 8px; border-radius: 999px; }
+
+/* Хроника */
+.timeline { position: relative; margin-top: 30px; padding-left: 28px; max-width: 820px; }
+.timeline::before { content: ""; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: linear-gradient(var(--accent), var(--accent-2)); }
+.tl-item { position: relative; padding: 0 0 22px 12px; }
+.tl-item::before { content: "★"; position: absolute; left: -29px; top: -2px; width: 22px; height: 22px; line-height: 22px; text-align: center; font-size: 13px; color: var(--bg); background: var(--accent-2); border-radius: 50%; box-shadow: 0 0 0 4px var(--bg), 0 0 14px var(--accent-glow); }
+.tl-date { font-family: "Russo One", sans-serif; color: var(--accent-2); font-size: 14px; letter-spacing: .5px; }
+.tl-item p { margin: 4px 0 0; font-size: 14.5px; }
+
+/* ----- Услуги ----- */
+#join .box { width: 100%; }
+.services { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+
+/* ----- Шаги ----- */
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; counter-reset: step; }
+.step { position: relative; padding: 24px 20px 20px; border-radius: 16px; border: 1px dashed var(--border); background: rgba(255,255,255,.015); }
+.step::before { counter-increment: step; content: "0" counter(step); font-family: "Russo One", sans-serif; font-size: 40px; line-height: 1; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; display: block; margin-bottom: 10px; }
+.step h3 { margin: 0 0 6px; color: #fff; font-size: 16px; }
+.step p { margin: 0; font-size: 14px; }
+
+/* ----- FAQ ----- */
+.faq { max-width: 820px; display: flex; flex-direction: column; gap: 10px; }
+.faq details { background: linear-gradient(160deg, var(--card-2), var(--card)); border: 1px solid var(--border); border-radius: 14px; padding: 0 18px; transition: border-color .2s ease; }
+.faq details[open] { border-color: var(--accent-2); }
+.faq summary { cursor: pointer; list-style: none; padding: 16px 28px 16px 0; font-weight: 600; color: #fff; position: relative; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; position: absolute; right: 0; top: 12px; font-size: 22px; color: var(--accent-2); transition: transform .25s ease; }
+.faq details[open] summary::after { transform: rotate(45deg); }
+.faq details p { margin: 0 0 16px; font-size: 14.5px; }
+
+/* ----- Подвал ----- */
+footer.site-footer { text-align: left; padding: 48px 60px 22px; background: linear-gradient(180deg, transparent, rgba(0,0,0,.35)), #06040d; font-size: 13.5px; color: var(--soft); }
+.footer-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 30px; max-width: 1100px; margin: 0 auto; }
+.footer-grid h4 { margin: 0 0 12px; color: #fff; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; }
+.footer-grid a { display: block; color: var(--soft); text-decoration: none; padding: 4px 0; }
+.footer-grid a:hover { color: var(--accent-2); }
+.footer-grid a.logo { display: inline-flex; padding: 0; }
+.footer-grid p { margin: 12px 0 0; font-size: 13.5px; }
+.footer-bottom { max-width: 1100px; margin: 30px auto 0; padding-top: 16px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 12px; color: #8a7fae; }
+@media (max-width: 768px) {
+    footer.site-footer { padding: 36px 16px 18px; }
+    .footer-grid { grid-template-columns: 1fr; gap: 20px; }
+}
+
+/* ----- Падающие звёзды (праздник) ----- */
+#oct-decor { position: fixed; inset: 0; pointer-events: none; z-index: 497; overflow: hidden; }
+.oct-star { position: absolute; top: -10vh; color: #ffc93c; text-shadow: 0 0 10px rgba(255,201,60,.6); animation: theme-icon-fall linear infinite; opacity: .55; }
+
+@media (prefers-reduced-motion: reduce) {
+    .oct-ribbon-track, .hero-rays, .oct-poster::before, .oct-star, .ember { animation: none !important; }
+    #oct-decor { display: none; }
+}
+
+/* =====================================================================
+   КРАСНО-ЗОЛОТАЯ ТЕМА «ВЕЛИКИЙ ОКТЯБРЬ»
+   (переменные переопределяются целиком, т.к. --grad вычисляется на месте)
+   ===================================================================== */
+body.oct-on {
+    --accent: #e0262b;
+    --accent-2: #ffc93c;
+    --accent-3: #8b0d12;
+    --accent-glow: rgba(224, 38, 43, .5);
+    --bg: #0d0506;
+    --card: #150809;
+    --card-2: #221012;
+    --border: rgba(224, 38, 43, .3);
+    --text: #f7ece1;
+    --soft: #cbb1a3;
+    --grad: linear-gradient(135deg, #8b0d12, #e0262b 55%, #ffc93c);
+    background:
+        radial-gradient(circle at 15% -10%, rgba(224,38,43,.22) 0, transparent 40%),
+        radial-gradient(circle at 90% 10%, rgba(255,201,60,.10) 0, transparent 45%),
+        radial-gradient(circle at top, #2a0709 0, #120405 45%, #060102 100%);
+    scrollbar-color: #e0262b #0a0304;
+}
+body.oct-on ::-webkit-scrollbar-track { background: #0a0304; }
+body.oct-on ::-webkit-scrollbar-thumb { border-color: #0a0304; }
+body.oct-on header { background: rgba(16,5,6,.86); box-shadow: 0 1px 24px rgba(224,38,43,.12); }
+body.oct-on .ember { background: #ffc93c; }
+body.oct-on #cmd-box { border-color: rgba(224,38,43,.35); color: #ffd7a0; box-shadow: 0 0 30px rgba(224,38,43,.2), inset 0 0 30px rgba(224,38,43,.05); }
+body.oct-on .intro-logo { -webkit-text-stroke-color: rgba(224,38,43,.45); }
+body.oct-on #intro-overlay { background: radial-gradient(circle at center, #2a0508, #000 70%); }
+body.oct-on input, body.oct-on textarea, body.oct-on select { border-color: rgba(224,38,43,.25); background: #0e0506; }
+body.oct-on input:focus, body.oct-on textarea:focus, body.oct-on select:focus { box-shadow: 0 0 0 3px rgba(255,201,60,.15); }
+body.oct-on .btn, body.oct-on .nav-btn-solid { box-shadow: 0 4px 16px rgba(224,38,43,.4); }
+body.oct-on .card::before { background: linear-gradient(120deg, rgba(224,38,43,.10), transparent 40%); }
+body.oct-on .card:hover, body.oct-on .blog-post:hover { border-color: rgba(255,201,60,.5); box-shadow: 0 14px 34px rgba(139,13,18,.35); }
+body.oct-on .box-kicker { background: rgba(255,201,60,.1); border-color: rgba(255,201,60,.3); }
+body.oct-on footer, body.oct-on footer.site-footer { background: linear-gradient(180deg, transparent, rgba(0,0,0,.35)), #080203; }
+body.oct-on .footer-bottom, body.oct-on .blog-date { color: #a58576; }
+body.oct-on nav a { color: #e6d3c6; }
+@media (max-width: 1440px) { body.oct-on header nav { background: #100506; } }
 </style>
 </head>
-<body class="no-scroll<?php echo ($site_theme_active && $theme_settings["active"] === "squid_game") ? " squid-theme-active" : ""; ?>">
+<body class="no-scroll<?php echo ($site_theme_active && $theme_settings["active"] === "squid_game") ? " squid-theme-active" : ""; ?><?= $oct_active ? " oct-on" : "" ?>">
+
+<!-- НОВЫЙ ЛОГОТИП RTEAM: звезда-«коммит» в скобках кода. Цвета берутся из темы -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+        <linearGradient id="rtLogoGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" style="stop-color:var(--accent-3)"/>
+            <stop offset=".55" style="stop-color:var(--accent)"/>
+            <stop offset="1" style="stop-color:var(--accent-2)"/>
+        </linearGradient>
+        <symbol id="rt-logo" viewBox="0 0 48 48">
+            <rect x="2" y="2" width="44" height="44" rx="13" fill="url(#rtLogoGrad)"/>
+            <rect x="2.5" y="2.5" width="43" height="43" rx="12.5" fill="none" stroke="#fff" stroke-opacity=".18"/>
+            <path d="M10 17l-5 7 5 7M38 17l5 7-5 7" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M24 12 L27.2 20.6 L36.4 21 L29.1 26.7 L31.6 35.5 L24 30.4 L16.4 35.5 L18.9 26.7 L11.6 21 L20.8 20.6Z" fill="#fff"/>
+            <circle cx="24" cy="25" r="2.6" style="fill:var(--accent)"/>
+        </symbol>
+    </defs>
+</svg>
 
 <div id="ember-bg">
     <?php for ($i = 0; $i < 22; $i++): ?>
@@ -1141,6 +1423,7 @@ body.squid-theme-active .card:nth-of-type(3n+1)::after { content: "●"; color: 
     </div>
     <?php endif; ?>
     <div class="intro-logo-container" id="intro-logo-wrap">
+        <svg class="intro-star"><use href="#rt-logo"/></svg>
         <div class="intro-logo">RTEAM</div>
     </div>
     <div id="cmd-box" class="cmd-intro-mode">
@@ -1353,6 +1636,13 @@ body.squid-theme-active .card:nth-of-type(3n+1)::after { content: "●"; color: 
 
 <!-- ОСНОВНОЙ КОНТЕНТ САЙТА -->
 <div id="main-content">
+    <?php if ($oct_active): ?>
+    <div id="oct-decor">
+        <?php for ($i = 0; $i < 18; $i++): ?>
+        <div class="oct-star" style="left:<?=rand(0,100)?>%; font-size:<?=rand(10,20)?>px; animation-duration:<?=rand(12,24)?>s; animation-delay:-<?=rand(0,24)?>s;">★</div>
+        <?php endfor; ?>
+    </div>
+    <?php endif; ?>
     <?php if ($ny_active): ?>
     <div id="snowfall">
         <?php for ($i = 0; $i < 45; $i++):
@@ -1387,9 +1677,15 @@ body.squid-theme-active .card:nth-of-type(3n+1)::after { content: "●"; color: 
     </script>
     <?php endif; ?>
     <header>
-        <div class="logo">RTEAM</div>
-        <nav>
+        <a class="logo" href="#home" aria-label="RTeam — на главную">
+            <svg class="logo-mark"><use href="#rt-logo"/></svg>
+            <span class="logo-word"><span><b>R</b>TEAM</span><small><?= $oct_active ? "Великий Октябрь" : "Into the Code" ?></small></span>
+        </a>
+        <button class="nav-toggle" id="navToggle" aria-label="Меню" aria-expanded="false">☰</button>
+        <nav id="siteNav">
             <a href="#home">Главная</a>
+            <?php if ($oct_active): ?><a href="#october" style="color:#ffc93c; font-weight:700;">★ Октябрь</a><?php endif; ?>
+            <a href="#about">О нас</a>
             <a href="team.php">Команда</a>
             <a href="#blog">Блог</a>
             <a href="#leaks">Сливы</a>
@@ -1429,17 +1725,169 @@ body.squid-theme-active .card:nth-of-type(3n+1)::after { content: "●"; color: 
         </div>
     </header>
 
+    <?php if ($oct_active): ?>
+    <div class="oct-ribbon" aria-hidden="true">
+        <div class="oct-ribbon-track">
+            <?php for ($r = 0; $r < 2; $r++): ?>
+            <span>С праздником Великого Октября</span>
+            <span>Вся власть — коду</span>
+            <span>Программисты всех стран, коммитьте</span>
+            <span>Мир — релизам, война — багам</span>
+            <span>RTeam · <?=htmlspecialchars($oct_date_label)?></span>
+            <span>Фабрики — рабочим, сервера — кодерам</span>
+            <?php endfor; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <section id="home">
-        <div style="text-align:center; margin-top:40px;">
-            <h1 id="dynamicText" style="font-size:48px; font-weight:700; color:#ff2a2a; text-shadow:0 0 20px #ff0000aa; transition:0.6s ease;">
+        <div class="hero-rays"></div>
+        <div class="hero-glow"></div>
+        <div class="hero-inner">
+            <span class="hero-kicker"><i></i><?= $oct_active ? "Праздничное обновление · " . htmlspecialchars($oct_date_label) : "Команда программирования RTeam" ?></span>
+            <h1 id="dynamicText" style="color:#ff2a2a; text-shadow:0 0 20px #ff0000aa; transition:0.6s ease;">
                 Загрузка...
             </h1>
-            <p style="margin:10px auto 0; max-width:600px;">
-                Мы собираем людей, которые не боятся писать большие коды.
+            <p class="hero-sub">
+                <?php if ($oct_active): ?>
+                    Отмечаем праздник Октябрьской революции вместе: новый дизайн, праздничный ивент и рейтинг. Мы собираем людей, которые не боятся писать большие коды.
+                <?php else: ?>
+                    Мы собираем людей, которые не боятся писать большие коды.
+                <?php endif; ?>
             </p>
+            <div class="hero-cta">
+                <?php if ($oct_active): ?>
+                    <a href="#october" class="btn">★ Праздничный ивент</a>
+                    <a href="#join" class="btn btn-ghost">Вступить в команду</a>
+                <?php else: ?>
+                    <a href="#join" class="btn">Вступить в команду</a>
+                    <a href="projects.php" class="btn btn-ghost">Наши проекты</a>
+                <?php endif; ?>
+            </div>
 
             <!-- Место для приземления терминала -->
-            <div id="cmd-placeholder" style="max-width:700px; margin:40px auto 0; min-height: 80px;"></div>
+            <div id="cmd-placeholder" style="max-width:700px; margin:34px auto 0; min-height: 80px;"></div>
+
+            <div class="stats">
+                <div class="stat"><b data-count="<?=$stat_members?>">0</b><span>участников</span></div>
+                <div class="stat"><b data-count="<?=$stat_posts?>">0</b><span>постов в блоге</span></div>
+                <div class="stat"><b data-count="<?=$stat_golden?>">0</b><span>золотых билетов</span></div>
+                <div class="stat"><b data-count="<?=$stat_squid?>">0</b><span>прошли испытания</span></div>
+            </div>
+        </div>
+    </section>
+
+    <?php if ($oct_active): ?>
+    <section id="october" class="reveal">
+        <div class="oct-poster">
+            <div>
+                <span class="oct-date-chip">★ <?=htmlspecialchars($oct_date_label)?> · праздник</span>
+                <h2>Великий <em>Октябрь</em><br>в RTeam</h2>
+                <p>Годовщина Октябрьской революции — повод обновиться. Сайт перекрашен в красное и золотое, в команде стартует праздничный ивент, а самые активные получат шанс на «Золотой билет RTeam».</p>
+                <a href="#join" class="btn">Присоединиться к команде</a>
+            </div>
+            <div>
+                <div class="countdown" id="octCountdown" data-target="<?= (int)$oct_target * 1000 ?>">
+                    <div><b data-unit="d">00</b><span>дней</span></div>
+                    <div><b data-unit="h">00</b><span>часов</span></div>
+                    <div><b data-unit="m">00</b><span>минут</span></div>
+                    <div><b data-unit="s">00</b><span>секунд</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="oct-cards">
+            <div class="feature">
+                <span class="feature-tag">Ивент</span>
+                <div class="feature-icon">⚙️</div>
+                <h3>Хакатон «Красный код»</h3>
+                <p>Небольшое задание от команды: напиши лучшее решение и попади в праздничный рейтинг.</p>
+            </div>
+            <div class="feature">
+                <span class="feature-tag">Награда</span>
+                <div class="feature-icon">🎫</div>
+                <h3>Золотой билет</h3>
+                <p>Самые активные участники ивента претендуют на «Золотой билет RTeam» и золотой профиль.</p>
+            </div>
+            <div class="feature">
+                <span class="feature-tag">Набор</span>
+                <div class="feature-icon">★</div>
+                <h3>Праздничный набор</h3>
+                <p>В дни праздника заявки в команду рассматриваются в первую очередь. Подай свою прямо сейчас.</p>
+            </div>
+            <div class="feature">
+                <span class="feature-tag">Стиль</span>
+                <div class="feature-icon">🚩</div>
+                <h3>Новый дизайн</h3>
+                <p>Красно-золотая тема, новый логотип и праздничные блоки — по всему сайту.</p>
+            </div>
+        </div>
+
+        <div class="section-head" style="margin-top:46px;">
+            <span class="section-eyebrow">Хроника</span>
+            <h1>Как это было в 1917-м</h1>
+        </div>
+        <div class="timeline">
+            <div class="tl-item">
+                <div class="tl-date">25 октября (7 ноября) 1917</div>
+                <p>Вооружённое восстание в Петрограде, взятие Зимнего дворца. Временное правительство низложено.</p>
+            </div>
+            <div class="tl-item">
+                <div class="tl-date">26 октября (8 ноября) 1917</div>
+                <p>II Всероссийский съезд Советов принимает Декрет о мире и Декрет о земле.</p>
+            </div>
+            <div class="tl-item">
+                <div class="tl-date">Февраль 1918</div>
+                <p>Россия переходит на григорианский календарь: после 31 января сразу наступает 14 февраля. Поэтому «Октябрьскую» революцию потом отмечали в ноябре.</p>
+            </div>
+            <div class="tl-item">
+                <div class="tl-date">1918 — 2004</div>
+                <p>7 ноября — государственный праздник и выходной день; в 1996 году его переименовали в День согласия и примирения.</p>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
+
+    <section id="about" class="reveal">
+        <div class="section-head">
+            <span class="section-eyebrow">Что мы делаем</span>
+            <h1>RTeam — команда разработки</h1>
+            <p>Берёмся за проекты любой сложности — от лендинга до собственной игровой инфраструктуры.</p>
+        </div>
+        <div class="services">
+            <div class="feature">
+                <div class="feature-icon">🌐</div>
+                <h3>Сайты и веб-приложения</h3>
+                <p>Порталы, личные кабинеты, админ-панели и форумы под ключ.</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🤖</div>
+                <h3>Боты и автоматизация</h3>
+                <p>Telegram- и Discord-боты, интеграции, 2FA и рассылки.</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🎮</div>
+                <h3>Игры и серверы</h3>
+                <p>Браузерные мини-игры и серверная система RMine.</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🛡️</div>
+                <h3>Безопасность</h3>
+                <p>Защита аккаунтов, баны и гео-блокировка, аудит кода.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="steps" class="reveal">
+        <div class="section-head">
+            <span class="section-eyebrow">Путь в команду</span>
+            <h1>Как попасть в RTeam</h1>
+        </div>
+        <div class="steps">
+            <div class="step"><h3>Создай аккаунт</h3><p>Регистрация занимает минуту — или войди через Google.</p></div>
+            <div class="step"><h3>Заполни заявку</h3><p>Выбери: вступление в команду или роль администратора.</p></div>
+            <div class="step"><h3>Дождись решения</h3><p>Ответ придёт на email, указанный в заявке.</p></div>
+            <div class="step"><h3>Пиши большие коды</h3><p>Проекты, рейтинг, розыгрыши и золотые билеты.</p></div>
         </div>
     </section>
 
@@ -1591,6 +2039,37 @@ body.squid-theme-active .card:nth-of-type(3n+1)::after { content: "●"; color: 
         <?php endif; ?>
     </section>
 
+    <section id="faq" class="reveal">
+        <div class="section-head">
+            <span class="section-eyebrow">Вопросы и ответы</span>
+            <h1>FAQ</h1>
+        </div>
+        <div class="faq">
+            <details>
+                <summary>Какие навыки нужны, чтобы попасть в команду?</summary>
+                <p>Опишите в заявке свой стек и опыт как можно подробнее — односложные ответы не принимаются. Возраст указывайте честно: несовпадение при проверке означает отказ.</p>
+            </details>
+            <details>
+                <summary>Когда придёт ответ на заявку?</summary>
+                <p>Обычно в течение нескольких дней. Решение отправляем на email из заявки, поэтому проверьте, что он указан без ошибок.</p>
+            </details>
+            <details>
+                <summary>Что даёт «Золотой билет RTeam»?</summary>
+                <p>Золотой профиль, отметку в рейтинге и ленте обладателей. Билет выдаётся победителям розыгрышей и испытаний.</p>
+            </details>
+            <?php if ($oct_active): ?>
+            <details>
+                <summary>Как участвовать в октябрьском ивенте?</summary>
+                <p>Войдите в аккаунт, следите за блогом — задания и итоги публикуются там. Праздничное оформление действует до <?=htmlspecialchars(date("j.m", $oct_target + 7 * 86400))?>.</p>
+            </details>
+            <?php endif; ?>
+            <details>
+                <summary>Можно подать заявку повторно?</summary>
+                <p>Да, но не отправляйте несколько заявок подряд — дубли замедляют обработку и могут привести к блокировке.</p>
+            </details>
+        </div>
+    </section>
+
     <section id="contact" class="reveal">
         <h1>Контакты</h1>
         <p>Есть вопрос, идея или предложение по сотрудничеству? Напишите нам — ответим в ближайшее время.</p>
@@ -1635,8 +2114,36 @@ body.squid-theme-active .card:nth-of-type(3n+1)::after { content: "●"; color: 
         </div>
     </section>
 
-    <footer>
-        © 2026 Rteam. Все права защищены.
+    <footer class="site-footer">
+        <div class="footer-grid">
+            <div>
+                <a class="logo" href="#home">
+                    <svg class="logo-mark"><use href="#rt-logo"/></svg>
+                    <span class="logo-word"><span><b>R</b>TEAM</span><small>Into the Code</small></span>
+                </a>
+                <p>Команда, которая не боится писать большие коды.<?php if ($oct_active): ?> С праздником Великого Октября! ★<?php endif; ?></p>
+            </div>
+            <div>
+                <h4>Навигация</h4>
+                <a href="#about">О нас</a>
+                <a href="#blog">Блог</a>
+                <a href="#rating">Рейтинг</a>
+                <a href="#join">Заявка</a>
+                <a href="#faq">FAQ</a>
+            </div>
+            <div>
+                <h4>Сообщество</h4>
+                <a href="team.php">Команда</a>
+                <a href="forum.html">Форум</a>
+                <a href="projects.php">Проекты</a>
+                <a href="support.php">Поддержка</a>
+                <a href="pay.html">Поддержать</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© <?=date("Y")?> Rteam. Все права защищены.</span>
+            <span>rteam.info</span>
+        </div>
     </footer>
 </div>
 
@@ -1652,6 +2159,8 @@ const loopPhrases = [
     "compiling ideas...",
     "system online."
 ];
+const OCT_ON = document.body.classList.contains('oct-on');
+if (OCT_ON) loopPhrases.push("git commit -m \"★ Вся власть — коду\"", "deploy october_event --prod");
 let loopIndex = 0;
 let loopCharIndex = 0;
 
@@ -1723,6 +2232,7 @@ if (!isSkip) {
         "[OK] compiling ideas...",
         "System online. Welcome to RTEAM."
     ];
+    if (OCT_ON) bootLines.splice(5, 0, "[OK] loading october_event.module ★");
 
     setTimeout(() => {
         introLogoWrap.style.opacity = '0';
@@ -1815,7 +2325,13 @@ if (!isSkip) {
 /* ==========================================
    ДИНАМИЧЕСКИЙ ТЕКСТ И ФОРМЫ
 ========================================== */
-const phrases = [
+const phrases = OCT_ON ? [
+    "С ПРАЗДНИКОМ ВЕЛИКОГО ОКТЯБРЯ",
+    "ВСЯ ВЛАСТЬ — КОДУ",
+    "ПРОГРАММИСТЫ ВСЕХ СТРАН, КОММИТЬТЕ",
+    "МИР — РЕЛИЗАМ, ВОЙНА — БАГАМ",
+    "RTEAM — СИЛА В ИДЕЯХ"
+] : [
     "НОВЫЙ ВЗГЛЯД НА РАЗРАБОТКУ",
     "КОМАНДА, КОТОРАЯ ДЕЛАЕТ БОЛЬШЕ",
     "ТЕХНОЛОГИИ, КОТОРЫЕ МЕНЯЮТ ИГРУ",
@@ -1830,7 +2346,7 @@ function changePhrase() {
     textEl.style.opacity = 0;
     setTimeout(() => {
         textEl.innerText = phrases[pIndex];
-        const colors = ["#ff2a2a","#ff6b00","#ff00c8","#00eaff","#00ff6a"];
+        const colors = OCT_ON ? ["#ff3b3f","#ffc93c","#ff6b3d","#ffe08a"] : ["#ff2a2a","#ff6b00","#ff00c8","#00eaff","#00ff6a"];
         const c = colors[pIndex % colors.length];
         textEl.style.color = c;
         textEl.style.textShadow = `0 0 20px ${c}aa`;
@@ -1861,6 +2377,66 @@ if (typeSelect) {
     typeSelect.addEventListener("change", () => render(typeSelect.value));
     render("Команда");
 }
+
+// ===== МОБИЛЬНОЕ МЕНЮ =====
+(function() {
+    const toggle = document.getElementById('navToggle');
+    const nav = document.getElementById('siteNav');
+    if (!toggle || !nav) return;
+    toggle.addEventListener('click', () => {
+        const open = nav.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        toggle.textContent = open ? '✕' : '☰';
+    });
+    nav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+        nav.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.textContent = '☰';
+    }));
+})();
+
+// ===== СЧЁТЧИКИ СТАТИСТИКИ =====
+(function() {
+    const nums = document.querySelectorAll('.stat b[data-count]');
+    if (!nums.length) return;
+    function run(el) {
+        const target = parseInt(el.dataset.count, 10) || 0;
+        const start = performance.now(), dur = 1400;
+        (function tick(now) {
+            const k = Math.min(1, (now - start) / dur);
+            el.textContent = Math.round(target * (1 - Math.pow(1 - k, 3)));
+            if (k < 1) requestAnimationFrame(tick);
+        })(start);
+    }
+    const io = new IntersectionObserver(entries => {
+        entries.forEach(e => { if (e.isIntersecting) { run(e.target); io.unobserve(e.target); } });
+    }, { threshold: .4 });
+    nums.forEach(n => io.observe(n));
+})();
+
+// ===== ОТСЧЁТ ДО ПРАЗДНИКА =====
+(function() {
+    const box = document.getElementById('octCountdown');
+    if (!box) return;
+    const target = parseInt(box.dataset.target, 10);
+    const cells = {};
+    box.querySelectorAll('[data-unit]').forEach(b => cells[b.dataset.unit] = b);
+    const pad = n => String(n).padStart(2, '0');
+    function tick() {
+        const left = target - Date.now();
+        if (left <= 0) {
+            box.innerHTML = '<div class="countdown-done">★ С праздником! ★</div>';
+            return;
+        }
+        const sec = Math.floor(left / 1000);
+        cells.d.textContent = pad(Math.floor(sec / 86400));
+        cells.h.textContent = pad(Math.floor(sec % 86400 / 3600));
+        cells.m.textContent = pad(Math.floor(sec % 3600 / 60));
+        cells.s.textContent = pad(sec % 60);
+        setTimeout(tick, 1000);
+    }
+    tick();
+})();
 
 // ===== КНОПКА "НАВЕРХ" =====
 (function() {
