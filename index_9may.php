@@ -322,7 +322,7 @@ if ($ny_active) {
      "auto"      — сам выбирает праздник по дате (за 14 дней до и 7 дней после)
    В режиме "auto" можно принудительно выбрать тему через settings.json: "holiday": "may9"
 ========================================== */
-$HOLIDAY_MODE = "november7";
+$HOLIDAY_MODE = "may9";
 
 $HOLIDAYS = [
     "november7" => [
