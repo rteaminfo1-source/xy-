@@ -89,12 +89,12 @@ if ($rteam_active_ban) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
     body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
-        background:#07040f; color:#ece7fb; font-family: Arial, sans-serif; text-align:center; padding:20px; }
-    .box { max-width:480px; padding:32px; border:1px solid rgba(255,42,42,.35); border-radius:14px; background:#14101f; }
+        background:#080606; color:#f2eaea; font-family: Arial, sans-serif; text-align:center; padding:20px; }
+    .box { max-width:480px; padding:32px; border:1px solid rgba(255,42,42,.35); border-radius:14px; background:#141010; }
     h1 { color:#ff2a2a; font-size:22px; margin-bottom:12px; }
-    p { color:#ada2cc; line-height:1.5; margin:6px 0; }
+    p { color:#b8a8a8; line-height:1.5; margin:6px 0; }
     .reason { margin-top:16px; padding:12px; border-left:2px solid #ff2a2a; background:rgba(255,42,42,.08); text-align:left; border-radius:4px; }
-    .ipline { color:#6f6689; font-size:12px; margin-top:18px; }
+    .ipline { color:#7a6666; font-size:12px; margin-top:18px; }
 </style>
 </head>
 <body>
@@ -132,10 +132,10 @@ if (!empty($geoblock_settings["enabled"]) && !empty($geoblock_settings["countrie
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
     body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
-        background:#07040f; color:#ece7fb; font-family: Arial, sans-serif; text-align:center; padding:20px; }
-    .box { max-width:480px; padding:32px; border:1px solid rgba(155,92,255,.28); border-radius:14px; background:#14101f; }
+        background:#080606; color:#f2eaea; font-family: Arial, sans-serif; text-align:center; padding:20px; }
+    .box { max-width:480px; padding:32px; border:1px solid rgba(255,42,42,.28); border-radius:14px; background:#141010; }
     h1 { color:#ff2a2a; font-size:22px; margin-bottom:12px; }
-    p { color:#ada2cc; line-height:1.5; }
+    p { color:#b8a8a8; line-height:1.5; }
 </style>
 </head>
 <body>
@@ -265,7 +265,7 @@ foreach ($squid_game["progress"] as $sg_login => $sg_p) {
 }
 uasort($squid_winners, fn($a, $b) => strcmp($a["completed_at"] ?? "", $b["completed_at"] ?? ""));
 
-$accent = $settings["accent"] ?? "#9b5cff";
+$accent = $settings["accent"] ?? "#ff2a2a";
 
 $teamQ  = $questions["team"];
 $adminQ = $questions["admin"];
@@ -510,23 +510,23 @@ $stat_squid   = count($squid_winners);
 <title>RTeam — Команда программирования и IT-разработки | rteam.info</title>
 <meta name="description" content="RTeam — профессиональная команда программирования. Разрабатываем сайты, приложения и сложные IT-решения под ключ">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="<?= $hol_active ? $hol["colors"]["bg2"] : '#07040f' ?>">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23<?= $hol_active ? ltrim($hol["colors"]["p3"], '#') : '6d28d9' ?>'/%3E%3Cpath d='M32 10l6.2 13.3 14.6 1.7-10.8 10 2.9 14.4L32 42.2l-12.9 7.2 2.9-14.4-10.8-10 14.6-1.7z' fill='%23<?= $hol_active ? ltrim($hol["colors"]["b"], '#') : 'ffffff' ?>'/%3E%3C/svg%3E">
+<meta name="theme-color" content="<?= $hol_active ? $hol["colors"]["bg2"] : '#080606' ?>">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23<?= $hol_active ? ltrim($hol["colors"]["p3"], '#') : '8b0000' ?>'/%3E%3Cpath d='M32 10l6.2 13.3 14.6 1.7-10.8 10 2.9 14.4L32 42.2l-12.9 7.2 2.9-14.4-10.8-10 14.6-1.7z' fill='%23<?= $hol_active ? ltrim($hol["colors"]["b"], '#') : 'ffffff' ?>'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
 :root {
     --accent: <?=$accent?>;
-    --accent-2: #d946ef;
-    --accent-3: #6d28d9;
-    --accent-glow: rgba(155, 92, 255, .55);
-    --bg: #07040f;
-    --card: #14101f;
-    --card-2: #1b1430;
-    --border: rgba(155, 92, 255, .28);
-    --text: #ece7fb;
-    --soft: #ada2cc;
+    --accent-2: #ff4d4d;
+    --accent-3: #8b0000;
+    --accent-glow: rgba(255,42,42, .55);
+    --bg: #080606;
+    --card: #141010;
+    --card-2: #1c1414;
+    --border: rgba(255,42,42, .28);
+    --text: #f2eaea;
+    --soft: #b8a8a8;
     --grad: linear-gradient(135deg, var(--accent-3), var(--accent) 55%, var(--accent-2));
 }
 * { box-sizing: border-box; }
@@ -534,12 +534,12 @@ $stat_squid   = count($squid_winners);
 /* Плавная прокрутка при клике на меню */
 html { scroll-behavior: smooth; }
 
-/* Кастомный скроллбар в фиолетовой гамме */
+/* Кастомный скроллбар в красно-чёрной гамме */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: #08050f; }
-::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--accent-2), var(--accent-3)); border-radius: 6px; border: 2px solid #08050f; }
+::-webkit-scrollbar-track { background: #080505; }
+::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--accent-2), var(--accent-3)); border-radius: 6px; border: 2px solid #080505; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
-* { scrollbar-width: thin; scrollbar-color: var(--accent) #08050f; }
+* { scrollbar-width: thin; scrollbar-color: var(--accent) #080505; }
 
 /* Фоновые парящие частицы — общая атмосфера сайта */
 #ember-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
@@ -571,9 +571,9 @@ body {
     margin: 0;
     font-family: "Segoe UI", Arial, sans-serif;
     background:
-        radial-gradient(circle at 15% -10%, rgba(155,92,255,.20) 0, transparent 40%),
-        radial-gradient(circle at 90% 10%, rgba(217,70,239,.14) 0, transparent 45%),
-        radial-gradient(circle at top, #1a0838 0, #0a0616 45%, #030109 100%);
+        radial-gradient(circle at 15% -10%, rgba(255,42,42,.10) 0, transparent 40%),
+        radial-gradient(circle at 90% 10%, rgba(255,42,42,.06) 0, transparent 45%),
+        radial-gradient(circle at top, #170303 0, #0a0606 45%, #030202 100%);
     color: var(--text);
     overflow-x: hidden;
 }
@@ -617,7 +617,7 @@ body.skip-intro #main-content {
     font-weight: 900;
     font-family: "Segoe UI", Arial, sans-serif;
     color: transparent;
-    -webkit-text-stroke: 1px rgba(155, 92, 255, 0.35);
+    -webkit-text-stroke: 1px rgba(255,42,42, 0.35);
     letter-spacing: 20px;
     text-transform: uppercase;
     transform: scale(0.9);
@@ -650,13 +650,13 @@ body.skip-intro #main-content {
 /* CMD БОКС И ЕГО СОСТОЯНИЯ                    */
 /* ------------------------------------------- */
 #cmd-box {
-    background: #05030c;
-    border: 1px solid rgba(155,92,255,.25);
+    background: #050303;
+    border: 1px solid rgba(255,42,42,.25);
     padding: 20px;
     border-radius: 12px;
     font-family: Consolas, monospace;
-    color: #c9a6ff;
-    box-shadow: 0 0 30px rgba(155,92,255,.18), inset 0 0 30px rgba(155,92,255,.04);
+    color: #ffb3b3;
+    box-shadow: 0 0 30px rgba(255,42,42,.18), inset 0 0 30px rgba(255,42,42,.04);
     text-align: left;
     box-sizing: border-box;
     z-index: 100000;
@@ -719,9 +719,9 @@ header {
     position: fixed;
     top: 0;
     width: 100%;
-    background: rgba(9,6,18,0.85);
+    background: rgba(10,6,6,0.85);
     border-bottom: 1px solid var(--border);
-    box-shadow: 0 1px 24px rgba(155,92,255,.08);
+    box-shadow: 0 1px 24px rgba(255,42,42,.08);
     padding: 12px 40px;
     display: flex;
     justify-content: space-between;
@@ -799,10 +799,10 @@ p {
 }
 .blog-post:hover {
     transform: translateY(-4px);
-    border-color: rgba(217,70,239,.5);
-    box-shadow: 0 12px 32px rgba(109,40,217,.28);
+    border-color: rgba(255,77,77,.5);
+    box-shadow: 0 12px 32px rgba(139,0,0,.28);
 }
-.blog-date { font-size: 11.5px; color: #8a7fae; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+.blog-date { font-size: 11.5px; color: #8f7c7c; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
 .blog-title { font-size: 18px; color: #fff; margin-bottom: 8px; font-weight: 800; }
 .blog-post > div:last-child { color: var(--soft); font-size: 14px; line-height: 1.6; }
 
@@ -877,20 +877,20 @@ p {
     padding: 18px;
     border-radius: 14px;
     margin-top: 15px;
-    box-shadow: 0 8px 24px rgba(5,2,15,.4);
+    box-shadow: 0 8px 24px rgba(5,2,2,.4);
     transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
     overflow: hidden;
 }
 .card::before {
     content: "";
     position: absolute; inset: 0;
-    background: linear-gradient(120deg, rgba(155,92,255,.08), transparent 40%);
+    background: linear-gradient(120deg, rgba(255,42,42,.08), transparent 40%);
     pointer-events: none;
 }
 .card:hover {
     transform: translateY(-4px);
-    border-color: rgba(155,92,255,.55);
-    box-shadow: 0 14px 34px rgba(109,40,217,.28), 0 0 0 1px rgba(217,70,239,.12);
+    border-color: rgba(255,42,42,.55);
+    box-shadow: 0 14px 34px rgba(139,0,0,.28), 0 0 0 1px rgba(255,77,77,.12);
 }
 
 /* ФОРМЫ */
@@ -901,15 +901,15 @@ p {
     border: 1px solid var(--border);
     padding: 22px;
     border-radius: 14px;
-    box-shadow: 0 0 30px rgba(109,40,217,.18), inset 0 0 0 1px rgba(255,255,255,.02);
+    box-shadow: 0 0 30px rgba(139,0,0,.18), inset 0 0 0 1px rgba(255,255,255,.02);
 }
 input, textarea, select {
     width: 100%;
     padding: 11px 12px;
     margin-top: 8px;
     border-radius: 9px;
-    border: 1px solid rgba(155,92,255,.22);
-    background: #0b0716;
+    border: 1px solid rgba(255,42,42,.22);
+    background: #0c0808;
     color: #fff;
     resize: none;
     font-size: 14px;
@@ -918,7 +918,7 @@ input, textarea, select {
 input:focus, textarea:focus, select:focus {
     outline: none;
     border-color: var(--accent-2);
-    box-shadow: 0 0 0 3px rgba(217,70,239,.15);
+    box-shadow: 0 0 0 3px rgba(255,77,77,.15);
 }
 textarea { height: 110px; }
 
@@ -934,13 +934,13 @@ textarea { height: 110px; }
     text-decoration: none;
     border: none;
     cursor: pointer;
-    box-shadow: 0 4px 16px rgba(155,92,255,.4);
+    box-shadow: 0 4px 16px rgba(255,42,42,.4);
     transition: transform .2s ease, box-shadow .2s ease, background-position .4s ease;
 }
 .btn:hover {
     transform: translateY(-2px);
     background-position: 100% 0;
-    box-shadow: 0 8px 24px rgba(217,70,239,.5);
+    box-shadow: 0 8px 24px rgba(255,77,77,.5);
 }
 .btn:active { transform: translateY(0); }
 
@@ -952,7 +952,7 @@ textarea { height: 110px; }
     align-items: stretch;
 }
 .auth-wrap .box { flex: 1 1 360px; }
-.error { color: #ff8fd6; margin-top: 8px; font-size: 13px; }
+.error { color: #ff8f8f; margin-top: 8px; font-size: 13px; }
 
 /* ===== ОБНОВЛЁННЫЕ ЭЛЕМЕНТЫ ФОРМ / АККАУНТА (новый дизайн) ===== */
 .box-kicker {
@@ -961,8 +961,8 @@ textarea { height: 110px; }
     letter-spacing: 1.5px;
     text-transform: uppercase;
     color: var(--accent-2);
-    background: rgba(217,70,239,.12);
-    border: 1px solid rgba(217,70,239,.3);
+    background: rgba(255,77,77,.12);
+    border: 1px solid rgba(255,77,77,.3);
     padding: 3px 10px;
     border-radius: 999px;
     margin-bottom: 10px;
@@ -978,7 +978,7 @@ textarea { height: 110px; }
     border: 1px solid var(--border);
     color: var(--text);
 }
-.btn-ghost:hover { border-color: var(--accent-2); box-shadow: 0 6px 18px rgba(217,70,239,.18); }
+.btn-ghost:hover { border-color: var(--accent-2); box-shadow: 0 6px 18px rgba(255,77,77,.18); }
 .btn-golden {
     background: linear-gradient(135deg,#ffe066,#d4a017);
     color: #3a2a00;
@@ -994,7 +994,7 @@ textarea { height: 110px; }
     box-shadow: 0 4px 14px rgba(0,0,0,.25);
 }
 .btn-google:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.3); }
-.divider { display: flex; align-items: center; gap: 10px; margin: 18px 0 4px; color: #6d6390; font-size: 12px; }
+.divider { display: flex; align-items: center; gap: 10px; margin: 18px 0 4px; color: #7a6666; font-size: 12px; }
 .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 
 /* Кнопки в шапке (Войти / Регистрация / Выйти) */
@@ -1008,9 +1008,9 @@ textarea { height: 110px; }
     transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
 }
 .nav-btn-ghost { color: var(--text); border: 1px solid var(--border); background: rgba(255,255,255,.02); }
-.nav-btn-ghost:hover { border-color: var(--accent-2); box-shadow: 0 4px 14px rgba(217,70,239,.2); }
-.nav-btn-solid { color: #fff; background: var(--grad); box-shadow: 0 4px 14px rgba(155,92,255,.35); }
-.nav-btn-solid:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(217,70,239,.4); }
+.nav-btn-ghost:hover { border-color: var(--accent-2); box-shadow: 0 4px 14px rgba(255,77,77,.2); }
+.nav-btn-solid { color: #fff; background: var(--grad); box-shadow: 0 4px 14px rgba(255,42,42,.35); }
+.nav-btn-solid:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(255,77,77,.4); }
 .user-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--soft); }
 .user-chip-avatar {
     width: 26px; height: 26px; border-radius: 50%;
@@ -1033,9 +1033,9 @@ textarea { height: 110px; }
 footer {
     text-align: center;
     padding: 18px;
-    background: #06040d;
+    background: #060404;
     border-top: 1px solid var(--border);
-    color: #8a7fae;
+    color: #8f7c7c;
     font-size: 12px;
 }
 
@@ -1353,7 +1353,7 @@ nav { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 0; }
     header nav {
         position: fixed; top: 64px; left: 0; right: 0; max-height: calc(100vh - 64px); overflow-y: auto;
         flex-direction: column; align-items: stretch; gap: 0;
-        background: #0a060e; border-bottom: 1px solid var(--border);
+        background: #0a0606; border-bottom: 1px solid var(--border);
         padding: 8px 16px 18px; transform: translateY(-110%); opacity: 0; pointer-events: none;
         transition: transform .35s ease, opacity .35s ease;
     }
@@ -1481,14 +1481,14 @@ nav { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 0; }
 .faq details p { margin: 0 0 16px; font-size: 14.5px; }
 
 /* ----- Подвал ----- */
-footer.site-footer { text-align: left; padding: 48px 60px 22px; background: linear-gradient(180deg, transparent, rgba(0,0,0,.35)), #06040d; font-size: 13.5px; color: var(--soft); }
+footer.site-footer { text-align: left; padding: 48px 60px 22px; background: linear-gradient(180deg, transparent, rgba(0,0,0,.35)), #060404; font-size: 13.5px; color: var(--soft); }
 .footer-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 30px; max-width: 1100px; margin: 0 auto; }
 .footer-grid h4 { margin: 0 0 12px; color: #fff; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; }
 .footer-grid a { display: block; color: var(--soft); text-decoration: none; padding: 4px 0; }
 .footer-grid a:hover { color: var(--accent-2); }
 .footer-grid a.logo { display: inline-flex; padding: 0; }
 .footer-grid p { margin: 12px 0 0; font-size: 13.5px; }
-.footer-bottom { max-width: 1100px; margin: 30px auto 0; padding-top: 16px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 12px; color: #8a7fae; }
+.footer-bottom { max-width: 1100px; margin: 30px auto 0; padding-top: 16px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 12px; color: #8f7c7c; }
 @media (max-width: 768px) {
     footer.site-footer { padding: 36px 16px 18px; }
     .footer-grid { grid-template-columns: 1fr; gap: 20px; }
