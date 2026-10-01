@@ -338,6 +338,7 @@ $HOLIDAYS = [
         "title" => "Великий <em>Октябрь</em><br>в RTeam",
         "text" => "7 ноября — годовщина Октябрьской революции 1917 года. Сайт перекрашен в красное и золотое, в команде стартует праздничный ивент, а самые активные получат шанс на «Золотой билет RTeam».",
         "greeting" => "С праздником Великого Октября!",
+        "toast" => "Залп «Авроры»! ★",
         "wish" => "С годовщиной Великой Октябрьской революции! Пусть код будет крепким, как броня крейсера «Аврора», а идеи — такими же смелыми, как в 1917-м.",
         "cards" => [
             ["Ивент", "⚙️", "Хакатон «Красный код»", "Небольшое задание от команды: напиши лучшее решение и попади в праздничный рейтинг."],
@@ -367,6 +368,7 @@ $HOLIDAYS = [
         "text" => "Подводим итоги года и открываем новый сезон. Участвуйте в новогоднем розыгрыше — один счастливчик получит «Золотой билет RTeam».",
         "cta" => ["giveaway.php", "🎁 Новогодний розыгрыш"],
         "greeting" => "С Новым годом!",
+        "toast" => "Ёлочка, гори! ❄",
         "wish" => "С Новым {year} годом! Пусть в новом году всё компилируется с первого раза, релизы выходят вовремя, а под ёлкой лежит золотой билет.",
         "cards" => [
             ["Розыгрыш", "🎁", "Новогодний розыгрыш", "Итоги подводятся автоматически 1 января — победитель получает «Золотой билет RTeam»."],
@@ -396,6 +398,7 @@ $HOLIDAYS = [
         "title" => "С Днём <em>защитника</em><br>Отечества",
         "text" => "23 февраля RTeam поздравляет всех, кто защищает страну, близких и продакшен. В команде стартует праздничный ивент, а самые активные получат шанс на «Золотой билет RTeam».",
         "greeting" => "С Днём защитника Отечества!",
+        "toast" => "Ура защитникам! ★",
         "wish" => "С Днём защитника Отечества! Крепкого здоровья, надёжного тыла и кода, который выдержит любую атаку.",
         "cards" => [
             ["Ивент", "🛡️", "Операция «Файрвол»", "Задание на безопасность от команды: найди уязвимость в учебном коде и попади в рейтинг."],
@@ -424,6 +427,7 @@ $HOLIDAYS = [
         "title" => "С <em>8 марта</em>,<br>дорогие!",
         "text" => "RTeam поздравляет всех девушек и женщин — в команде, на форуме и за её пределами. Весенний ивент уже стартовал, а самые активные получат шанс на «Золотой билет RTeam».",
         "greeting" => "С 8 марта!",
+        "toast" => "Цветы для вас! ✿",
         "wish" => "С 8 марта! Весеннего настроения, тепла, вдохновения и улыбок. Пусть всё задуманное получается легко!",
         "cards" => [
             ["Ивент", "💐", "Весенний ивент", "Праздничные задания от команды — выполняй и попадай в рейтинг."],
@@ -453,6 +457,7 @@ $HOLIDAYS = [
         "title" => "С Днём <em>Победы</em>",
         "text" => "9 мая — день памяти и благодарности. Поздравляем ветеранов и всех, кто хранит память о Великой Отечественной войне. Расскажите историю своей семьи — лучшие истории команда опубликует в блоге.",
         "greeting" => "С Днём Победы!",
+        "toast" => "Салют Победы! ★",
         "wish" => "С Днём Победы! Вечная память героям и низкий поклон ветеранам. Мирного неба над головой.",
         "cards" => [
             ["Память", "🕯️", "Помним каждого", "Истории о родных, прошедших войну, — присылайте через форму «Контакты»."],
@@ -519,7 +524,7 @@ function rteam_star_d($cx, $cy, $R, $r) {
 }
 
 function rteam_holiday_art($key, $p, $year) {
-    $banner = ["november7" => ["7 НОЯБРЯ", "#ffc93c", "#4a0306", 28],
+    $banner = ["november7" => ["7 НОЯБРЯ · 1917", "#ffc93c", "#4a0306", 24],
                "newyear"   => ["С НОВЫМ $year ГОДОМ!", "#ffd76a", "#2a1e00", 19],
                "feb23"     => ["23 ФЕВРАЛЯ", "#e8c547", "#1c2a10", 26],
                "mar8"      => ["8 МАРТА", "#ff4f9a", "#ffffff", 28],
@@ -529,33 +534,69 @@ function rteam_holiday_art($key, $p, $year) {
     $body = "";
 
     if ($key === "november7") {
-        $defs .= '<radialGradient id="' . $p . 'bg" cx="50%" cy="34%" r="70%"><stop offset="0" stop-color="#ff7a3d"/><stop offset=".45" stop-color="#c8161d"/><stop offset="1" stop-color="#3a0508"/></radialGradient>'
-               . '<linearGradient id="' . $p . 'gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#e0a21a"/></linearGradient>';
-        $body .= '<rect width="400" height="400" fill="url(#' . $p . 'bg)"/>';
-        $body .= '<g class="art-spin" style="transform-origin:200px 120px">';
-        for ($i = 0; $i < 18; $i++) {
-            $a1 = deg2rad($i * 20 - 5); $a2 = deg2rad($i * 20 + 5);
-            $body .= '<path d="M200 120 L' . round(200 + 340 * cos($a1)) . ' ' . round(120 + 340 * sin($a1)) . ' L' . round(200 + 340 * cos($a2)) . ' ' . round(120 + 340 * sin($a2)) . 'Z" fill="#ffc93c" opacity=".16"/>';
+        $defs .= '<linearGradient id="' . $p . 'sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a0306"/><stop offset=".35" stop-color="#9c1016"/><stop offset=".53" stop-color="#e0402a"/><stop offset=".6" stop-color="#ffa040"/></linearGradient>'
+               . '<radialGradient id="' . $p . 'sun"><stop offset="0" stop-color="#fff4c0"/><stop offset=".45" stop-color="#ffc24a"/><stop offset="1" stop-color="#ff7a2a" stop-opacity="0"/></radialGradient>'
+               . '<linearGradient id="' . $p . 'gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0a8"/><stop offset=".5" stop-color="#ffc93c"/><stop offset="1" stop-color="#d48a10"/></linearGradient>'
+               . '<radialGradient id="' . $p . 'glow"><stop offset="0" stop-color="#ffd76a" stop-opacity=".8"/><stop offset="1" stop-color="#ffd76a" stop-opacity="0"/></radialGradient>'
+               . '<linearGradient id="' . $p . 'water" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a1a14"/><stop offset="1" stop-color="#1a0204"/></linearGradient>'
+               . '<radialGradient id="' . $p . 'flash"><stop offset="0" stop-color="#ffffff"/><stop offset=".35" stop-color="#ffe066"/><stop offset=".7" stop-color="#ff7a1a" stop-opacity=".7"/><stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/></radialGradient>';
+        // Небо на рассвете, лучи и солнце над Невой
+        $body .= '<rect width="400" height="400" fill="url(#' . $p . 'sky)"/>';
+        $body .= '<g class="art-spin" style="transform-origin:200px 240px">';
+        for ($i = 0; $i < 20; $i++) {
+            $a1 = deg2rad($i * 18 - 4); $a2 = deg2rad($i * 18 + 4);
+            $body .= '<path d="M200 240 L' . round(200 + 360 * cos($a1)) . ' ' . round(240 + 360 * sin($a1)) . ' L' . round(200 + 360 * cos($a2)) . ' ' . round(240 + 360 * sin($a2)) . 'Z" fill="#ffd76a" opacity=".13"/>';
         }
         $body .= '</g>';
-        $body .= '<path d="' . rteam_star_d(200, 122, 66, 26) . '" fill="url(#' . $p . 'gold)" stroke="#8b0d12" stroke-width="5" stroke-linejoin="round"/>';
-        $body .= '<path class="art-beam" style="transform-origin:296px 194px" d="M296 194 L420 70 L420 150 Z" fill="#fff3c4" opacity=".22"/>';
-        $body .= '<rect y="290" width="400" height="110" fill="#2a0306"/>';
-        $body .= '<path d="M0 298 Q25 290 50 298 T100 298 T150 298 T200 298 T250 298 T300 298 T350 298 T400 298 V308 H0Z" fill="#5a0a10"/>';
+        $body .= '<circle cx="200" cy="240" r="74" fill="url(#' . $p . 'sun)"/>';
+        // Звезда
+        $body .= '<circle class="art-pulse" cx="200" cy="98" r="74" fill="url(#' . $p . 'glow)"/>';
+        $body .= '<path d="' . rteam_star_d(200, 100, 54, 22) . '" fill="url(#' . $p . 'gold)" stroke="#8b0d12" stroke-width="4" stroke-linejoin="round"/>';
+        // Зимний дворец и Александровская колонна на дальнем берегу
+        $body .= '<g fill="#5a0a12">'
+               . '<rect x="10" y="222" width="380" height="18"/><rect x="160" y="213" width="80" height="27"/><rect x="34" y="216" width="44" height="24"/><rect x="322" y="216" width="44" height="24"/>'
+               . '<rect x="250" y="168" width="6" height="54"/><rect x="246" y="166" width="14" height="4"/><circle cx="253" cy="160" r="5"/>';
+        for ($x = 14; $x < 386; $x += 11) $body .= '<rect x="' . $x . '" y="' . (($x > 160 && $x < 240) ? 208 : (($x > 34 && $x < 78) || ($x > 322 && $x < 366) ? 211 : 217)) . '" width="3" height="5"/>';
+        $body .= '</g>';
+        for ($x = 16; $x < 384; $x += 9) {
+            $body .= '<rect x="' . $x . '" y="227" width="4" height="3.5" fill="#ffb347" opacity=".45"/><rect x="' . $x . '" y="233" width="4" height="3.5" fill="#ffb347" opacity=".3"/>';
+        }
+        // Нева и солнечная дорожка
+        $body .= '<rect y="240" width="400" height="160" fill="url(#' . $p . 'water)"/>';
+        foreach ([[248, 110], [255, 90], [262, 74], [269, 60], [276, 46], [283, 34], [290, 24]] as $i => [$ry, $rw]) {
+            $body .= '<rect class="art-blink" style="animation-delay:-' . ($i * 0.3) . 's" x="' . (200 - $rw / 2) . '" y="' . $ry . '" width="' . $rw . '" height="2.5" rx="1.2" fill="#ffc24a" opacity=".7"/>';
+        }
+        $body .= '<ellipse cx="200" cy="314" rx="172" ry="9" fill="#120102" opacity=".6"/>';
+        // Луч прожектора
+        $body .= '<path class="art-beam" style="transform-origin:294px 204px" d="M294 204 L420 90 L420 170 Z" fill="#fff3c4" opacity=".2"/>';
         // Крейсер «Аврора»
         $body .= '<g fill="#1a0204">'
-               . '<path d="M46 268 L354 258 L332 298 L74 298 Z"/>'
-               . '<rect x="112" y="246" width="176" height="24" rx="2"/><rect x="150" y="230" width="96" height="18" rx="2"/>'
-               . '<rect x="160" y="184" width="18" height="50" rx="3"/><rect x="190" y="180" width="18" height="54" rx="3"/><rect x="220" y="184" width="18" height="50" rx="3"/>'
-               . '<rect x="103" y="138" width="5" height="112"/><rect x="292" y="158" width="5" height="92"/>'
-               . '<rect x="284" y="188" width="18" height="12" rx="2"/>'
-               . '<rect x="300" y="244" width="46" height="5" transform="rotate(-8 300 246)"/>'
+               . '<path d="M34 284 L352 278 Q364 278 368 282 L348 310 L62 310 Q42 302 34 284 Z"/>'
+               . '<rect x="90" y="266" width="214" height="16" rx="2"/>'
+               . '<rect x="268" y="250" width="34" height="18"/><rect x="272" y="243" width="26" height="9"/>'
+               . '<rect x="144" y="192" width="17" height="78" rx="2"/><rect x="180" y="192" width="17" height="78" rx="2"/><rect x="216" y="192" width="17" height="78" rx="2"/>'
+               . '<rect x="143" y="188" width="19" height="6"/><rect x="179" y="188" width="19" height="6"/><rect x="215" y="188" width="19" height="6"/>'
+               . '<rect x="101" y="160" width="4" height="108"/><rect x="284" y="152" width="4" height="100"/>'
+               . '<rect x="102" y="140" width="2" height="22"/><rect x="285" y="132" width="2" height="22"/>'
+               . '<rect x="90" y="178" width="26" height="2.5"/><rect x="273" y="168" width="26" height="2.5"/>'
+               . '<rect x="278" y="200" width="16" height="9" rx="2"/>'
+               . '<rect x="312" y="265" width="14" height="8" rx="3"/><rect x="318" y="266" width="38" height="4" transform="rotate(-7 318 268)"/>'
+               . '<rect x="70" y="271" width="12" height="7" rx="3"/><rect x="44" y="273" width="32" height="4" transform="rotate(6 76 275)"/>'
+               . '<ellipse cx="128" cy="266" rx="10" ry="3.5"/><ellipse cx="250" cy="266" rx="10" ry="3.5"/>'
                . '</g>';
-        $body .= '<g fill="#c8161d" opacity=".75"><rect x="160" y="192" width="18" height="5"/><rect x="190" y="188" width="18" height="5"/><rect x="220" y="192" width="18" height="5"/></g>';
-        for ($x = 96; $x <= 316; $x += 20) $body .= '<circle cx="' . $x . '" cy="282" r="3" fill="#ffc93c" opacity=".85"/>';
-        $f1 = "M106 140 Q86 132 66 140 T26 140 V168 Q46 160 66 168 T106 168 Z";
-        $f2 = "M106 140 Q86 148 66 140 T26 140 V168 Q46 176 66 168 T106 168 Z";
+        $body .= '<g fill="#c8161d"><rect x="144" y="200" width="17" height="5"/><rect x="180" y="200" width="17" height="5"/><rect x="216" y="200" width="17" height="5"/></g>';
+        $body .= '<g stroke="#1a0204" stroke-width="1.2" fill="none"><path d="M103 141 L36 284"/><path d="M103 141 L286 133"/><path d="M286 133 L366 280"/><path d="M103 160 L144 192"/><path d="M286 152 L233 192"/></g>';
+        $body .= '<path d="M38 290 L362 284" stroke="#5a0a10" stroke-width="2"/>';
+        for ($x = 70; $x <= 330; $x += 15) $body .= '<circle cx="' . $x . '" cy="298" r="2.4" fill="#ffc93c" opacity=".9"/>';
+        // Красный флаг на грот-мачте
+        $f1 = "M103 142 Q83 134 63 142 T23 142 V168 Q43 160 63 168 T103 168 Z";
+        $f2 = "M103 142 Q83 150 63 142 T23 142 V168 Q43 176 63 168 T103 168 Z";
         $body .= '<path fill="#e0262b" stroke="#8b0d12" stroke-width="1.5" d="' . $f1 . '"><animate attributeName="d" dur="2.2s" repeatCount="indefinite" values="' . $f1 . ';' . $f2 . ';' . $f1 . '"/></path>';
+        // Выстрел носового орудия (сам по себе раз в несколько секунд и по нажатию)
+        $body .= '<g class="art-shot"><circle cx="362" cy="262" r="28" fill="url(#' . $p . 'flash)"/><path d="' . rteam_star_d(362, 262, 20, 7) . '" fill="#fff7c0"/></g>';
+        $body .= '<g class="art-smoke" fill="#d9c6bf"><circle cx="380" cy="252" r="10"/><circle cx="392" cy="242" r="12"/><circle cx="372" cy="240" r="8"/></g>';
+        // Волны перед кораблём
+        $body .= '<path d="M0 312 Q20 306 40 312 T80 312 T120 312 T160 312 T200 312 T240 312 T280 312 T320 312 T360 312 T400 312 V330 H0Z" fill="#3a0508"/>';
         $ring = "#ffc93c";
     }
 
@@ -727,6 +768,75 @@ function rteam_holiday_art($key, $p, $year) {
          . '<path d="M54 336 H346 L330 355 L346 374 H54 L70 355 Z" fill="' . $bfill . '" stroke="rgba(0,0,0,.35)" stroke-width="2"/>'
          . '<text x="200" y="363" text-anchor="middle" font-family="Russo One, Segoe UI, Arial, sans-serif" font-size="' . $bsize . '" fill="' . $bink . '">' . htmlspecialchars($btext) . '</text>'
          . '</svg>';
+}
+
+/* ==========================================
+   АГИТПЛАКАТЫ В СТИЛЕ 1920-х (только для 7 ноября)
+========================================== */
+function rteam_agit_posters() {
+    $font = 'font-family="Russo One, Segoe UI, Arial, sans-serif"';
+    $paper = "#efe3c8"; $ink = "#141010"; $red = "#c8161d";
+    $posters = [];
+
+    // 1. «Клином красным бей баги!» — по мотивам Эль Лисицкого
+    $s = '<rect width="300" height="420" fill="' . $paper . '"/>'
+       . '<rect x="150" width="150" height="420" fill="' . $ink . '"/>'
+       . '<circle cx="208" cy="200" r="78" fill="#f6efe0"/>'
+       . '<text x="214" y="236" text-anchor="middle" ' . $font . ' font-size="30" fill="' . $ink . '" transform="rotate(-12 214 226)">БАГИ</text>'
+       . '<path d="M14 150 L14 250 L236 200 Z" fill="' . $red . '"/>'
+       . '<rect x="172" y="52" width="40" height="40" fill="' . $red . '" transform="rotate(20 192 72)"/>'
+       . '<path d="M36 318 L84 302 L74 344 Z" fill="' . $ink . '"/>'
+       . '<rect x="36" y="362" width="74" height="9" fill="' . $red . '" transform="rotate(-12 73 366)"/>'
+       . '<path d="M246 392 L280 356 L284 404 Z" fill="' . $red . '"/>'
+       . '<circle cx="186" cy="388" r="9" fill="' . $paper . '"/>'
+       . '<text x="20" y="66" ' . $font . ' font-size="38" textLength="122" lengthAdjust="spacingAndGlyphs" fill="' . $ink . '">КЛИНОМ</text>'
+       . '<text x="20" y="112" ' . $font . ' font-size="28" textLength="122" lengthAdjust="spacingAndGlyphs" fill="' . $red . '">КРАСНЫМ</text>'
+       . '<text x="172" y="336" ' . $font . ' font-size="56" textLength="106" lengthAdjust="spacingAndGlyphs" fill="' . $paper . '">БЕЙ</text>'
+       . '<text x="20" y="406" ' . $font . ' font-size="11" letter-spacing="3" fill="' . $ink . '">RTEAM · 1917</text>';
+    $posters[] = ["Клином красным бей баги!", $s];
+
+    // 2. «Вся власть — коду!» — рупор в духе Родченко
+    $s = '<rect width="300" height="420" fill="' . $paper . '"/>'
+       . '<circle cx="206" cy="118" r="90" fill="' . $red . '"/>'
+       . '<text x="206" y="140" text-anchor="middle" ' . $font . ' font-size="62" fill="' . $paper . '">&lt;/&gt;</text>'
+       . '<path d="M0 300 L300 220 L300 290 L0 370 Z" fill="' . $ink . '"/>'
+       . '<path d="M30 292 L44 312 L164 262 L118 194 Z" fill="' . $ink . '"/>'
+       . '<ellipse cx="141" cy="228" rx="11" ry="41" fill="' . $red . '" transform="rotate(-34 141 228)"/>'
+       . '<rect x="22" y="290" width="18" height="26" rx="3" fill="' . $ink . '" transform="rotate(-34 31 303)"/>'
+       . '<g fill="none" stroke="' . $ink . '" stroke-width="6" stroke-linecap="round"><path d="M178 206 Q196 232 184 262"/><path d="M196 188 Q222 228 204 274"/><path d="M216 172 Q248 226 226 288"/></g>'
+       . '<text x="20" y="342" ' . $font . ' font-size="34" textLength="250" lengthAdjust="spacingAndGlyphs" fill="' . $paper . '" transform="rotate(-15 20 342)">ВСЯ ВЛАСТЬ</text>'
+       . '<text x="24" y="404" ' . $font . ' font-size="44" textLength="250" lengthAdjust="spacingAndGlyphs" fill="' . $red . '" transform="rotate(-15 24 404)">— КОДУ!</text>'
+       . '<text x="20" y="30" ' . $font . ' font-size="11" letter-spacing="3" fill="' . $ink . '">RTEAM · АГИТПРОП</text>';
+    $posters[] = ["Вся власть — коду!", $s];
+
+    // 3. «Программисты всех стран, коммитьте!» — шестерёнка и звезда
+    $pts = [];
+    for ($i = 0; $i < 12; $i++) {
+        $a = $i * 30;
+        foreach ([[80, -11], [96, -6], [96, 6], [80, 11]] as [$r, $da]) {
+            $rad = deg2rad($a + $da);
+            $pts[] = round(150 + $r * cos($rad), 1) . " " . round(196 + $r * sin($rad), 1);
+        }
+    }
+    $gear = "M" . implode(" L", $pts) . "Z M200 196 A50 50 0 1 0 100 196 A50 50 0 1 0 200 196 Z";
+    $s = '<rect width="300" height="420" fill="' . $paper . '"/>'
+       . '<path d="M0 0 L120 0 L0 90 Z" fill="' . $red . '" opacity=".9"/>'
+       . '<path d="' . $gear . '" fill="' . $ink . '" fill-rule="evenodd"/>'
+       . '<path d="' . rteam_star_d(150, 198, 62, 25) . '" fill="' . $red . '" stroke="' . $paper . '" stroke-width="3" stroke-linejoin="round"/>'
+       . '<text x="20" y="52" ' . $font . ' font-size="30" textLength="262" lengthAdjust="spacingAndGlyphs" fill="' . $ink . '">ПРОГРАММИСТЫ</text>'
+       . '<text x="20" y="86" ' . $font . ' font-size="24" textLength="168" lengthAdjust="spacingAndGlyphs" fill="' . $red . '">ВСЕХ СТРАН,</text>'
+       . '<text x="20" y="314" font-family="Consolas, monospace" font-size="12" fill="' . $ink . '">$ git commit -m "★"</text>'
+       . '<path d="M0 334 L300 294 L300 364 L0 404 Z" fill="' . $red . '"/>'
+       . '<text x="18" y="384" ' . $font . ' font-size="38" textLength="264" lengthAdjust="spacingAndGlyphs" fill="' . $paper . '" transform="rotate(-7.6 18 384)">КОММИТЬТЕ!</text>';
+    $posters[] = ["Программисты всех стран, коммитьте!", $s];
+
+    $o = '';
+    foreach ($posters as [$title, $svg]) {
+        $o .= '<figure class="agit-poster" tabindex="0" role="button" aria-label="Открыть плакат «' . htmlspecialchars($title) . '»">'
+            . '<svg viewBox="0 0 300 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' . htmlspecialchars($title) . '">' . $svg . '</svg>'
+            . '<figcaption>' . htmlspecialchars($title) . '</figcaption></figure>';
+    }
+    return $o;
 }
 
 /* Цифры для блока статистики на главной */
@@ -1750,6 +1860,47 @@ footer.site-footer { text-align: left; padding: 48px 60px 22px; background: line
 .hol-art .art-burst { animation: artBurst 2.8s ease-out infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes artBurst { 0% { transform: scale(.1); opacity: 0; } 15% { opacity: 1; } 70% { transform: scale(1); opacity: .9; } 100% { transform: scale(1.12); opacity: 0; } }
 
+/* ----- Нажатие на праздничную картинку ----- */
+.hol-hero-art { position: relative; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.hol-hero-art:active svg { transform: scale(.97); }
+.hol-hero-art svg { transition: transform .15s ease; }
+.hol-art-hint { position: absolute; top: 6%; right: -6%; padding: 5px 11px; border-radius: 999px; font-size: 12px; font-weight: 800; letter-spacing: .5px; background: var(--hol-b); color: var(--hol-ink); box-shadow: 0 6px 18px rgba(0,0,0,.4); animation: hintBob 1.8s ease-in-out infinite; pointer-events: none; }
+@keyframes hintBob { 0%, 100% { transform: translateY(0) rotate(6deg); } 50% { transform: translateY(-5px) rotate(6deg); } }
+.hol-confetti { position: fixed; z-index: 9995; pointer-events: none; color: var(--hol-b); text-shadow: 0 0 8px rgba(var(--hol-b-rgb), .7); transform: translate(-50%, -50%); animation: confettiFly 1.3s cubic-bezier(.15,.7,.3,1) forwards; }
+@keyframes confettiFly { to { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot)); opacity: 0; } }
+#hol-flash { position: fixed; inset: 0; z-index: 9994; pointer-events: none; background: radial-gradient(circle at 70% 55%, rgba(255,230,140,.75), rgba(255,90,30,.35) 45%, transparent 75%); opacity: 0; }
+#hol-flash.on { animation: screenFlash .7s ease-out; }
+@keyframes screenFlash { 0% { opacity: 1; } 100% { opacity: 0; } }
+.hol-toast { position: fixed; left: 50%; bottom: 28px; z-index: 9996; transform: translateX(-50%); padding: 12px 22px; border-radius: 999px; background: var(--hol-b); color: var(--hol-ink); font-family: "Russo One", sans-serif; font-size: 17px; box-shadow: 0 12px 30px rgba(0,0,0,.45); animation: toastIn 2.2s ease forwards; pointer-events: none; white-space: nowrap; }
+@keyframes toastIn { 0% { opacity: 0; transform: translate(-50%, 20px); } 12%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -10px); } }
+
+/* ----- 7 ноября: выстрел «Авроры», конструктивистские полосы ----- */
+.hol-art .art-shot { opacity: 0; animation: artShot 6s ease-out infinite; }
+@keyframes artShot { 0%, 88% { opacity: 0; } 90% { opacity: 1; } 100% { opacity: 0; } }
+.hol-art .art-smoke { opacity: 0; animation: artSmoke 6s ease-out infinite; }
+@keyframes artSmoke { 0%, 89% { opacity: 0; transform: translate(0, 0); } 92% { opacity: .75; } 100% { opacity: 0; transform: translate(16px, -14px); } }
+.hol-art.fire .art-shot { animation: artShotNow .9s ease-out; }
+.hol-art.fire .art-smoke { animation: artSmokeNow 1.4s ease-out; }
+@keyframes artShotNow { 0% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes artSmokeNow { 0% { opacity: 0; transform: translate(0, 0); } 15% { opacity: .8; } 100% { opacity: 0; transform: translate(18px, -16px); } }
+.hol-november7 #home::before, .hol-november7 #home::after { content: ""; position: absolute; left: -20%; width: 140%; z-index: 0; pointer-events: none; transform: rotate(-12deg); }
+.hol-november7 #home::before { top: 64%; height: 130px; background: rgba(0,0,0,.38); }
+.hol-november7 #home::after { top: 60%; height: 14px; background: rgba(var(--hol-a-rgb), .55); }
+
+/* ----- Агитплакаты ----- */
+.agit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 26px; max-width: 1000px; margin-top: 8px; }
+.agit-poster { margin: 0; cursor: zoom-in; transition: transform .3s ease, box-shadow .3s ease; outline: none; }
+.agit-poster svg { display: block; width: 100%; height: auto; border-radius: 4px; box-shadow: 0 18px 40px rgba(0,0,0,.5), 0 0 0 6px #efe3c8, 0 0 0 7px rgba(0,0,0,.25); }
+.agit-poster:nth-child(1) { transform: rotate(-2deg); }
+.agit-poster:nth-child(2) { transform: rotate(1.5deg); }
+.agit-poster:nth-child(3) { transform: rotate(-1deg); }
+.agit-poster:hover, .agit-poster:focus-visible { transform: rotate(0) translateY(-8px) scale(1.02); }
+.agit-poster figcaption { text-align: center; margin-top: 14px; font-family: "Russo One", sans-serif; color: var(--hol-b); font-size: 15px; }
+#agit-lightbox { position: fixed; inset: 0; z-index: 9993; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.85); cursor: zoom-out; }
+#agit-lightbox.show { display: flex; animation: cardIn .35s ease; }
+#agit-lightbox svg { height: min(88vh, 900px); width: auto; max-width: 100%; border-radius: 6px; box-shadow: 0 30px 80px rgba(0,0,0,.7), 0 0 0 8px #efe3c8; }
+@media (max-width: 520px) { .hol-art-hint { right: -2%; font-size: 11px; } }
+
 /* ----- Новый год: гирлянда через весь экран ----- */
 .hol-garland { position: relative; z-index: 3; height: 46px; margin-bottom: -46px; pointer-events: none; filter: drop-shadow(0 0 6px rgba(255,215,106,.55)); }
 .hol-garland svg { display: block; }
@@ -1795,7 +1946,8 @@ footer.site-footer { text-align: left; padding: 48px 60px 22px; background: line
 .hol-star { position: absolute; top: -10vh; color: var(--hol-b); text-shadow: 0 0 10px rgba(var(--hol-b-rgb),.6); animation: theme-icon-fall linear infinite; opacity: .55; }
 
 @media (prefers-reduced-motion: reduce) {
-    .hol-ribbon-track, .hero-rays, .hol-poster::before, .hol-star, .ember, .hol-hero-art, .hol-art *, .hol-fw { animation: none !important; }
+    .hol-ribbon-track, .hero-rays, .hol-poster::before, .hol-star, .ember, .hol-hero-art, .hol-art *, .hol-fw, .hol-art-hint, .hol-confetti { animation: none !important; }
+    .hol-confetti { display: none; }
     #hol-decor { display: none; }
 }
 
@@ -2249,7 +2401,7 @@ body.hol-on {
         <?php endif; ?>
         <div class="hero-inner">
             <?php if ($hol_active): ?>
-            <div class="hol-hero-art"><?= rteam_holiday_art($hol_key, "hero", $hol_year) ?></div>
+            <div class="hol-hero-art" role="button" tabindex="0" aria-label="Нажми на картинку"><?= rteam_holiday_art($hol_key, "hero", $hol_year) ?><span class="hol-art-hint">Нажми! <?=$hol["glyph"]?></span></div>
             <?php endif; ?>
             <span class="hero-kicker"><i></i><?= $hol_active ? "Праздничное обновление · " . htmlspecialchars($hol_date_label) : "Команда программирования RTeam" ?></span>
             <h1 id="dynamicText" style="color:#ff2a2a; text-shadow:0 0 20px #ff0000aa; transition:0.6s ease;">
@@ -2314,6 +2466,15 @@ body.hol-on {
             </div>
             <?php endforeach; ?>
         </div>
+
+        <?php if ($hol_key === "november7"): ?>
+        <div class="section-head" style="margin-top:56px;">
+            <span class="section-eyebrow">Агитплакаты</span>
+            <h1>Плакаты в стиле 1920-х</h1>
+            <p>Конструктивизм, красный клин и рупор — по мотивам Эль Лисицкого и Родченко. Нажми на плакат, чтобы рассмотреть.</p>
+        </div>
+        <div class="agit-grid"><?= rteam_agit_posters() ?></div>
+        <?php endif; ?>
 
         <div class="section-head" style="margin-top:46px;">
             <span class="section-eyebrow">Хроника</span>
@@ -2630,6 +2791,8 @@ body.hol-on {
 </div>
 
 <?php if ($hol_active): ?>
+<div id="hol-flash"></div>
+<?php if ($hol_key === "november7"): ?><div id="agit-lightbox" role="dialog" aria-modal="true" aria-label="Плакат"></div><?php endif; ?>
 <!-- ОТКРЫТКА-ПОЗДРАВЛЕНИЕ: показывается один раз за праздник -->
 <div id="hol-card" role="dialog" aria-modal="true" aria-label="Поздравление" data-key="<?=htmlspecialchars($hol_key . "_" . $hol_year)?>">
     <div class="hol-card-box">
@@ -2655,7 +2818,7 @@ const loopPhrases = [
     "compiling ideas...",
     "system online."
 ];
-const HOL = <?= json_encode($hol_active ? ["cmd" => $hol["cmd"], "boot" => $hol["boot"], "phrases" => $hol["phrases"], "colors" => [$hol["colors"]["a"], $hol["colors"]["b"], $hol["colors"]["light"]]] : null, JSON_UNESCAPED_UNICODE) ?>;
+const HOL = <?= json_encode($hol_active ? ["key" => $hol_key, "glyph" => $hol["glyph"], "toast" => $hol["toast"], "cmd" => $hol["cmd"], "boot" => $hol["boot"], "phrases" => $hol["phrases"], "colors" => [$hol["colors"]["a"], $hol["colors"]["b"], $hol["colors"]["light"]]] : null, JSON_UNESCAPED_UNICODE) ?>;
 if (HOL) loopPhrases.push(...HOL.cmd);
 let loopIndex = 0;
 let loopCharIndex = 0;
@@ -2902,6 +3065,56 @@ if (typeSelect) {
         entries.forEach(e => { if (e.isIntersecting) { run(e.target); io.unobserve(e.target); } });
     }, { threshold: .4 });
     nums.forEach(n => io.observe(n));
+})();
+
+// ===== НАЖАТИЕ НА ПРАЗДНИЧНУЮ КАРТИНКУ: залп, вспышка, разлёт звёзд =====
+(function() {
+    const art = document.querySelector('.hol-hero-art');
+    if (!art || !HOL) return;
+    const svg = art.querySelector('svg');
+    const flash = document.getElementById('hol-flash');
+    let toastEl = null;
+    function boom() {
+        svg.classList.remove('fire'); void svg.getBoundingClientRect(); svg.classList.add('fire');
+        setTimeout(() => svg.classList.remove('fire'), 1400);
+        if (HOL.key === 'november7' && flash) { flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on'); }
+        const r = art.getBoundingClientRect();
+        const cx = r.left + r.width * (HOL.key === 'november7' ? .9 : .5), cy = r.top + r.height * (HOL.key === 'november7' ? .65 : .5);
+        for (let i = 0; i < 30; i++) {
+            const s = document.createElement('span');
+            s.className = 'hol-confetti';
+            if (HOL.key === 'mar8' && i % 2) s.innerHTML = '<i class="petal"></i>'; else s.textContent = HOL.glyph;
+            const a = Math.random() * Math.PI * 2, d = 110 + Math.random() * 240;
+            s.style.left = cx + 'px'; s.style.top = cy + 'px';
+            s.style.fontSize = (14 + Math.random() * 18) + 'px';
+            s.style.setProperty('--dx', Math.cos(a) * d + 'px');
+            s.style.setProperty('--dy', Math.sin(a) * d - 70 + 'px');
+            s.style.setProperty('--rot', (Math.random() * 720 - 360) + 'deg');
+            document.body.appendChild(s);
+            setTimeout(() => s.remove(), 1400);
+        }
+        if (toastEl) toastEl.remove();
+        toastEl = document.createElement('div');
+        toastEl.className = 'hol-toast';
+        toastEl.textContent = HOL.toast;
+        document.body.appendChild(toastEl);
+        const t = toastEl; setTimeout(() => t.remove(), 2300);
+    }
+    art.addEventListener('click', boom);
+    art.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); boom(); } });
+})();
+
+// ===== АГИТПЛАКАТЫ: просмотр на весь экран =====
+(function() {
+    const box = document.getElementById('agit-lightbox');
+    if (!box) return;
+    function open(fig) { box.innerHTML = ''; box.appendChild(fig.querySelector('svg').cloneNode(true)); box.classList.add('show'); }
+    document.querySelectorAll('.agit-poster').forEach(fig => {
+        fig.addEventListener('click', () => open(fig));
+        fig.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(fig); } });
+    });
+    box.addEventListener('click', () => box.classList.remove('show'));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') box.classList.remove('show'); });
 })();
 
 // ===== ОТКРЫТКА-ПОЗДРАВЛЕНИЕ =====
