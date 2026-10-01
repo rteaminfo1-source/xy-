@@ -528,10 +528,35 @@ function rteam_holiday_art($key, $p, $year) {
                "newyear"   => ["С НОВЫМ $year ГОДОМ!", "#ffd76a", "#2a1e00", 19],
                "feb23"     => ["23 ФЕВРАЛЯ", "#e8c547", "#1c2a10", 26],
                "mar8"      => ["8 МАРТА", "#ff4f9a", "#ffffff", 28],
-               "may9"      => ["9 МАЯ · 1945 — $year", "#ffb347", "#1a0a00", 19]][$key] ?? null;
+               "may9"      => ["9 МАЯ · 1945 — $year", "#ffb347", "#1a0a00", 19],
+               "plain"     => ["RTEAM · INTO THE CODE", "#ff2a2a", "#ffffff", 18]][$key] ?? null;
     if (!$banner) return "";
     $defs = "";
     $body = "";
+
+    if ($key === "plain") {
+        $defs .= '<radialGradient id="' . $p . 'bg" cx="50%" cy="45%" r="70%"><stop offset="0" stop-color="#3a0508"/><stop offset=".6" stop-color="#140303"/><stop offset="1" stop-color="#050101"/></radialGradient>'
+               . '<linearGradient id="' . $p . 'mark" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b0000"/><stop offset=".55" stop-color="#ff2a2a"/><stop offset="1" stop-color="#ff6a4d"/></linearGradient>'
+               . '<radialGradient id="' . $p . 'glow"><stop offset="0" stop-color="#ff2a2a" stop-opacity=".7"/><stop offset="1" stop-color="#ff2a2a" stop-opacity="0"/></radialGradient>';
+        $body .= '<rect width="400" height="400" fill="url(#' . $p . 'bg)"/>';
+        $body .= '<g stroke="#ff2a2a" stroke-width="2" fill="none" opacity=".25"><path d="M20 110 H90 L110 130 H150"/><path d="M380 270 H310 L290 250 H250"/><path d="M40 300 H120 L140 280"/><path d="M360 90 H290 L270 110"/><path d="M200 20 V60"/></g>';
+        foreach ([[150, 130], [250, 250], [140, 280], [270, 110], [200, 60], [20, 110], [380, 270]] as [$nx, $ny]) $body .= '<circle class="art-blink" cx="' . $nx . '" cy="' . $ny . '" r="3.5" fill="#ff4d4d"/>';
+        $orbits = [[-18, 150, 58, 9, ["&lt;/&gt;", "{ }"]], [24, 132, 46, 7, ["$_", "#"]], [80, 120, 40, 11, ["01", "★"]]];
+        foreach ($orbits as [$rot, $rx, $ry, $dur, $labels]) {
+            $path = "M" . (200 - $rx) . " 190 A$rx $ry 0 1 1 " . (200 + $rx) . " 190 A$rx $ry 0 1 1 " . (200 - $rx) . " 190";
+            $body .= '<g transform="rotate(' . $rot . ' 200 190)"><path d="' . $path . '" fill="none" stroke="#ff2a2a" stroke-width="1.5" stroke-dasharray="4 6" opacity=".45"/>';
+            foreach ($labels as $li => $lab) {
+                $body .= '<g><rect x="-22" y="-13" width="44" height="26" rx="7" fill="#1a0606" stroke="#ff4d4d" stroke-width="1.5"/><text y="5" text-anchor="middle" font-family="Consolas, monospace" font-size="14" font-weight="700" fill="#ffb3b3">' . $lab . '</text>'
+                       . '<animateMotion dur="' . $dur . 's" begin="-' . ($li * $dur / 2) . 's" repeatCount="indefinite" path="' . $path . '"/></g>';
+            }
+            $body .= '</g>';
+        }
+        $body .= '<circle class="art-pulse" cx="200" cy="190" r="96" fill="url(#' . $p . 'glow)"/>';
+        $body .= '<rect x="132" y="122" width="136" height="136" rx="34" fill="url(#' . $p . 'mark)"/><rect x="134" y="124" width="132" height="132" rx="32" fill="none" stroke="#fff" stroke-opacity=".2" stroke-width="2"/>';
+        $body .= '<path d="M162 160 L146 190 L162 220 M238 160 L254 190 L238 220" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>';
+        $body .= '<path d="' . rteam_star_d(200, 194, 44, 18) . '" fill="#fff"/><circle cx="200" cy="194" r="7" fill="#ff2a2a"/>';
+        $ring = "#ff2a2a";
+    }
 
     if ($key === "november7") {
         $defs .= '<linearGradient id="' . $p . 'sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a0306"/><stop offset=".35" stop-color="#9c1016"/><stop offset=".53" stop-color="#e0402a"/><stop offset=".6" stop-color="#ffa040"/></linearGradient>'
@@ -611,6 +636,12 @@ function rteam_holiday_art($key, $p, $year) {
         }
         $body .= '<circle cx="326" cy="80" r="44" fill="url(#' . $p . 'moon)"/><circle cx="326" cy="80" r="22" fill="#fff6d6"/>';
         $body .= '<path d="M0 312 Q90 286 190 310 T400 300 V400 H0Z" fill="#cfe0ff"/><path d="M0 334 Q120 314 230 332 T400 324 V400 H0Z" fill="#ffffff"/>';
+        foreach ([[22, 0], [318, 1]] as [$hx, $hi]) {
+            $body .= '<rect x="' . $hx . '" y="266" width="56" height="42" fill="#4a2e22"/><path d="M' . ($hx - 6) . ' 268 L' . ($hx + 28) . ' 240 L' . ($hx + 62) . ' 268 Z" fill="#dce9ff"/>'
+                   . '<rect x="' . ($hx + 40) . '" y="244" width="8" height="16" fill="#4a2e22"/>'
+                   . '<rect class="art-blink" style="animation-delay:-' . ($hi * 0.8) . 's;animation-duration:3s" x="' . ($hx + 18) . '" y="278" width="18" height="14" fill="#ffd76a"/>'
+                   . '<path d="M' . ($hx + 27) . ' 278 V292 M' . ($hx + 18) . ' 285 H' . ($hx + 36) . '" stroke="#4a2e22" stroke-width="1.5"/>';
+        }
         $body .= '<rect x="188" y="288" width="24" height="34" fill="#6b3e1e"/>';
         $tiers = [["M200 150 L302 292 H98 Z", [118, 262, 200, 288, 284, 254]], ["M200 104 L278 212 H122 Z", [140, 184, 200, 206, 262, 178]], ["M200 64 L250 142 H150 Z", [166, 116, 200, 132, 234, 112]]];
         foreach ($tiers as [$d]) $body .= '<path d="' . $d . '" fill="url(#' . $p . 'tree)" stroke="#0f5e33" stroke-width="8" stroke-linejoin="round"/>';
@@ -633,6 +664,9 @@ function rteam_holiday_art($key, $p, $year) {
                . '<ellipse cx="104" cy="287" rx="10" ry="6" fill="#ffd76a"/><ellipse cx="120" cy="287" rx="10" ry="6" fill="#ffd76a"/>'
                . '<rect x="262" y="298" width="50" height="38" rx="4" fill="#2f7cf6"/><rect x="282" y="298" width="10" height="38" fill="#ffffff"/><rect x="262" y="312" width="50" height="9" fill="#ffffff"/>'
                . '<rect x="140" y="312" width="36" height="26" rx="3" fill="#ffd76a"/><rect x="154" y="312" width="8" height="26" fill="#e0262b"/>';
+        foreach ([[30, 7], [80, 9], [130, 6.5], [175, 8], [228, 10], [262, 7.5], [300, 9], [344, 6], [372, 8.5], [56, 11], [154, 9.5], [316, 7]] as $i => [$sx, $sd]) {
+            $body .= '<circle cx="' . $sx . '" cy="-10" r="' . (1.6 + $i % 3 * 0.7) . '" fill="#fff" opacity=".85"><animate attributeName="cy" from="-10" to="410" dur="' . $sd . 's" begin="-' . ($i * 0.9) . 's" repeatCount="indefinite"/></circle>';
+        }
         $ring = "#ffd76a";
     }
 
@@ -675,6 +709,9 @@ function rteam_holiday_art($key, $p, $year) {
             $body .= '<path d="' . $jet . '" transform="translate(' . $jx . ' ' . $jy . ')" fill="#e6edf2" stroke="#55606a" stroke-width="1"/>';
         }
         $body .= '</g>';
+        foreach ([[70, 150], [330, 150], [60, 300], [340, 300], [300, 60]] as $i => [$sx, $sy]) {
+            $body .= '<path class="art-blink" style="animation-delay:-' . ($i * 0.5) . 's" d="' . rteam_star_d($sx, $sy, 8, 3.2) . '" fill="#e8c547"/>';
+        }
         $ring = "#e8c547";
     }
 
@@ -713,6 +750,12 @@ function rteam_holiday_art($key, $p, $year) {
         $body .= '<path d="M236 252 L330 252 L298 352 L268 352 Z" fill="#fff3dc" stroke="#f0cfa0" stroke-width="2"/><path d="M236 252 L283 262 L330 252" fill="none" stroke="#f0cfa0" stroke-width="2"/>';
         $body .= '<ellipse cx="270" cy="282" rx="14" ry="8" fill="#ff4f9a" transform="rotate(-20 270 282)"/><ellipse cx="296" cy="282" rx="14" ry="8" fill="#ff4f9a" transform="rotate(20 296 282)"/><circle cx="283" cy="284" r="6" fill="#e0307a"/>';
         $body .= '</g>';
+        foreach ([[212, 70, "#ff7ab0", 0], [350, 250, "#ffd84d", 1.3], [56, 46, "#ffffff", 0.6]] as [$bx, $by, $bc, $bd]) {
+            $body .= '<g class="art-fly" style="animation-delay:-' . $bd . 's"><g transform="translate(' . $bx . ' ' . $by . ')"><g class="art-flap" style="animation-delay:-' . $bd . 's">'
+                   . '<ellipse cx="-8" cy="-5" rx="9" ry="7" fill="' . $bc . '" stroke="#c2306f" stroke-width="1"/><ellipse cx="8" cy="-5" rx="9" ry="7" fill="' . $bc . '" stroke="#c2306f" stroke-width="1"/>'
+                   . '<ellipse cx="-6" cy="6" rx="6" ry="5" fill="' . $bc . '" stroke="#c2306f" stroke-width="1"/><ellipse cx="6" cy="6" rx="6" ry="5" fill="' . $bc . '" stroke="#c2306f" stroke-width="1"/>'
+                   . '</g><ellipse rx="2" ry="9" fill="#5a1a3a"/><path d="M-1 -8 Q-5 -16 -8 -17 M1 -8 Q5 -16 8 -17" stroke="#5a1a3a" stroke-width="1.2" fill="none"/></g></g>';
+        }
         $ring = "#ffd84d";
     }
 
@@ -724,7 +767,7 @@ function rteam_holiday_art($key, $p, $year) {
         $body .= '<rect width="400" height="400" fill="url(#' . $p . 'bg)"/>';
         foreach ([[60, 40], [140, 30], [250, 24], [340, 50], [30, 110], [370, 130], [180, 100]] as [$sx, $sy]) $body .= '<circle cx="' . $sx . '" cy="' . $sy . '" r="1.6" fill="#fff" opacity=".8"/>';
         // Салют
-        foreach ([[100, 96, "#ffd76a", 0, 36], [302, 90, "#ff5a5a", 0.9, 40], [204, 58, "#ffffff", 1.8, 30], [70, 190, "#ff5a5a", 1.3, 24], [330, 186, "#ffd76a", 2.2, 26]] as [$fx, $fy, $c, $d, $len]) {
+        foreach ([[100, 96, "#ffd76a", 0, 36], [302, 90, "#ff5a5a", 0.9, 40], [204, 58, "#ffffff", 1.8, 30], [136, 170, "#ff5a5a", 1.3, 22], [330, 186, "#ffd76a", 2.2, 26]] as [$fx, $fy, $c, $d, $len]) {
             $body .= '<g class="art-burst" style="animation-delay:' . $d . 's">';
             for ($i = 0; $i < 16; $i++) {
                 $a = deg2rad($i * 22.5);
@@ -733,6 +776,10 @@ function rteam_holiday_art($key, $p, $year) {
             }
             $body .= '</g>';
         }
+        $body .= '<g fill="#1a0d08"><rect x="0" y="252" width="150" height="20"/><rect x="262" y="252" width="138" height="20"/>';
+        foreach (array_merge(range(2, 146, 9), range(264, 396, 9)) as $mx) $body .= '<path d="M' . $mx . ' 252 V244 L' . ($mx + 2.5) . ' 247 L' . ($mx + 5) . ' 244 V252 Z"/>';
+        $body .= '<rect x="44" y="214" width="40" height="40"/><rect x="50" y="186" width="28" height="30"/><rect x="56" y="166" width="16" height="22"/><path d="M56 166 L64 124 L72 166 Z"/></g>'
+               . '<circle cx="64" cy="200" r="7" fill="#ffcf5a" opacity=".85"/><path d="' . rteam_star_d(64, 118, 8, 3.4) . '" fill="#ff3b3b"/>';
         $body .= '<rect y="270" width="400" height="130" fill="#1a0d08"/>';
         // Георгиевская лента
         $body .= '<g transform="translate(0 270) rotate(-6 200 17)"><rect x="-40" y="0" width="480" height="35" fill="url(#' . $p . 'rib)"/></g>';
@@ -837,6 +884,277 @@ function rteam_agit_posters() {
             . '<figcaption>' . htmlspecialchars($title) . '</figcaption></figure>';
     }
     return $o;
+}
+
+/* ==========================================
+   ПРАЗДНИЧНЫЕ ГАЛЕРЕИ: у каждого праздника свои три картинки
+   (7 ноября — агитплакаты, Новый год — открытки, 23 февраля — шевроны,
+   8 марта — весенние открытки, 9 мая — открытки Победы)
+========================================== */
+function rteam_heart_d($x, $y, $s) {
+    return "M$x " . ($y + $s * .3) . " C$x $y " . ($x - $s / 2) . " $y " . ($x - $s / 2) . " " . ($y + $s * .3)
+         . " C" . ($x - $s / 2) . " " . ($y + $s * .6) . " $x " . ($y + $s * .75) . " $x " . ($y + $s)
+         . " C$x " . ($y + $s * .75) . " " . ($x + $s / 2) . " " . ($y + $s * .6) . " " . ($x + $s / 2) . " " . ($y + $s * .3)
+         . " C" . ($x + $s / 2) . " $y $x $y $x " . ($y + $s * .3) . "Z";
+}
+
+function rteam_laurel($cx, $cy, $R, $from, $to, $color, $stroke) {
+    $o = "";
+    foreach ([[$from, $to, -1], [180 - $from, 180 - $to, 1]] as [$f, $t, $dir]) {
+        for ($i = 0; $i <= 8; $i++) {
+            $deg = $f + ($t - $f) * $i / 8;
+            $a = deg2rad($deg);
+            foreach ([-1, 1] as $side) {
+                $r = $R + $side * 9;
+                $lx = round($cx + $r * cos($a), 1); $ly = round($cy + $r * sin($a), 1);
+                $rot = round($deg + 90 + $side * 28 * $dir);
+                $o .= '<ellipse cx="' . $lx . '" cy="' . $ly . '" rx="11" ry="4.6" fill="' . $color . '" stroke="' . $stroke . '" stroke-width="1" transform="rotate(' . $rot . ' ' . $lx . ' ' . $ly . ')"/>';
+            }
+        }
+    }
+    return $o;
+}
+
+function rteam_holiday_gallery($key, $year) {
+    $F = 'font-family="Russo One, Segoe UI, Arial, sans-serif"';
+    $items = [];
+
+    if ($key === "november7") {
+        return ["Агитплакаты", "Плакаты в стиле 1920-х", "Конструктивизм, красный клин и рупор — по мотивам Эль Лисицкого и Родченко. Нажми на плакат, чтобы рассмотреть.", rteam_agit_posters()];
+    }
+
+    if ($key === "newyear") {
+        // 1. Ёлочная игрушка
+        $s = '<defs><linearGradient id="gny1bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d4fae"/><stop offset="1" stop-color="#0a1c44"/></linearGradient>'
+           . '<radialGradient id="gny1ball" cx="38%" cy="35%" r="70%"><stop offset="0" stop-color="#ff8a8a"/><stop offset=".45" stop-color="#e0262b"/><stop offset="1" stop-color="#7a0a0f"/></radialGradient>'
+           . '<linearGradient id="gny1cap" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c8901a"/><stop offset=".5" stop-color="#fff0a8"/><stop offset="1" stop-color="#c8901a"/></linearGradient></defs>'
+           . '<rect width="300" height="420" fill="url(#gny1bg)"/>';
+        foreach ([[30, 120], [262, 150], [40, 300], [270, 330], [80, 200], [230, 250], [20, 220], [282, 90]] as $i => [$x, $y]) $s .= '<circle class="art-blink" style="animation-delay:-' . $i * .4 . 's" cx="' . $x . '" cy="' . $y . '" r="' . (2 + $i % 2) . '" fill="#fff"/>';
+        $s .= '<path d="M-10 40 Q150 76 310 30" stroke="#1f5e32" stroke-width="10" fill="none"/>';
+        for ($x = 0; $x <= 300; $x += 8) {
+            $t = $x / 300; $y = round((1 - $t) ** 2 * 40 + 2 * $t * (1 - $t) * 76 + $t ** 2 * 30, 1);
+            $s .= '<path d="M' . $x . ' ' . $y . ' l-12 ' . (($x / 8) % 2 ? 18 : -16) . 'M' . $x . ' ' . $y . ' l12 ' . (($x / 8) % 2 ? -14 : 18) . '" stroke="#2f8a4c" stroke-width="3" stroke-linecap="round"/>';
+        }
+        $s .= '<line x1="150" y1="58" x2="150" y2="110" stroke="#ffd76a" stroke-width="2"/><circle cx="150" cy="112" r="6" fill="none" stroke="#ffd76a" stroke-width="2.5"/>'
+            . '<rect x="132" y="116" width="36" height="22" rx="3" fill="url(#gny1cap)"/><path d="M138 118 V136 M144 118 V136 M150 118 V136 M156 118 V136 M162 118 V136" stroke="#a8761a" stroke-width="1.2"/>'
+            . '<circle cx="150" cy="232" r="96" fill="url(#gny1ball)"/>'
+            . '<ellipse cx="150" cy="232" rx="96" ry="22" fill="none" stroke="#ffd76a" stroke-width="4" stroke-dasharray="1 9" stroke-linecap="round"/>'
+            . '<ellipse cx="150" cy="232" rx="96" ry="52" fill="none" stroke="#ffd76a" stroke-width="1.5" opacity=".6"/>'
+            . '<path d="' . rteam_star_d(150, 228, 34, 14) . '" fill="#ffd76a" stroke="#b8860b" stroke-width="2" stroke-linejoin="round"/>'
+            . '<ellipse cx="112" cy="188" rx="26" ry="13" fill="#fff" opacity=".35" transform="rotate(-35 112 188)"/>'
+            . '<text x="22" y="372" ' . $F . ' font-size="28" textLength="256" lengthAdjust="spacingAndGlyphs" fill="#ffd76a">С НОВЫМ ГОДОМ!</text>'
+            . '<text x="150" y="400" text-anchor="middle" ' . $F . ' font-size="12" letter-spacing="3" fill="#cfe0ff">RTEAM · ' . $year . '</text>';
+        $items[] = ["Ёлочная игрушка", $s];
+
+        // 2. Куранты без минуты полночь
+        $s = '<defs><linearGradient id="gny2bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0e2a5e"/><stop offset="1" stop-color="#06142e"/></linearGradient></defs>'
+           . '<rect width="300" height="420" fill="url(#gny2bg)"/>';
+        foreach ([[50, 52, "#ffd76a", 0], [252, 46, "#ff5a5a", 1.2], [262, 300, "#ffd76a", 2]] as [$fx, $fy, $c, $d]) {
+            $s .= '<g class="art-burst" style="animation-delay:' . $d . 's">';
+            for ($i = 0; $i < 12; $i++) { $a = deg2rad($i * 30); $s .= '<line x1="' . round($fx + 4 * cos($a), 1) . '" y1="' . round($fy + 4 * sin($a), 1) . '" x2="' . round($fx + 22 * cos($a), 1) . '" y2="' . round($fy + 22 * sin($a), 1) . '" stroke="' . $c . '" stroke-width="2" stroke-linecap="round"/>'; }
+            $s .= '</g>';
+        }
+        $s .= '<circle cx="150" cy="180" r="106" fill="#0a1c44" stroke="#ffd76a" stroke-width="8"/><circle cx="150" cy="180" r="90" fill="#f6efe0"/>';
+        for ($i = 0; $i < 60; $i++) {
+            $a = deg2rad($i * 6 - 90); $big = $i % 5 === 0;
+            $r1 = $big ? 74 : 82;
+            $s .= '<line x1="' . round(150 + $r1 * cos($a), 1) . '" y1="' . round(180 + $r1 * sin($a), 1) . '" x2="' . round(150 + 86 * cos($a), 1) . '" y2="' . round(180 + 86 * sin($a), 1) . '" stroke="#0a1c44" stroke-width="' . ($big ? 4 : 1.5) . '"/>';
+        }
+        $s .= '<text x="150" y="226" text-anchor="middle" ' . $F . ' font-size="11" letter-spacing="3" fill="#0a1c44">RTEAM</text>'
+            . '<line x1="150" y1="180" x2="150" y2="132" stroke="#0a1c44" stroke-width="7" stroke-linecap="round" transform="rotate(-1 150 180)"/>'
+            . '<line x1="150" y1="180" x2="150" y2="112" stroke="#0a1c44" stroke-width="4" stroke-linecap="round" transform="rotate(-6 150 180)"/>'
+            . '<line class="art-tick" style="transform-origin:150px 180px" x1="150" y1="192" x2="150" y2="104" stroke="#e0262b" stroke-width="2"/>'
+            . '<circle cx="150" cy="180" r="6" fill="#e0262b"/>'
+            . '<text x="40" y="336" ' . $F . ' font-size="17" textLength="220" lengthAdjust="spacingAndGlyphs" fill="#cfe0ff">ДО НОВОГО ГОДА —</text>'
+            . '<text x="22" y="384" ' . $F . ' font-size="36" textLength="256" lengthAdjust="spacingAndGlyphs" fill="#ffd76a">ОДИН КОММИТ</text>';
+        $items[] = ["Без минуты полночь", $s];
+
+        // 3. Снеговик
+        $s = '<defs><linearGradient id="gny3bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b3f8a"/><stop offset="1" stop-color="#0b1f45"/></linearGradient>'
+           . '<radialGradient id="gny3snow" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#c6dafa"/></radialGradient></defs>'
+           . '<rect width="300" height="420" fill="url(#gny3bg)"/><circle cx="252" cy="58" r="20" fill="#fff6d6"/>';
+        foreach ([[40, 60], [100, 40], [180, 30], [30, 160], [270, 140], [60, 240], [250, 230]] as $i => [$x, $y]) $s .= '<circle class="art-blink" style="animation-delay:-' . $i * .5 . 's" cx="' . $x . '" cy="' . $y . '" r="2" fill="#fff"/>';
+        $s .= '<path d="M0 316 Q150 286 300 316 V420 H0Z" fill="#e8f1ff"/>'
+            . '<line x1="112" y1="206" x2="62" y2="168" stroke="#6b3e1e" stroke-width="4" stroke-linecap="round"/><path d="M70 174 l-10 -4 M66 170 l-2 -10" stroke="#6b3e1e" stroke-width="3" stroke-linecap="round"/>'
+            . '<line x1="188" y1="206" x2="226" y2="166" stroke="#6b3e1e" stroke-width="4" stroke-linecap="round"/>'
+            . '<circle cx="150" cy="282" r="58" fill="url(#gny3snow)"/><circle cx="150" cy="200" r="44" fill="url(#gny3snow)"/><circle cx="150" cy="136" r="32" fill="url(#gny3snow)"/>'
+            . '<path d="M122 112 L178 112 L168 76 L132 76 Z" fill="#e0262b"/><rect x="118" y="108" width="64" height="8" rx="3" fill="#b3141b"/>'
+            . '<circle cx="139" cy="130" r="3.5" fill="#0a1c44"/><circle cx="161" cy="130" r="3.5" fill="#0a1c44"/>'
+            . '<path d="M150 138 L184 145 L150 147 Z" fill="#ff8a1a"/>'
+            . '<path d="M138 152 q12 8 24 0" stroke="#0a1c44" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-dasharray="1 5"/>'
+            . '<path d="M118 164 Q150 178 182 164 L184 176 Q150 190 116 176 Z" fill="#e0262b"/><path d="M164 174 L174 212 L188 208 L176 172 Z" fill="#e0262b"/>'
+            . '<path d="M168 186 L182 183 M171 198 L185 195" stroke="#fff" stroke-width="3"/>'
+            . '<circle cx="150" cy="196" r="4" fill="#0a1c44"/><circle cx="150" cy="212" r="4" fill="#0a1c44"/><circle cx="150" cy="228" r="4" fill="#0a1c44"/>'
+            . '<line x1="232" y1="164" x2="232" y2="128" stroke="#6b3e1e" stroke-width="4"/>'
+            . '<rect x="198" y="96" width="70" height="38" rx="4" fill="#fff3dc" stroke="#8a5a2a" stroke-width="2"/>'
+            . '<text x="233" y="123" text-anchor="middle" ' . $F . ' font-size="22" fill="#e0262b">&lt;/&gt;</text>'
+            . '<text x="20" y="376" ' . $F . ' font-size="24" textLength="150" lengthAdjust="spacingAndGlyphs" fill="#0d2a66">ПУСТЬ ВСЁ</text>'
+            . '<text x="20" y="406" ' . $F . ' font-size="26" textLength="260" lengthAdjust="spacingAndGlyphs" fill="#e0262b">КОМПИЛИРУЕТСЯ!</text>';
+        $items[] = ["Снеговик-разработчик", $s];
+        $head = ["Открытки", "Новогодние открытки", "В духе советских новогодних открыток. Нажми на открытку, чтобы рассмотреть."];
+    }
+
+    if ($key === "feb23") {
+        $fabric = '<defs><pattern id="gfabric" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)"><rect width="8" height="8" fill="#4a5a2a"/><rect width="3" height="8" fill="#43521f"/></pattern></defs><rect width="300" height="420" fill="url(#gfabric)"/>';
+        $gold = "#e8c547";
+        // 1. Войска кода
+        $shield = "M150 40 L262 76 V200 Q262 320 150 380 Q38 320 38 200 V76 Z";
+        $s = $fabric
+           . '<path d="' . $shield . '" fill="#1f3316" stroke="' . $gold . '" stroke-width="10" stroke-linejoin="round"/>'
+           . '<path d="' . $shield . '" fill="none" stroke="' . $gold . '" stroke-width="2" stroke-dasharray="6 5" transform="translate(150 210) scale(.88) translate(-150 -210)"/>'
+           . '<path d="' . rteam_star_d(150, 88, 14, 6) . '" fill="#e0262b" stroke="' . $gold . '" stroke-width="1.5"/>'
+           . '<text x="78" y="138" ' . $F . ' font-size="30" textLength="144" lengthAdjust="spacingAndGlyphs" fill="' . $gold . '">ВОЙСКА</text>'
+           . '<g stroke-linecap="round"><line x1="92" y1="300" x2="208" y2="166" stroke="#d9dde0" stroke-width="7"/><line x1="208" y1="300" x2="92" y2="166" stroke="#d9dde0" stroke-width="7"/>'
+           . '<line x1="96" y1="276" x2="116" y2="294" stroke="' . $gold . '" stroke-width="6"/><line x1="204" y1="276" x2="184" y2="294" stroke="' . $gold . '" stroke-width="6"/></g>'
+           . '<text x="150" y="252" text-anchor="middle" ' . $F . ' font-size="54" fill="' . $gold . '" stroke="#1f3316" stroke-width="5" paint-order="stroke">&lt;/&gt;</text>'
+           . '<text x="104" y="330" ' . $F . ' font-size="28" textLength="92" lengthAdjust="spacingAndGlyphs" fill="' . $gold . '">КОДА</text>';
+        $items[] = ["Войска кода", $s];
+
+        // 2. Кибербезопасность
+        $s = $fabric
+           . '<circle cx="150" cy="210" r="120" fill="#1c2a14" stroke="' . $gold . '" stroke-width="10"/>'
+           . '<circle cx="150" cy="210" r="108" fill="none" stroke="' . $gold . '" stroke-width="2" stroke-dasharray="5 5"/>'
+           . '<path id="gpatchTop" d="M62 210 A88 88 0 1 1 238 210" fill="none"/><path id="gpatchBot" d="M70 210 A80 80 0 0 0 230 210" fill="none"/>'
+           . '<text ' . $F . ' font-size="17" letter-spacing="1" fill="' . $gold . '"><textPath href="#gpatchTop" startOffset="50%" text-anchor="middle">КИБЕРБЕЗОПАСНОСТЬ</textPath></text>'
+           . '<text ' . $F . ' font-size="16" letter-spacing="3" fill="' . $gold . '"><textPath href="#gpatchBot" startOffset="50%" text-anchor="middle">★ RTEAM ★</textPath></text>'
+           . '<path d="M128 206 V184 A22 22 0 0 1 172 184 V206" stroke="' . $gold . '" stroke-width="10" fill="none"/>'
+           . '<rect x="114" y="204" width="72" height="56" rx="8" fill="' . $gold . '"/>'
+           . '<circle cx="150" cy="226" r="7" fill="#1c2a14"/><rect x="147" y="226" width="6" height="18" rx="2" fill="#1c2a14"/>'
+           . '<path d="' . rteam_star_d(92, 232, 10, 4) . '" fill="#e0262b"/><path d="' . rteam_star_d(208, 232, 10, 4) . '" fill="#e0262b"/>';
+        $items[] = ["Кибербезопасность", $s];
+
+        // 3. Отряд дебага
+        $s = $fabric
+           . '<rect x="40" y="46" width="220" height="320" rx="26" fill="#22301a" stroke="' . $gold . '" stroke-width="10"/>'
+           . '<rect x="54" y="60" width="192" height="292" rx="18" fill="none" stroke="' . $gold . '" stroke-width="2" stroke-dasharray="6 5"/>';
+        foreach ([74, 100, 126] as $cy) $s .= '<path d="M82 ' . $cy . ' L150 ' . ($cy + 36) . ' L218 ' . $cy . ' L218 ' . ($cy + 16) . ' L150 ' . ($cy + 52) . ' L82 ' . ($cy + 16) . ' Z" fill="' . $gold . '"/>';
+        $s .= '<g stroke="#d9dde0" stroke-width="4" stroke-linecap="round"><path d="M126 236 L108 228 M126 252 L104 252 M126 268 L108 278 M174 236 L192 228 M174 252 L196 252 M174 268 L192 278 M144 214 L134 200 M156 214 L166 200"/></g>'
+            . '<ellipse cx="150" cy="256" rx="24" ry="32" fill="#d9dde0"/><circle cx="150" cy="220" r="12" fill="#d9dde0"/><line x1="150" y1="232" x2="150" y2="286" stroke="#22301a" stroke-width="2"/>'
+            . '<circle cx="150" cy="252" r="56" fill="none" stroke="#e0262b" stroke-width="9"/><line x1="111" y1="213" x2="189" y2="291" stroke="#e0262b" stroke-width="9" stroke-linecap="round"/>'
+            . '<text x="62" y="342" ' . $F . ' font-size="22" textLength="176" lengthAdjust="spacingAndGlyphs" fill="' . $gold . '">ОТРЯД ДЕБАГА</text>';
+        $items[] = ["Отряд дебага", $s];
+        $head = ["Шевроны", "Шевроны RTeam", "Нашивки для защитников кода. Нажми на шеврон, чтобы рассмотреть."];
+    }
+
+    if ($key === "mar8") {
+        // 1. Мимоза в вазе
+        $s = '<defs><radialGradient id="gm1bg" cx="50%" cy="40%" r="75%"><stop offset="0" stop-color="#fffaf0"/><stop offset="1" stop-color="#ffd0e2"/></radialGradient></defs>'
+           . '<rect width="300" height="420" fill="url(#gm1bg)"/>'
+           . '<text x="25" y="52" ' . $F . ' font-size="26" textLength="250" lengthAdjust="spacingAndGlyphs" fill="#e0307a">НЕЖНОСТИ И ТЕПЛА</text>';
+        $tips = [[86, 128], [150, 92], [214, 124], [116, 176], [186, 172]];
+        foreach ($tips as [$tx, $ty]) {
+            $s .= '<path d="M150 284 Q' . (($tx + 150) / 2) . ' ' . (($ty + 284) / 2 + 20) . ' ' . $tx . ' ' . $ty . '" stroke="#6a8f3a" stroke-width="3" fill="none"/>';
+            for ($k = 1; $k <= 4; $k++) {
+                $lx = round(150 + ($tx - 150) * $k / 5, 1); $ly = round(284 + ($ty - 284) * $k / 5, 1);
+                $s .= '<ellipse cx="' . ($lx - 7) . '" cy="' . $ly . '" rx="8" ry="2.6" fill="#7aa83f" transform="rotate(-30 ' . ($lx - 7) . ' ' . $ly . ')"/><ellipse cx="' . ($lx + 7) . '" cy="' . $ly . '" rx="8" ry="2.6" fill="#7aa83f" transform="rotate(30 ' . ($lx + 7) . ' ' . $ly . ')"/>';
+            }
+        }
+        foreach ($tips as $n => [$tx, $ty]) {
+            foreach ([[0, 0], [-12, 6], [12, 4], [-6, -11], [8, -10], [-16, -6], [16, -6], [0, 13], [-10, 16], [10, 15]] as $j => [$dx, $dy]) {
+                $s .= '<circle cx="' . ($tx + $dx) . '" cy="' . ($ty + $dy) . '" r="' . (6 + ($j + $n) % 3) . '" fill="#ffd84d" stroke="#e8b400" stroke-width="1"/>';
+            }
+        }
+        $s .= '<path d="M114 278 Q104 340 124 392 H176 Q196 340 186 278 Z" fill="#bfe6ff" opacity=".6" stroke="#8cc8ee" stroke-width="2"/>'
+            . '<path d="M112 300 H188" stroke="#8cc8ee" stroke-width="2" opacity=".8"/><ellipse cx="150" cy="278" rx="36" ry="6" fill="none" stroke="#8cc8ee" stroke-width="2"/>'
+            . '<path d="M124 300 Q120 340 132 380" stroke="#fff" stroke-width="4" opacity=".6" fill="none" stroke-linecap="round"/>';
+        $items[] = ["Мимоза", $s];
+
+        // 2. Тюльпан
+        $s = '<defs><linearGradient id="gm2bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe3ec"/><stop offset="1" stop-color="#ffc6a8"/></linearGradient></defs>'
+           . '<rect width="300" height="420" fill="url(#gm2bg)"/>'
+           . '<text x="25" y="60" ' . $F . ' font-size="32" textLength="250" lengthAdjust="spacingAndGlyphs" fill="#c2306f">ВДОХНОВЕНИЯ!</text>'
+           . '<path d="M150 420 Q144 320 150 224" stroke="#3f9a3a" stroke-width="9" fill="none"/>'
+           . '<path d="M148 400 Q70 360 64 250 Q118 300 150 360 Z" fill="#4caf50"/><path d="M152 420 Q236 380 248 280 Q190 320 154 384 Z" fill="#43a047"/>'
+           . '<path d="M150 360 Q110 330 98 290" stroke="#2e7d32" stroke-width="2" fill="none"/>'
+           . '<g class="art-sway" style="transform-origin:150px 300px">'
+           . '<path d="M150 92 Q198 132 186 196 Q150 226 114 196 Q102 132 150 92 Z" fill="#ff3b6b"/>'
+           . '<path d="M150 226 Q84 222 88 132 Q128 142 148 192 Z" fill="#ff5c86"/>'
+           . '<path d="M150 226 Q216 222 212 132 Q172 142 152 192 Z" fill="#ff4f7a"/>'
+           . '<path d="M106 150 Q112 196 140 214" stroke="#fff" stroke-width="3" opacity=".45" fill="none" stroke-linecap="round"/>'
+           . '<circle cx="176" cy="170" r="4" fill="#fff" opacity=".8"/><circle cx="120" cy="190" r="3" fill="#fff" opacity=".7"/>'
+           . '</g>'
+           . '<circle cx="96" cy="300" r="4" fill="#fff" opacity=".8"/><circle cx="226" cy="320" r="3.5" fill="#fff" opacity=".8"/>';
+        $items[] = ["Тюльпан", $s];
+
+        // 3. Подарок
+        $s = '<rect width="300" height="420" fill="#ffe8f0"/>'
+           . '<text x="40" y="56" ' . $F . ' font-size="28" textLength="220" lengthAdjust="spacingAndGlyphs" fill="#e0307a">ПУСТЬ МЕЧТЫ</text>'
+           . '<text x="50" y="94" ' . $F . ' font-size="28" textLength="200" lengthAdjust="spacingAndGlyphs" fill="#ff8a3d">СБЫВАЮТСЯ!</text>';
+        foreach ([[70, 130, 26, "#ff4f9a"], [228, 120, 20, "#ffd84d"], [150, 112, 16, "#ff8fc0"], [250, 200, 18, "#ff4f9a"], [46, 200, 16, "#ffd84d"]] as $i => [$hx, $hy, $hs, $hc]) {
+            $s .= '<path class="art-blink" style="animation-delay:-' . $i * .5 . 's" d="' . rteam_heart_d($hx, $hy, $hs) . '" fill="' . $hc . '"/>';
+        }
+        $s .= '<rect x="80" y="236" width="140" height="124" rx="6" fill="#ff4f9a"/><rect x="70" y="212" width="160" height="34" rx="6" fill="#ff6fa8"/>'
+            . '<rect x="140" y="212" width="20" height="148" fill="#ffd84d"/><rect x="80" y="282" width="140" height="16" fill="#ffd84d"/>'
+            . '<path d="M150 212 C104 160 82 214 150 212 Z" fill="#ffd84d" stroke="#e8b400" stroke-width="2"/><path d="M150 212 C196 160 218 214 150 212 Z" fill="#ffd84d" stroke="#e8b400" stroke-width="2"/>'
+            . '<circle cx="150" cy="210" r="9" fill="#ffc21a"/>'
+            . '<text x="150" y="398" text-anchor="middle" ' . $F . ' font-size="12" letter-spacing="3" fill="#c2306f">RTEAM · 8 МАРТА</text>';
+        $items[] = ["Подарок", $s];
+        $head = ["Открытки", "Весенние открытки", "Цветы и пожелания для наших девушек. Нажми на открытку, чтобы рассмотреть."];
+    }
+
+    if ($key === "may9") {
+        $rib = '<pattern id="%s" patternUnits="userSpaceOnUse" width="20" height="28" patternTransform="%s"><rect width="20" height="28" fill="#ff8a00"/><rect y="3" width="20" height="6" fill="#111"/><rect y="11" width="20" height="6" fill="#111"/><rect y="19" width="20" height="6" fill="#111"/></pattern>';
+        // 1. 1945
+        $s = '<defs><radialGradient id="gv1bg" cx="50%" cy="40%" r="75%"><stop offset="0" stop-color="#b01c1c"/><stop offset="1" stop-color="#3a0404"/></radialGradient>' . sprintf($rib, "gv1rib", "translate(0 392)") . '</defs>'
+           . '<rect width="300" height="420" fill="url(#gv1bg)"/>'
+           . '<g class="art-spin" style="transform-origin:150px 170px">';
+        for ($i = 0; $i < 24; $i++) { $a1 = deg2rad($i * 15 - 3); $a2 = deg2rad($i * 15 + 3); $s .= '<path d="M150 170 L' . round(150 + 300 * cos($a1)) . ' ' . round(170 + 300 * sin($a1)) . ' L' . round(150 + 300 * cos($a2)) . ' ' . round(170 + 300 * sin($a2)) . 'Z" fill="#ffcf5a" opacity=".12"/>'; }
+        $s .= '</g>' . rteam_laurel(150, 170, 96, 115, 215, "#ffcf5a", "#a8761a")
+            . '<path d="' . rteam_star_d(150, 172, 70, 28) . '" fill="#d62828" stroke="#ffcf5a" stroke-width="5" stroke-linejoin="round"/>'
+            . '<text x="44" y="330" ' . $F . ' font-size="64" textLength="212" lengthAdjust="spacingAndGlyphs" fill="#ffcf5a">1945</text>'
+            . '<text x="34" y="372" ' . $F . ' font-size="24" textLength="232" lengthAdjust="spacingAndGlyphs" fill="#fff1d6">С ДНЁМ ПОБЕДЫ!</text>'
+            . '<rect y="392" width="300" height="28" fill="url(#gv1rib)"/>';
+        $items[] = ["1945", $s];
+
+        // 2. Помним: гвоздики с георгиевской лентой
+        $carn = function ($cx, $cy) {
+            $o = "";
+            foreach ([[26, 18, "#c8161d"], [18, 12, "#e0262b"], [9, 5, "#8a0f0f"]] as [$R, $r, $c]) {
+                $pts = [];
+                for ($i = 0; $i < 22; $i++) { $a = deg2rad($i * 360 / 22); $rad = $i % 2 ? $r : $R; $pts[] = round($cx + $rad * cos($a), 1) . " " . round($cy + $rad * sin($a), 1); }
+                $o .= '<path d="M' . implode(" L", $pts) . 'Z" fill="' . $c . '"/>';
+            }
+            return $o;
+        };
+        $s = '<defs>' . sprintf($rib, "gv2rib", "rotate(-12)") . '</defs>'
+           . '<rect width="300" height="420" fill="#f3e6cf"/><rect x="12" y="12" width="276" height="396" fill="none" stroke="#c9a66b" stroke-width="2"/>'
+           . '<text x="40" y="62" ' . $F . ' font-size="36" textLength="220" lengthAdjust="spacingAndGlyphs" fill="#8a0f0f">ПОМНИМ.</text>'
+           . '<text x="40" y="98" ' . $F . ' font-size="28" textLength="220" lengthAdjust="spacingAndGlyphs" fill="#1a0a00">ГОРДИМСЯ.</text>'
+           . '<g stroke="#2e7d32" stroke-width="5" fill="none" stroke-linecap="round"><path d="M110 176 Q130 260 150 340"/><path d="M150 146 Q150 250 150 340"/><path d="M192 178 Q172 260 150 340"/></g>'
+           . '<path d="M126 240 Q100 226 92 204 Q118 214 130 232 Z" fill="#43a047"/><path d="M174 250 Q204 238 210 214 Q184 226 170 244 Z" fill="#43a047"/>'
+           . $carn(110, 176) . $carn(192, 178) . $carn(150, 146)
+           . '<path d="M126 300 L174 300 L174 322 L126 322 Z" fill="url(#gv2rib)"/>'
+           . '<path d="M140 320 L108 384 L124 380 L132 394 L156 322 Z" fill="url(#gv2rib)"/><path d="M160 320 L192 384 L176 380 L168 394 L144 322 Z" fill="url(#gv2rib)"/>'
+           . '<path d="M150 312 C118 280 104 318 140 316 Z" fill="url(#gv2rib)"/><path d="M150 312 C182 280 196 318 160 316 Z" fill="url(#gv2rib)"/>';
+        $items[] = ["Помним", $s];
+
+        // 3. Мирного неба: голубь мира
+        $s = '<defs><linearGradient id="gv3bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfe3ff"/><stop offset="1" stop-color="#fdfdff"/></linearGradient>' . sprintf($rib, "gv3rib", "translate(0 330)") . '</defs>'
+           . '<rect width="300" height="420" fill="url(#gv3bg)"/><circle cx="236" cy="130" r="54" fill="#fff6d0" opacity=".8"/>'
+           . '<text x="25" y="62" ' . $F . ' font-size="30" textLength="250" lengthAdjust="spacingAndGlyphs" fill="#1d3557">МИРНОГО НЕБА!</text>'
+           . '<g class="art-fly">'
+           . '<path d="M170 214 Q176 150 222 104 Q232 150 214 204 Z" fill="#e3eaf2" stroke="#9fb3c8" stroke-width="1.5"/>'
+           . '<path d="M96 236 Q120 214 168 210 Q206 206 228 190 Q238 178 254 180 Q266 182 270 190 L284 194 L270 198 Q262 210 248 214 Q226 246 176 252 Q140 256 118 244 L66 262 L74 248 L58 246 L86 236 Z" fill="#ffffff" stroke="#9fb3c8" stroke-width="1.5"/>'
+           . '<path d="M150 222 Q120 150 150 88 Q178 130 196 210 Z" fill="#ffffff" stroke="#9fb3c8" stroke-width="1.5"/>'
+           . '<path d="M156 120 Q168 160 178 200 M146 140 Q160 176 168 208" stroke="#c9d6e3" stroke-width="1.5" fill="none"/>'
+           . '<circle cx="258" cy="188" r="2.5" fill="#1d3557"/>'
+           . '<path d="M278 196 Q290 206 296 224" stroke="#5a7d2a" stroke-width="2.5" fill="none"/>'
+           . '<ellipse cx="286" cy="204" rx="7" ry="3" fill="#6a9a3a" transform="rotate(40 286 204)"/><ellipse cx="294" cy="214" rx="7" ry="3" fill="#6a9a3a" transform="rotate(70 294 214)"/><ellipse cx="282" cy="214" rx="6" ry="2.6" fill="#7aa83f" transform="rotate(-20 282 214)"/>'
+           . '</g>'
+           . '<path d="M0 330 Q75 310 150 330 T300 330 V358 Q225 338 150 358 T0 358 Z" fill="url(#gv3rib)"/>'
+           . '<text x="150" y="398" text-anchor="middle" ' . $F . ' font-size="13" letter-spacing="3" fill="#1d3557">9 МАЯ · 1945 — ' . $year . '</text>';
+        $items[] = ["Мирного неба", $s];
+        $head = ["Открытки", "Открытки Победы", "Помним и гордимся. Нажми на открытку, чтобы рассмотреть."];
+    }
+
+    if (!$items) return null;
+    $o = "";
+    foreach ($items as [$title, $svg]) {
+        $o .= '<figure class="agit-poster" tabindex="0" role="button" aria-label="Открыть: ' . htmlspecialchars($title) . '">'
+            . '<svg class="hol-art" viewBox="0 0 300 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' . htmlspecialchars($title) . '">' . $svg . '</svg>'
+            . '<figcaption>' . htmlspecialchars($title) . '</figcaption></figure>';
+    }
+    return [$head[0], $head[1], $head[2], $o];
 }
 
 /* Цифры для блока статистики на главной */
@@ -1864,14 +2182,14 @@ footer.site-footer { text-align: left; padding: 48px 60px 22px; background: line
 .hol-hero-art { position: relative; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .hol-hero-art:active svg { transform: scale(.97); }
 .hol-hero-art svg { transition: transform .15s ease; }
-.hol-art-hint { position: absolute; top: 6%; right: -6%; padding: 5px 11px; border-radius: 999px; font-size: 12px; font-weight: 800; letter-spacing: .5px; background: var(--hol-b); color: var(--hol-ink); box-shadow: 0 6px 18px rgba(0,0,0,.4); animation: hintBob 1.8s ease-in-out infinite; pointer-events: none; }
+.hol-art-hint { position: absolute; top: 6%; right: -6%; padding: 5px 11px; border-radius: 999px; font-size: 12px; font-weight: 800; letter-spacing: .5px; background: var(--hol-b, #ff2a2a); color: var(--hol-ink, #fff); box-shadow: 0 6px 18px rgba(0,0,0,.4); animation: hintBob 1.8s ease-in-out infinite; pointer-events: none; }
 @keyframes hintBob { 0%, 100% { transform: translateY(0) rotate(6deg); } 50% { transform: translateY(-5px) rotate(6deg); } }
-.hol-confetti { position: fixed; z-index: 9995; pointer-events: none; color: var(--hol-b); text-shadow: 0 0 8px rgba(var(--hol-b-rgb), .7); transform: translate(-50%, -50%); animation: confettiFly 1.3s cubic-bezier(.15,.7,.3,1) forwards; }
+.hol-confetti { position: fixed; z-index: 9995; pointer-events: none; color: var(--hol-b, #ff4d4d); text-shadow: 0 0 8px rgba(var(--hol-b-rgb, 255,77,77), .7); font-family: Consolas, monospace; font-weight: 700; transform: translate(-50%, -50%); animation: confettiFly 1.3s cubic-bezier(.15,.7,.3,1) forwards; }
 @keyframes confettiFly { to { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot)); opacity: 0; } }
 #hol-flash { position: fixed; inset: 0; z-index: 9994; pointer-events: none; background: radial-gradient(circle at 70% 55%, rgba(255,230,140,.75), rgba(255,90,30,.35) 45%, transparent 75%); opacity: 0; }
 #hol-flash.on { animation: screenFlash .7s ease-out; }
 @keyframes screenFlash { 0% { opacity: 1; } 100% { opacity: 0; } }
-.hol-toast { position: fixed; left: 50%; bottom: 28px; z-index: 9996; transform: translateX(-50%); padding: 12px 22px; border-radius: 999px; background: var(--hol-b); color: var(--hol-ink); font-family: "Russo One", sans-serif; font-size: 17px; box-shadow: 0 12px 30px rgba(0,0,0,.45); animation: toastIn 2.2s ease forwards; pointer-events: none; white-space: nowrap; }
+.hol-toast { position: fixed; left: 50%; bottom: 28px; z-index: 9996; transform: translateX(-50%); padding: 12px 22px; border-radius: 999px; background: var(--hol-b, #ff2a2a); color: var(--hol-ink, #fff); font-family: "Russo One", sans-serif; font-size: 17px; box-shadow: 0 12px 30px rgba(0,0,0,.45); animation: toastIn 2.2s ease forwards; pointer-events: none; white-space: nowrap; }
 @keyframes toastIn { 0% { opacity: 0; transform: translate(-50%, 20px); } 12%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -10px); } }
 
 /* ----- 7 ноября: выстрел «Авроры», конструктивистские полосы ----- */
@@ -1887,18 +2205,45 @@ footer.site-footer { text-align: left; padding: 48px 60px 22px; background: line
 .hol-november7 #home::before { top: 64%; height: 130px; background: rgba(0,0,0,.38); }
 .hol-november7 #home::after { top: 60%; height: 14px; background: rgba(var(--hol-a-rgb), .55); }
 
+/* ----- Эффекты при нажатии: всё на картинке ускоряется ----- */
+.hol-art .art-tick { animation: raysSpin 60s steps(60) infinite; }
+.hol-art .art-flap { animation: artFlap .35s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
+@keyframes artFlap { from { transform: scaleX(1); } to { transform: scaleX(.25); } }
+.hol-art.fire .art-blink { animation-duration: .25s !important; }
+.hol-art.fire .art-fly { animation-duration: .35s; }
+.hol-art.fire .art-shine { animation-duration: .8s; }
+.hol-art.fire .art-sway { animation-duration: .35s; }
+.hol-art.fire .art-burst { animation-duration: 1s; }
+.hol-art.fire .art-flame { animation-duration: .2s; }
+.hol-art.fire .art-pulse { animation-duration: .45s; }
+.hol-art.fire .art-spin { animation-duration: 4s; }
+
+/* ----- Свой фон главного экрана у каждого праздника ----- */
+.hol-newyear #home::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 70px; z-index: 1; pointer-events: none; opacity: .9;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 70' preserveAspectRatio='none'%3E%3Cpath d='M0 40 Q50 10 100 34 T200 30 T300 36 T400 28 V70 H0Z' fill='%23dce9ff' fill-opacity='.18'/%3E%3Cpath d='M0 56 Q60 34 130 52 T260 48 T400 50 V70 H0Z' fill='%23ffffff' fill-opacity='.22'/%3E%3C/svg%3E") no-repeat bottom / 100% 100%; }
+.hol-feb23 #home::before { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: .14;
+    background: radial-gradient(ellipse 120px 50px at 20% 30%, #1a2a10 95%, transparent 100%), radial-gradient(ellipse 160px 60px at 75% 20%, #5c4a2a 95%, transparent 100%), radial-gradient(ellipse 140px 55px at 60% 70%, #1a2a10 95%, transparent 100%), radial-gradient(ellipse 120px 45px at 15% 80%, #5c4a2a 95%, transparent 100%), radial-gradient(ellipse 100px 40px at 90% 60%, #3f6a28 95%, transparent 100%); }
+.hol-mar8 #home::before { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(circle at 12% 30%, rgba(255,79,154,.22) 0 60px, transparent 61px), radial-gradient(circle at 85% 22%, rgba(255,216,77,.18) 0 46px, transparent 47px), radial-gradient(circle at 78% 72%, rgba(255,143,192,.2) 0 80px, transparent 81px), radial-gradient(circle at 22% 78%, rgba(255,216,77,.14) 0 54px, transparent 55px), radial-gradient(circle at 50% 12%, rgba(255,255,255,.08) 0 36px, transparent 37px);
+    filter: blur(6px); animation: bokehDrift 12s ease-in-out infinite alternate; }
+@keyframes bokehDrift { from { transform: translateY(0); } to { transform: translateY(-24px); } }
+
 /* ----- Агитплакаты ----- */
-.agit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 26px; max-width: 1000px; margin-top: 8px; }
+.agit-grid { --frame: #efe3c8; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 26px; max-width: 1000px; margin-top: 8px; }
 .agit-poster { margin: 0; cursor: zoom-in; transition: transform .3s ease, box-shadow .3s ease; outline: none; }
-.agit-poster svg { display: block; width: 100%; height: auto; border-radius: 4px; box-shadow: 0 18px 40px rgba(0,0,0,.5), 0 0 0 6px #efe3c8, 0 0 0 7px rgba(0,0,0,.25); }
+.agit-poster svg { display: block; width: 100%; height: auto; border-radius: 4px; box-shadow: 0 18px 40px rgba(0,0,0,.5), 0 0 0 6px var(--frame), 0 0 0 7px rgba(0,0,0,.25); }
+.gallery-newyear { --frame: #ffd76a; }
+.gallery-feb23 { --frame: #3d4a22; }
+.gallery-mar8 { --frame: #ffffff; }
+.gallery-may9 { --frame: #f3e6cf; }
 .agit-poster:nth-child(1) { transform: rotate(-2deg); }
 .agit-poster:nth-child(2) { transform: rotate(1.5deg); }
 .agit-poster:nth-child(3) { transform: rotate(-1deg); }
 .agit-poster:hover, .agit-poster:focus-visible { transform: rotate(0) translateY(-8px) scale(1.02); }
 .agit-poster figcaption { text-align: center; margin-top: 14px; font-family: "Russo One", sans-serif; color: var(--hol-b); font-size: 15px; }
-#agit-lightbox { position: fixed; inset: 0; z-index: 9993; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.85); cursor: zoom-out; }
-#agit-lightbox.show { display: flex; animation: cardIn .35s ease; }
-#agit-lightbox svg { height: min(88vh, 900px); width: auto; max-width: 100%; border-radius: 6px; box-shadow: 0 30px 80px rgba(0,0,0,.7), 0 0 0 8px #efe3c8; }
+#hol-lightbox { position: fixed; inset: 0; z-index: 9993; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.85); cursor: zoom-out; }
+#hol-lightbox.show { display: flex; animation: cardIn .35s ease; }
+#hol-lightbox svg { height: min(88vh, 900px); width: auto; max-width: 100%; border-radius: 6px; box-shadow: 0 30px 80px rgba(0,0,0,.7), 0 0 0 8px var(--frame, #efe3c8); }
 @media (max-width: 520px) { .hol-art-hint { right: -2%; font-size: 11px; } }
 
 /* ----- Новый год: гирлянда через весь экран ----- */
@@ -2400,9 +2745,7 @@ body.hol-on {
         </div>
         <?php endif; ?>
         <div class="hero-inner">
-            <?php if ($hol_active): ?>
-            <div class="hol-hero-art" role="button" tabindex="0" aria-label="Нажми на картинку"><?= rteam_holiday_art($hol_key, "hero", $hol_year) ?><span class="hol-art-hint">Нажми! <?=$hol["glyph"]?></span></div>
-            <?php endif; ?>
+            <div class="hol-hero-art" role="button" tabindex="0" aria-label="Нажми на картинку"><?= rteam_holiday_art($hol_active ? $hol_key : "plain", "hero", $hol_active ? $hol_year : (int)date("Y")) ?><span class="hol-art-hint">Нажми! <?= $hol_active ? $hol["glyph"] : "★" ?></span></div>
             <span class="hero-kicker"><i></i><?= $hol_active ? "Праздничное обновление · " . htmlspecialchars($hol_date_label) : "Команда программирования RTeam" ?></span>
             <h1 id="dynamicText" style="color:#ff2a2a; text-shadow:0 0 20px #ff0000aa; transition:0.6s ease;">
                 Загрузка...
@@ -2467,13 +2810,13 @@ body.hol-on {
             <?php endforeach; ?>
         </div>
 
-        <?php if ($hol_key === "november7"): ?>
+        <?php $hol_gallery = rteam_holiday_gallery($hol_key, $hol_year); if ($hol_gallery): ?>
         <div class="section-head" style="margin-top:56px;">
-            <span class="section-eyebrow">Агитплакаты</span>
-            <h1>Плакаты в стиле 1920-х</h1>
-            <p>Конструктивизм, красный клин и рупор — по мотивам Эль Лисицкого и Родченко. Нажми на плакат, чтобы рассмотреть.</p>
+            <span class="section-eyebrow"><?=htmlspecialchars($hol_gallery[0])?></span>
+            <h1><?=htmlspecialchars($hol_gallery[1])?></h1>
+            <p><?=htmlspecialchars($hol_gallery[2])?></p>
         </div>
-        <div class="agit-grid"><?= rteam_agit_posters() ?></div>
+        <div class="agit-grid gallery-<?=$hol_key?>"><?= $hol_gallery[3] ?></div>
         <?php endif; ?>
 
         <div class="section-head" style="margin-top:46px;">
@@ -2792,7 +3135,7 @@ body.hol-on {
 
 <?php if ($hol_active): ?>
 <div id="hol-flash"></div>
-<?php if ($hol_key === "november7"): ?><div id="agit-lightbox" role="dialog" aria-modal="true" aria-label="Плакат"></div><?php endif; ?>
+<div id="hol-lightbox" role="dialog" aria-modal="true" aria-label="Картинка"></div>
 <!-- ОТКРЫТКА-ПОЗДРАВЛЕНИЕ: показывается один раз за праздник -->
 <div id="hol-card" role="dialog" aria-modal="true" aria-label="Поздравление" data-key="<?=htmlspecialchars($hol_key . "_" . $hol_year)?>">
     <div class="hol-card-box">
@@ -3067,23 +3410,24 @@ if (typeSelect) {
     nums.forEach(n => io.observe(n));
 })();
 
-// ===== НАЖАТИЕ НА ПРАЗДНИЧНУЮ КАРТИНКУ: залп, вспышка, разлёт звёзд =====
+// ===== НАЖАТИЕ НА КАРТИНКУ: залп, вспышка, разлёт символов =====
+const ART = <?= json_encode($hol_active ? ["key" => $hol_key, "glyphs" => [$hol["glyph"]], "toast" => $hol["toast"]] : ["key" => "plain", "glyphs" => ["{ }", "</>", "#", "$_", "01", "★", ";"], "toast" => "Билд успешен! ✓"], JSON_UNESCAPED_UNICODE) ?>;
 (function() {
     const art = document.querySelector('.hol-hero-art');
-    if (!art || !HOL) return;
+    if (!art) return;
     const svg = art.querySelector('svg');
     const flash = document.getElementById('hol-flash');
     let toastEl = null;
     function boom() {
         svg.classList.remove('fire'); void svg.getBoundingClientRect(); svg.classList.add('fire');
-        setTimeout(() => svg.classList.remove('fire'), 1400);
-        if (HOL.key === 'november7' && flash) { flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on'); }
+        setTimeout(() => svg.classList.remove('fire'), 2000);
+        if (ART.key === 'november7' && flash) { flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on'); }
         const r = art.getBoundingClientRect();
-        const cx = r.left + r.width * (HOL.key === 'november7' ? .9 : .5), cy = r.top + r.height * (HOL.key === 'november7' ? .65 : .5);
+        const cx = r.left + r.width * (ART.key === 'november7' ? .9 : .5), cy = r.top + r.height * (ART.key === 'november7' ? .65 : .5);
         for (let i = 0; i < 30; i++) {
             const s = document.createElement('span');
             s.className = 'hol-confetti';
-            if (HOL.key === 'mar8' && i % 2) s.innerHTML = '<i class="petal"></i>'; else s.textContent = HOL.glyph;
+            if (ART.key === 'mar8' && i % 2) s.innerHTML = '<i class="petal"></i>'; else s.textContent = ART.glyphs[Math.floor(Math.random() * ART.glyphs.length)];
             const a = Math.random() * Math.PI * 2, d = 110 + Math.random() * 240;
             s.style.left = cx + 'px'; s.style.top = cy + 'px';
             s.style.fontSize = (14 + Math.random() * 18) + 'px';
@@ -3093,10 +3437,23 @@ if (typeSelect) {
             document.body.appendChild(s);
             setTimeout(() => s.remove(), 1400);
         }
+        // 9 мая — дополнительный салют над главным экраном
+        const fwBox = document.querySelector('.hol-fireworks');
+        if (ART.key === 'may9' && fwBox && fwBox.firstElementChild) {
+            for (let k = 0; k < 6; k++) {
+                const fw = fwBox.firstElementChild.cloneNode(true);
+                fw.style.left = (5 + Math.random() * 85) + '%';
+                fw.style.top = (5 + Math.random() * 55) + '%';
+                fw.style.width = (90 + Math.random() * 110) + 'px';
+                fw.style.animation = 'artBurst 1.8s ease-out ' + (k * 0.18) + 's 1 both';
+                fwBox.appendChild(fw);
+                setTimeout(() => fw.remove(), 3200);
+            }
+        }
         if (toastEl) toastEl.remove();
         toastEl = document.createElement('div');
         toastEl.className = 'hol-toast';
-        toastEl.textContent = HOL.toast;
+        toastEl.textContent = ART.toast;
         document.body.appendChild(toastEl);
         const t = toastEl; setTimeout(() => t.remove(), 2300);
     }
@@ -3104,11 +3461,16 @@ if (typeSelect) {
     art.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); boom(); } });
 })();
 
-// ===== АГИТПЛАКАТЫ: просмотр на весь экран =====
+// ===== ГАЛЕРЕЯ ПРАЗДНИКА: просмотр на весь экран =====
 (function() {
-    const box = document.getElementById('agit-lightbox');
+    const box = document.getElementById('hol-lightbox');
     if (!box) return;
-    function open(fig) { box.innerHTML = ''; box.appendChild(fig.querySelector('svg').cloneNode(true)); box.classList.add('show'); }
+    function open(fig) {
+        box.innerHTML = '';
+        box.style.setProperty('--frame', getComputedStyle(fig).getPropertyValue('--frame'));
+        box.appendChild(fig.querySelector('svg').cloneNode(true));
+        box.classList.add('show');
+    }
     document.querySelectorAll('.agit-poster').forEach(fig => {
         fig.addEventListener('click', () => open(fig));
         fig.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(fig); } });
