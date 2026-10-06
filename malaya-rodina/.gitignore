@@ -1,0 +1,12 @@
+# сборка
+bin/
+obj/
+build/
+out/
+.vs/
+*.user
+*.suo
+__pycache__/
+*.pyc
+# собственная сборка движка (готовая лежит в Engine/prebuilt)
+variant1-csharp-cpp-hronograf/Engine/bin/
