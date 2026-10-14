@@ -105,6 +105,7 @@ typedef struct {
 extern Game G;
 extern UiState U;
 extern HWND g_hwnd;
+extern int g_dev;          /* режим --scene: без записи сохранений и настроек */
 
 /* ui_core.c */
 void ui_invalidate(void);
@@ -126,6 +127,9 @@ void ui_hover_status(int act, int arg);
 /* ui_map.c */
 void map_draw(int x, int y, int w, int h, int interactive);
 void map_invalidate(void);
+
+/* ui_dev.c */
+void dev_scene(int n);
 
 /* ui_modal.c */
 void modal_draw(void);

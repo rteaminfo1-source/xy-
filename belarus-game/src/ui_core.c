@@ -10,6 +10,7 @@ int g_dark = 1;
 float g_s = 1.0f;
 int g_w = 1280, g_h = 800;
 HWND g_hwnd;
+int g_dev;
 Game G;
 UiState U;
 
@@ -541,6 +542,7 @@ static void data_file(const wchar_t *name, wchar_t *out, int n)
 
 int ui_save(void)
 {
+    if (g_dev) return 1;
     wchar_t path[MAX_PATH + 32];
     data_file(L"save.dat", path, MAX_PATH + 32);
     FILE *f = _wfopen(path, L"wb");
@@ -572,6 +574,7 @@ int ui_load(void)
 
 void ui_save_settings(void)
 {
+    if (g_dev) return;
     wchar_t path[MAX_PATH + 32];
     data_file(L"settings.dat", path, MAX_PATH + 32);
     FILE *f = _wfopen(path, L"wb");
@@ -733,6 +736,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     {
         static Game probe;
         U.hasSave = load_into(&probe) && !probe.over;
+    }
+    {
+        const wchar_t *sc = cmd ? wcsstr(cmd, L"--scene=") : 0;
+        if (sc) { g_dev = 1; g_dark = 1; apply_scale(); dev_scene(_wtoi(sc + 8)); }
     }
 
     WNDCLASSEXW wc;

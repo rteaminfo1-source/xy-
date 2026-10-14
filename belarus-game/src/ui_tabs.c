@@ -496,7 +496,7 @@ static void chart(int x, int y, int w, int h, const wchar_t *title, const float 
         }
         d_poly(rp, 11, CLR_INVALID, mix(card_fill(), P.muted, 170), 1);
         for (int i = 0; i < 11; i += 2) d_circle(rp[i].x, rp[i].y, SC(2), P.muted, CLR_INVALID, 1);
-        d_text(rp[0].x - SC(4), rp[0].y - SC(36), L"реальная история", F_TINY, P.muted);
+        d_text(rp[1].x + SC(4), rp[1].y + SC(6), L"реальная история", F_TINY, P.muted);
     }
     for (int s = 0; s < 2; s++) {
         const float *v = s ? b : a;

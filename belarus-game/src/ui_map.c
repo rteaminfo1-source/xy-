@@ -210,7 +210,7 @@ void map_draw(int x, int y, int w, int h, int interactive)
     d_bitmap(s_mdc, x, y, w, h);
 
     /* подписи рек */
-    static const struct { int r; double lon, lat; } rl[] = { { 0, 29.6, 55.25 }, { 1, 30.55, 53.40 }, { 4, 24.6, 53.53 }, { 5, 26.9, 52.0 } };
+    static const struct { int r; double lon, lat; } rl[] = { { 0, 28.95, 55.12 }, { 1, 30.55, 53.40 }, { 4, 24.6, 53.53 }, { 5, 26.9, 52.0 } };
     for (int i = 0; i < 4; i++) {
         int rx, ry;
         geo_xy(rl[i].lon, rl[i].lat, 1, &rx, &ry);
@@ -232,7 +232,10 @@ void map_draw(int x, int y, int w, int h, int interactive)
                 if (PROJECTS[p].city == c) {
                     int st = game_proj_state(&G, p);
                     if (st == PS_DONE) {
-                        int bx = cx - SC(9) + (built % 4) * SC(6), by = cy + SC(7) + (built / 4) * SC(6);
+                        /* квадраты — с противоположной от подписи стороны */
+                        int col = built % 5, row = built / 5;
+                        int bx = CITIES[c].lx < 0 ? cx + SC(6) + col * SC(6) : cx - SC(10) - col * SC(6);
+                        int by = cy + SC(6) + row * SC(6);
                         d_fill(bx, by, SC(5), SC(5), PROJECTS[p].era == G.era ? P.red : mix(P.red, P.surface, 110));
                         built++;
                     } else if (st == PS_AVAILABLE) avail++;

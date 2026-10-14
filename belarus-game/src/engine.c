@@ -217,7 +217,7 @@ void game_income(const Game *g, Income *inc)
     for (int r = 0; r < R_COUNT; r++) inc->total[r] = raw[r] * inc->mult[r];
 
     inc->total[R_ECO] = raw[R_ECO] * 0.3 + pr->ecoAdd;
-    inc->stabTarget = clampd(35.0 + 55.0 * (1.0 - exp(-raw[R_STAB] / 50.0)) + pr->stabAdd, 5, 97);
+    inc->stabTarget = clampd(42.0 + 52.0 * (1.0 - exp(-raw[R_STAB] / 50.0)) + pr->stabAdd, 5, 97);
 
     /* вклад технологий в рост насыщается: не больше +0,4% в год */
     double extra = raw[R_GROW] - inc->base[R_GROW];
@@ -529,6 +529,7 @@ void game_choose(Game *g, int ch, Outcome *o)
     if (q.type == Q_HIST) g->histDone[q.idx] = 1;
     else if (g->randSeen[q.idx] < 250) g->randSeen[q.idx]++;
     game_log(g, c->war ? LOG_WAR : LOG_EVENT, L"%ls — %ls", e->title, c->label);
+    if (q.type == Q_HIST && g->logN > 0) g->logs[g->logN - 1].year = e->year;
     g->qpos++;
     game_check_achievements(g);
 }

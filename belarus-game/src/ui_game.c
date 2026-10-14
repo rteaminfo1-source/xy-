@@ -242,8 +242,10 @@ static void draw_timeline(int x, int y, int w, int h)
         hit(sx, y, ex - sx, h, A_HOVER_ERA, e);
     }
     int t = G.turn < n ? G.turn : n - 1;
-    int mx = x + w * t / n;
-    d_fill(mx, y - SC(3), w / n > SC(3) ? w / n : SC(3), h + SC(6), P.red);
+    int mx = x + w * t / n + (w / n) / 2;
+    d_fill(mx - SC(1), y - SC(4), SC(3), h + SC(8), P.red);
+    POINT tri[4] = { { mx - SC(5), y - SC(8) }, { mx + SC(6), y - SC(8) }, { mx, y - SC(2) }, { mx - SC(5), y - SC(8) } };
+    d_poly(tri, 4, P.red, CLR_INVALID, 1);
 }
 
 /* ---------- панель карты ---------- */
@@ -273,9 +275,9 @@ static void draw_map_panel(int x, int y, int w, int h)
         d_text(x + pad + i * cw, fy, lab[i], F_TINY, P.muted);
         d_text(x + pad + i * cw, fy + SC(15), s[i], F_BODY_B, P.ink);
     }
-    /* легенда */
-    int lx = x + w - pad - SC(170), ly = y + SC(14);
-    if (w > SC(470)) {
+    /* легенда — в нижнем левом углу карты */
+    int lx = x + pad, ly = fy - SC(32);
+    {
         d_circle(lx + SC(5), ly + SC(7), SC(5), CLR_INVALID, P.blue, 2);
         d_text(lx + SC(16), ly, L"можно строить", F_TINY, P.muted);
         d_fill(lx + SC(96), ly + SC(3), SC(7), SC(7), P.red);
@@ -349,8 +351,9 @@ static void draw_game(void)
     int kw = d_text_w(keys, F_TINY);
     d_text(g_w - pad - kw, sy + (statusH - d_font_h(F_TINY)) / 2, keys, F_TINY, P.muted);
     wchar_t def[200];
-    swprintf(def, 200, L"Ход %d из %d · сложность «%ls» · курс «%ls»", G.turn + 1, TURN_COUNT,
-             DIFFICULTIES[G.difficulty].name, PRIORITIES[G.priority].name);
+    if (G.over) swprintf(def, 200, L"Летопись завершена · сложность «%ls»", DIFFICULTIES[G.difficulty].name);
+    else swprintf(def, 200, L"Ход %d из %d · сложность «%ls» · курс «%ls»", G.turn + 1, TURN_COUNT,
+                  DIFFICULTIES[G.difficulty].name, PRIORITIES[G.priority].name);
     d_ellipsis(pad, sy + (statusH - d_font_h(F_SMALL)) / 2, g_w - 3 * pad - kw, U.status[0] ? U.status : def, F_SMALL, U.status[0] ? P.ink : P.muted);
 }
 
