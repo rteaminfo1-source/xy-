@@ -86,24 +86,40 @@ static void draw_title(void)
     int x0 = g_w / 16 > SC(40) ? g_w / 16 : SC(40);
     int wide = g_w > SC(1000);
     int colW = wide ? g_w * 46 / 100 : g_w - 2 * x0;
-    int y = SC(26) + 9 * cell + SC(36);
+    /* Колонка подстраивается под высоту окна: при нехватке места сначала убираем вводный абзац,
+       затем уменьшаем заголовок и кнопки — чтобы кнопки и издатели всегда оставались на экране. */
+    static const wchar_t *TITLE = L"Судьба Республики Беларусь";
+    static const wchar_t *PITCH =
+        L"Девять веков от болотной руды и берестяных грамот до атомной станции и искусственного интеллекта. "
+        L"Изучайте технологии, стройте замки и заводы, приглашайте мастеров и учёных, принимайте решения "
+        L"в переломные моменты истории — и посмотрите, какой станет страна к 2026 году.";
+    int top = SC(26) + 9 * cell + SC(36);
+    int limit = g_h - SC(26) - 9 * cell - SC(12) - d_font_h(F_SMALL_B) - SC(12);
+    int nb = U.hasSave ? 3 : 2;
+    int titleF = F_HUGE, pitch = 1, bh = SC(44), gap = SC(10);
+    int pw = colW < SC(520) ? colW : SC(520);
+    for (int pass = 0; pass < 4; pass++) {
+        int h = SC(30) + d_wrap(x0, 0, colW, TITLE, titleF, 0, 0) + SC(2) + d_font_h(F_ERA_L) + SC(6)
+              + d_font_h(F_BODY) + SC(18) + (pitch ? d_wrap(x0, 0, pw, PITCH, F_BODY, 0, 0) + SC(26) : SC(4))
+              + nb * (bh + gap) + SC(36);
+        if (top + h <= limit) break;
+        if (pass == 0) pitch = 0;
+        else if (pass == 1) titleF = F_ERA_XL;
+        else if (pass == 2) { bh = SC(36); gap = SC(6); top = SC(26) + 9 * cell + SC(18); }
+    }
+    int y = top;
     spaced(x0, y, L"СТРАТЕГИЯ · 1100–2026 · 8 ЭПОХ", F_SMALL_B, P.red);
     y += SC(30);
-    y += d_wrap(x0, y, colW, L"Судьба Республики Беларусь", F_HUGE, P.ink, 1);
+    y += d_wrap(x0, y, colW, TITLE, titleF, P.ink, 1);
     y += SC(2);
     d_text(x0, y, L"в объективе технологий", F_ERA_L, P.red);
     y += d_font_h(F_ERA_L) + SC(6);
     d_text(x0, y, L"Лёс Беларусі ў аб’ектыве тэхналогій", F_BODY, P.muted);
     y += d_font_h(F_BODY) + SC(18);
-    int pw = colW < SC(520) ? colW : SC(520);
-    y += d_wrap(x0, y, pw,
-                L"Девять веков от болотной руды и берестяных грамот до атомной станции и искусственного интеллекта. "
-                L"Изучайте технологии, стройте замки и заводы, приглашайте мастеров и учёных, принимайте решения "
-                L"в переломные моменты истории — и посмотрите, какой станет страна к 2026 году.",
-                F_BODY, P.ink, 1);
-    y += SC(26);
+    if (pitch) y += d_wrap(x0, y, pw, PITCH, F_BODY, P.ink, 1) + SC(26);
+    else y += SC(4);
 
-    int bw = SC(300), bh = SC(44), gap = SC(10);
+    int bw = SC(300);
     if (U.hasSave) {
         w_button(x0, y, bw, bh, L"Продолжить летопись", B_PRIMARY, 1, A_CONTINUE, 0); y += bh + gap;
         w_button(x0, y, bw, bh, L"Новая игра", B_SECONDARY, 1, A_NEW, 0); y += bh + gap;
@@ -115,6 +131,7 @@ static void draw_title(void)
     w_button(x0, y, tw3, SC(36), L"Тема", B_GHOST, 1, A_THEME, 0);
     w_button(x0 + tw3 + gap, y, tw3, SC(36), L"Об игре", B_GHOST, 1, A_CREDITS, 0);
     w_button(x0 + 2 * (tw3 + gap), y, tw3, SC(36), L"Выход", B_GHOST, 1, A_EXIT, 0);
+    int stackBottom = y + SC(36);   /* низ колонки кнопок */
 
     if (wide) {
         int mx = x0 + colW + SC(30), my = SC(26) + 9 * cell + SC(30);
@@ -138,11 +155,15 @@ static void draw_title(void)
     wchar_t foot[200];
     swprintf(foot, 200, L"%d технологий · %d строек · %d деятелей · %d событий · %d вопросов летописца",
              TECH_COUNT, PROJECT_COUNT, PEOPLE_COUNT, HIST_COUNT + RAND_COUNT, QUIZ_COUNT);
-    int fy = g_h - SC(26) - 9 * cell - SC(26);
+    /* издатели — у нижнего орнамента, но никогда не выше низа колонки кнопок */
+    int orn = g_h - SC(26) - 9 * cell;
+    int fy = orn - SC(26), cy = fy - SC(24);
+    if (cy < stackBottom + SC(12)) { cy = stackBottom + SC(12); fy = cy + SC(24); }
     wchar_t cr[200];
     swprintf(cr, 200, L"Издатели: %ls · %ls, %ls", CREDIT_SCHOOL, CREDIT_AUTHOR, CREDIT_CLASS);
-    d_text(x0, fy - SC(24), cr, F_SMALL_B, P.ink);
-    d_text(x0, fy, U.status[0] ? U.status : foot, F_SMALL, P.muted);
+    d_text(x0, cy, cr, F_SMALL_B, P.ink);
+    if (fy + d_font_h(F_SMALL) <= orn)   /* строка статистики — только если остаётся место */
+        d_text(x0, fy, U.status[0] ? U.status : foot, F_SMALL, P.muted);
 }
 
 /* ---------- шапка ---------- */
@@ -160,13 +181,14 @@ static void draw_header(int *outH)
     /* часы минутного дохода справа от года */
     if (!G.over) {
         int px = pad + d_text_w(s, F_ERA_XL) + SC(26), py = SC(30), pr = SC(13);
-        int left = 60 - U.minuteMs / 1000;
+        int left = (60000 - U.minuteMs + 999) / 1000;   /* секунды до выплаты, с округлением вверх */
         if (left < 1) left = 1;
+        if (left > 60) left = 60;
         d_circle(px, py, pr, P.surface2, P.line, 1);
         d_pie(px, py, pr, U.minuteMs / 60000.0, P.gold);
         d_circle(px, py, pr * 45 / 100, P.surface, CLR_INVALID, 1);
         wchar_t mt[40];
-        swprintf(mt, 40, L"0:%02d", left);
+        swprintf(mt, 40, L"%d:%02d", left / 60, left % 60);
         d_text(px + pr + SC(8), py - SC(16), L"доход через", F_TINY, P.muted);
         d_text(px + pr + SC(8), py - SC(2), mt, F_SMALL_B, P.gold);
         hit(px - pr, py - pr, pr * 2 + SC(80), pr * 2, A_HOVER_MIN, 0);
@@ -441,7 +463,7 @@ void ui_click(int act, int arg)
     case A_NEW: U.modal = M_NEWGAME; U.modalScroll = 0; break;
     case A_CONTINUE:
         if (ui_load()) {
-            U.screen = SCR_GAME; U.modal = M_NONE; U.eraFilter = G.era; U.city = -1; U.minuteMs = 0;
+            U.screen = SCR_GAME; U.modal = M_NONE; U.eraFilter = G.era; U.city = -1;
             memset(U.scroll, 0, sizeof U.scroll);
             map_invalidate();
             if (G.over) { U.modal = M_FINAL; }
@@ -623,7 +645,7 @@ void ui_hover_status(int act, int arg)
     else if (act == A_HOVER_MIN) {
         MinuteBonus b;
         game_minute_preview(&G, &b);
-        swprintf(buf, 260, L"Минутный доход: каждую минуту игры +%d казны, +%d знаний, +%d производства. Растёт с каждой эпохой.",
+        swprintf(buf, 260, L"Минутный доход: каждую минуту игры +%d казны, +%d знаний, +%d производства. Растёт от эпохи к эпохе.",
                  b.gold, b.sci, b.ind);
     }
     else if (act == A_HOVER_ACH && arg >= 0 && arg < ACH_COUNT)

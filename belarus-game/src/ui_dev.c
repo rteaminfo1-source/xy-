@@ -73,6 +73,7 @@ void dev_scene(int n)
     case 14: play_until(1700); resolve(&G); U.modal = M_CITY; U.modalArg = C_GRODNO; break;
     case 15: U.screen = SCR_TITLE; U.modal = M_CREDITS; break;                  /* об игре и издатели */
     case 16: play_until(1517); resolve(&G); U.minuteMs = 52000; break;          /* до минутного дохода 8 секунд */
+    case 17: U.screen = SCR_TITLE; U.hasSave = 1; break;                         /* титул с кнопкой «Продолжить» */
     }
     if (U.screen == SCR_GAME) {
         U.eraFilter = G.era;
