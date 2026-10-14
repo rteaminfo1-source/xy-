@@ -177,8 +177,48 @@ static int body_final(int x, int y, int w)
     w_button(x, y, bw, SC(42), L"Новая игра", B_PRIMARY, 1, A_NEW, 0);
     w_button(x + bw + SC(10), y, bw, SC(42), L"Смотреть летопись", B_SECONDARY, 1, A_CLOSE, 0);
     w_button(x + 2 * (bw + SC(10)), y, bw, SC(42), L"Главное меню", B_SECONDARY, 1, A_TO_TITLE, 0);
-    y += SC(42);
+    y += SC(42) + SC(16);
+    swprintf(s, 200, L"Издатели: %ls · %ls, %ls", CREDIT_SCHOOL, CREDIT_AUTHOR, CREDIT_CLASS);
+    d_text_c(x, y, w, s, F_TINY, P.muted);
+    y += d_font_h(F_TINY);
     return y - y0;
+}
+
+/* ---------- об игре и издатели ---------- */
+static int body_credits(int x, int y, int w)
+{
+    int y0 = y;
+    wchar_t s[300];
+    swprintf(s, 300, L"ОБ ИГРЕ · ВЕРСИЯ %ls", APP_VERSION);
+    eyebrow(x, &y, IC_CULT, P.red, s);
+    y += d_wrap(x, y, w, L"Судьба Республики Беларусь в объективе технологий", F_ERA_L, P.ink, 1) + SC(4);
+    y += d_wrap(x, y, w, L"Лёс Беларусі ў аб’ектыве тэхналогій", F_BODY, P.muted, 1) + SC(14);
+    d_ornament(x, y, w, SC(3) > 2 ? SC(3) : 3, P.red, mix(P.red, P.surface, 140));
+    y += 9 * (SC(3) > 2 ? SC(3) : 3) + SC(18);
+
+    SetTextCharacterExtra(d_dc(), 1);
+    d_text(x, y, L"ИЗДАТЕЛИ", F_SMALL_B, P.muted);
+    SetTextCharacterExtra(d_dc(), 0);
+    y += SC(26);
+    int ch = SC(16) + d_font_h(F_H2) + SC(6) + d_font_h(F_H3) + SC(4) + d_font_h(F_BODY) + SC(16);
+    d_rrect(x, y, w, ch, SC(8), mix(P.surface, P.red, 22), P.red);
+    d_fill(x + SC(1), y + SC(12), SC(5), ch - SC(24), P.red);
+    int ty = y + SC(16);
+    d_text(x + SC(22), ty, CREDIT_SCHOOL, F_H2, P.ink);
+    ty += d_font_h(F_H2) + SC(6);
+    d_text(x + SC(22), ty, CREDIT_AUTHOR, F_H3, P.red);
+    ty += d_font_h(F_H3) + SC(4);
+    d_text(x + SC(22), ty, CREDIT_CLASS, F_BODY, P.muted);
+    y += ch + SC(20);
+
+    swprintf(s, 300, L"%d технологий · %d строек · %d деятелей · %d событий · %d вопросов летописца · %d наград",
+             TECH_COUNT, PROJECT_COUNT, PEOPLE_COUNT, HIST_COUNT + RAND_COUNT, QUIZ_COUNT, ACH_COUNT);
+    y += d_wrap(x, y, w, s, F_SMALL, P.ink, 1) + SC(8);
+    y += d_wrap(x, y, w, L"Нативное приложение Windows на языке C: Win32 и GDI, без сторонних библиотек. "
+                         L"Технологии, стройки, деятели и события опираются на реальную историю Беларуси; числа в игре условны и служат балансу.",
+                F_SMALL, P.muted, 1) + SC(20);
+    w_button(x + w - SC(160), y, SC(160), SC(40), L"Закрыть", B_PRIMARY, 1, A_CLOSE, 0);
+    return y + SC(40) - y0;
 }
 
 /* ---------- справка ---------- */
@@ -206,6 +246,9 @@ static int body_help(int x, int y, int w)
         { L"Сохранения", L"Игра сохраняется автоматически после каждого хода и при выходе в папку %APPDATA%\\BelarusTechFate." },
         { L"Об истории", L"Все технологии, стройки, деятели и события опираются на реальную историю. Решения в событиях — это развилки: "
                          L"иногда исторический вариант, иногда тот, которого история не знала. Числа в игре условны и служат балансу." },
+        { L"Минутный доход", L"Пока идёт партия, каждую реальную минуту начисляются казна, знания и производство — кружок-часы справа от года "
+                             L"показывает, сколько осталось. Сумма растёт с каждой эпохой. В свёрнутом окне и после 2026 года часы стоят." },
+        { L"Издатели", L"Гимназия № 10 г. Минска · Биончик Роман, учащийся 6 «Г» класса." },
     };
     for (int i = 0; i < (int)(sizeof H / sizeof H[0]); i++) {
         d_text(x, y, H[i][0], F_H3, P.red);
@@ -237,6 +280,7 @@ static int body_menu(int x, int y, int w)
     d_text_c(x, y, w, z, F_TINY, P.muted);
     y += SC(22);
     w_button(x, y, w, bh, L"Справка  (F1)", B_SECONDARY, 1, A_HELP, 0); y += bh + gap;
+    w_button(x, y, w, bh, L"Об игре и издатели", B_SECONDARY, 1, A_CREDITS, 0); y += bh + gap;
     if (U.screen == SCR_GAME) { w_button(x, y, w, bh, L"В главное меню", B_GHOST, 1, A_TO_TITLE, 0); y += bh + gap; }
     w_button(x, y, w, bh, L"Выйти из игры", B_GHOST, 1, A_EXIT, 0); y += bh;
     return y - y0;
@@ -473,5 +517,6 @@ void modal_draw(void)
     case M_PROJ:    modal_run(SC(680), body_proj, 1); break;
     case M_PERSON:  modal_run(SC(680), body_person, 1); break;
     case M_CITY:    modal_run(SC(680), body_city, 1); break;
+    case M_CREDITS: modal_run(SC(640), body_credits, 1); break;
     }
 }

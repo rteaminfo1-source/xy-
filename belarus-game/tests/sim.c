@@ -147,6 +147,24 @@ int main(int argc, char **argv)
         }
         printf("  среднее за %d партий: счёт %.0f, технологий %.1f, население %.0f тыс.\n", runs, sumScore / runs, sumTech / runs, sumPop / runs);
     }
+    /* минутный доход: растёт с эпохой, не начисляется после финала */
+    {
+        static Game m;
+        MinuteBonus b1, b8;
+        game_new(&m, 1, 3);
+        double g0 = m.gold, s0 = m.sci, i0 = m.ind;
+        if (!game_minute_bonus(&m, &b1) || b1.gold <= 0 || b1.sci <= 0 || b1.ind <= 0) FAIL("минутный доход в эпоху I");
+        if (m.gold != g0 + b1.gold || m.sci != s0 + b1.sci || m.ind != i0 + b1.ind) FAIL("минутный доход не зачислен");
+        m.era = 8;
+        game_minute_preview(&m, &b8);
+        MinuteBonus shown8 = b8;
+        if (b8.gold <= b1.gold || b8.sci <= b1.sci || b8.ind <= b1.ind) FAIL("минутный доход не растёт с эпохой");
+        m.over = 1;
+        double g1 = m.gold;
+        if (game_minute_bonus(&m, &b8) || m.gold != g1) FAIL("минутный доход после финала");
+        printf("Минутный доход: эпоха I +%d/+%d/+%d, эпоха VIII +%d/+%d/+%d (казна/знания/производство)\n",
+               b1.gold, b1.sci, b1.ind, shown8.gold, shown8.sci, shown8.ind);
+    }
     /* сохранение и загрузка */
     {
         static Game a, b;

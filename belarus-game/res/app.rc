@@ -5,8 +5,8 @@
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"
 
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION 1,0,0,0
-PRODUCTVERSION 1,0,0,0
+FILEVERSION 1,1,0,0
+PRODUCTVERSION 1,1,0,0
 FILEOS VOS_NT_WINDOWS32
 FILETYPE VFT_APP
 BEGIN
@@ -16,10 +16,12 @@ BEGIN
     BEGIN
       VALUE "FileDescription", "Судьба Республики Беларусь в объективе технологий"
       VALUE "ProductName", "Судьба Республики Беларусь в объективе технологий"
-      VALUE "FileVersion", "1.0.0"
-      VALUE "ProductVersion", "1.0.0"
+      VALUE "FileVersion", "1.1.0"
+      VALUE "ProductVersion", "1.1.0"
+      VALUE "CompanyName", "Гимназия № 10 г. Минска"
+      VALUE "Comments", "Издатели: Гимназия № 10 г. Минска, Биончик Роман, учащийся 6 «Г» класса"
       VALUE "OriginalFilename", "BelarusTech.exe"
-      VALUE "LegalCopyright", "Свободное использование"
+      VALUE "LegalCopyright", "© 2026 Биончик Роман, 6 «Г» класс, гимназия № 10 г. Минска"
     END
   END
   BLOCK "VarFileInfo"

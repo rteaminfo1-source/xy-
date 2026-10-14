@@ -306,6 +306,11 @@ int  game_proj_ind(const Game *g, int p);
 int  game_build(Game *g, int p);
 int  game_sell_amount(const Game *g);
 int  game_sell_ind(Game *g);              /* продать излишки производства: вернёт прибавку казны */
+
+/* Минутный доход: каждую реальную минуту партии — казна, знания и производство (растут с эпохой) */
+typedef struct { int gold, sci, ind; } MinuteBonus;
+void game_minute_preview(const Game *g, MinuteBonus *b);
+int  game_minute_bonus(Game *g, MinuteBonus *b);   /* 1 — начислено; после финала не начисляется */
 int  game_proj_count(const Game *g);
 
 enum { HS_FUTURE, HS_AVAILABLE, HS_ACTIVE, HS_LEGACY, HS_MISSED };

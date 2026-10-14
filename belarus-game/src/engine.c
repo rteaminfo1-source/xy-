@@ -328,6 +328,26 @@ int game_sell_ind(Game *g)
     return gain;
 }
 
+/* ---------- минутный доход ---------- */
+void game_minute_preview(const Game *g, MinuteBonus *b)
+{
+    double k = era_scale(g->era);
+    double diff = 1.0 + DIFFICULTIES[g->difficulty].incomePct / 100.0;
+    b->gold = (int)lround((3.0 + 4.0 * k) * diff);
+    b->sci  = (int)lround((2.0 + 2.0 * k) * diff);
+    b->ind  = (int)lround((1.0 + 1.5 * k) * diff);
+}
+
+int game_minute_bonus(Game *g, MinuteBonus *b)
+{
+    if (g->over) { b->gold = b->sci = b->ind = 0; return 0; }
+    game_minute_preview(g, b);
+    g->gold += b->gold;
+    g->sci  += b->sci;
+    g->ind  += b->ind;
+    return 1;
+}
+
 /* ---------- деятели ---------- */
 int game_next_year(const Game *g) { return g->turn + 1 < TURN_COUNT ? TURN_YEARS[g->turn + 1] : END_YEAR; }
 

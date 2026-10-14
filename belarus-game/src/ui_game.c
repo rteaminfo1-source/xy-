@@ -111,8 +111,10 @@ static void draw_title(void)
         w_button(x0, y, bw, bh, L"Новая игра", B_PRIMARY, 1, A_NEW, 0); y += bh + gap;
     }
     w_button(x0, y, bw, bh, L"Как играть", B_SECONDARY, 1, A_HELP, 0); y += bh + gap;
-    w_button(x0, y, bw / 2 - gap / 2, SC(36), g_dark ? L"Светлая тема" : L"Тёмная тема", B_GHOST, 1, A_THEME, 0);
-    w_button(x0 + bw / 2 + gap / 2, y, bw / 2 - gap / 2, SC(36), L"Выход", B_GHOST, 1, A_EXIT, 0);
+    int tw3 = (bw - 2 * gap) / 3;
+    w_button(x0, y, tw3, SC(36), L"Тема", B_GHOST, 1, A_THEME, 0);
+    w_button(x0 + tw3 + gap, y, tw3, SC(36), L"Об игре", B_GHOST, 1, A_CREDITS, 0);
+    w_button(x0 + 2 * (tw3 + gap), y, tw3, SC(36), L"Выход", B_GHOST, 1, A_EXIT, 0);
 
     if (wide) {
         int mx = x0 + colW + SC(30), my = SC(26) + 9 * cell + SC(30);
@@ -136,7 +138,11 @@ static void draw_title(void)
     wchar_t foot[200];
     swprintf(foot, 200, L"%d технологий · %d строек · %d деятелей · %d событий · %d вопросов летописца",
              TECH_COUNT, PROJECT_COUNT, PEOPLE_COUNT, HIST_COUNT + RAND_COUNT, QUIZ_COUNT);
-    d_text(x0, g_h - SC(26) - 9 * cell - SC(26), U.status[0] ? U.status : foot, F_SMALL, P.muted);
+    int fy = g_h - SC(26) - 9 * cell - SC(26);
+    wchar_t cr[200];
+    swprintf(cr, 200, L"Издатели: %ls · %ls, %ls", CREDIT_SCHOOL, CREDIT_AUTHOR, CREDIT_CLASS);
+    d_text(x0, fy - SC(24), cr, F_SMALL_B, P.ink);
+    d_text(x0, fy, U.status[0] ? U.status : foot, F_SMALL, P.muted);
 }
 
 /* ---------- шапка ---------- */
@@ -151,6 +157,20 @@ static void draw_header(int *outH)
     wchar_t s[64];
     swprintf(s, 64, L"%d", G.year);
     d_text(pad, SC(4), s, F_ERA_XL, P.ink);
+    /* часы минутного дохода справа от года */
+    if (!G.over) {
+        int px = pad + d_text_w(s, F_ERA_XL) + SC(26), py = SC(30), pr = SC(13);
+        int left = 60 - U.minuteMs / 1000;
+        if (left < 1) left = 1;
+        d_circle(px, py, pr, P.surface2, P.line, 1);
+        d_pie(px, py, pr, U.minuteMs / 60000.0, P.gold);
+        d_circle(px, py, pr * 45 / 100, P.surface, CLR_INVALID, 1);
+        wchar_t mt[40];
+        swprintf(mt, 40, L"0:%02d", left);
+        d_text(px + pr + SC(8), py - SC(16), L"доход через", F_TINY, P.muted);
+        d_text(px + pr + SC(8), py - SC(2), mt, F_SMALL_B, P.gold);
+        hit(px - pr, py - pr, pr * 2 + SC(80), pr * 2, A_HOVER_MIN, 0);
+    }
     wchar_t era[160];
     swprintf(era, 160, L"%ls · %ls", roman(G.era), ERAS[G.era - 1].name);
     int yearW = SC(270);
@@ -402,6 +422,7 @@ static void close_modal(void)
 static void start_game(void)
 {
     game_new(&G, U.diffPick, GetTickCount() ^ 0x5bd1e995u);
+    U.minuteMs = 0;
     memset(U.scroll, 0, sizeof U.scroll);
     U.tab = TAB_TECH;
     U.eraFilter = 1;
@@ -420,7 +441,7 @@ void ui_click(int act, int arg)
     case A_NEW: U.modal = M_NEWGAME; U.modalScroll = 0; break;
     case A_CONTINUE:
         if (ui_load()) {
-            U.screen = SCR_GAME; U.modal = M_NONE; U.eraFilter = G.era; U.city = -1;
+            U.screen = SCR_GAME; U.modal = M_NONE; U.eraFilter = G.era; U.city = -1; U.minuteMs = 0;
             memset(U.scroll, 0, sizeof U.scroll);
             map_invalidate();
             if (G.over) { U.modal = M_FINAL; }
@@ -494,6 +515,7 @@ void ui_click(int act, int arg)
         break;
     }
     case A_ZOOM: ui_zoom(arg); break;
+    case A_CREDITS: U.modal = M_CREDITS; U.modalScroll = 0; break;
     }
     ui_invalidate();
 }
@@ -598,8 +620,34 @@ void ui_hover_status(int act, int arg)
         swprintf(buf, 260, L"%ls · построено: %d · можно строить: %d — нажмите, чтобы открыть", CITIES[arg].name, built, avail);
     } else if (act == A_PRIORITY && arg >= 0 && arg < PRIORITY_COUNT)
         swprintf(buf, 260, L"%ls: %ls", PRIORITIES[arg].name, PRIORITIES[arg].desc);
+    else if (act == A_HOVER_MIN) {
+        MinuteBonus b;
+        game_minute_preview(&G, &b);
+        swprintf(buf, 260, L"Минутный доход: каждую минуту игры +%d казны, +%d знаний, +%d производства. Растёт с каждой эпохой.",
+                 b.gold, b.sci, b.ind);
+    }
     else if (act == A_HOVER_ACH && arg >= 0 && arg < ACH_COUNT)
         swprintf(buf, 260, L"%ls — %ls", ACHIEVEMENTS[arg].name, ACHIEVEMENTS[arg].desc);
     wcsncpy(U.status, buf, 259);
     U.status[259] = 0;
+}
+
+/* Каждую секунду: копим реальное время партии; раз в минуту — доход. */
+void ui_minute_tick(void)
+{
+    DWORD now = GetTickCount();
+    DWORD dt = U.minuteLast ? now - U.minuteLast : 0;
+    U.minuteLast = now;
+    if (dt > 5000) dt = 1000;   /* после сна компьютера не начисляем «пропущенные» минуты */
+    if (U.screen != SCR_GAME || G.over || IsIconic(g_hwnd)) return;
+    U.minuteMs += (int)dt;
+    if (U.minuteMs >= 60000) {
+        U.minuteMs -= 60000;
+        if (U.minuteMs >= 60000) U.minuteMs = 0;
+        MinuteBonus b;
+        if (game_minute_bonus(&G, &b))
+            ui_toast(L"Минутный доход: +%d казны, +%d знаний, +%d производства", b.gold, b.sci, b.ind);
+    }
+    RECT r = { 0, 0, g_w, SC(90) };
+    InvalidateRect(g_hwnd, &r, FALSE);
 }

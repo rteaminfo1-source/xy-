@@ -312,6 +312,25 @@ void d_unclip(void) { SelectClipRgn(s_dc, NULL); }
 
 void d_bitmap(HDC src, int x, int y, int w, int h) { BitBlt(s_dc, x, y, w, h, src, 0, 0, SRCCOPY); }
 
+/* Сектор круга по часовой стрелке от «12 часов»: индикатор минутного дохода. */
+void d_pie(int cx, int cy, int r, double frac, COLORREF fill)
+{
+    if (frac < 0.01) return;   /* иначе концы совпадут и Pie нарисует полный круг */
+    if (frac >= 0.999) { d_circle(cx, cy, r, fill, CLR_INVALID, 1); return; }
+    const double PI2 = 6.283185307179586;
+    double a0 = -PI2 / 4, a1 = a0 + frac * PI2;
+    int xs = cx + (int)lround(r * 4 * cos(a0)), ys = cy + (int)lround(r * 4 * sin(a0));
+    int xe = cx + (int)lround(r * 4 * cos(a1)), ye = cy + (int)lround(r * 4 * sin(a1));
+    HGDIOBJ ob = SelectObject(s_dc, GetStockObject(DC_BRUSH));
+    HGDIOBJ op = SelectObject(s_dc, GetStockObject(NULL_PEN));
+    SetDCBrushColor(s_dc, fill);
+    int old = SetArcDirection(s_dc, AD_CLOCKWISE);
+    Pie(s_dc, cx - r, cy - r, cx + r + 1, cy + r + 1, xs, ys, xe, ye);
+    SetArcDirection(s_dc, old);
+    SelectObject(s_dc, ob);
+    SelectObject(s_dc, op);
+}
+
 /* Вышивка: ромбы — знак земли и плодородия в белорусском орнаменте. */
 void d_ornament(int x, int y, int w, int cell, COLORREF a, COLORREF b)
 {
@@ -697,6 +716,7 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
         if (wp == VK_F10) { ui_key(VK_F10); return 0; }
         break;
     case WM_TIMER:
+        if (wp == 2) { ui_minute_tick(); return 0; }
         if (GetTickCount() > U.toastUntil) { U.toast[0] = 0; KillTimer(h, 1); }
         ui_invalidate();
         return 0;
@@ -762,6 +782,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     g_hwnd = CreateWindowExW(0, wc.lpszClassName, L"Судьба Республики Беларусь в объективе технологий",
                              WS_OVERLAPPEDWINDOW, wa.left + (wa.right - wa.left - ww) / 2, wa.top + (wa.bottom - wa.top - wh) / 2,
                              ww, wh, NULL, NULL, inst, NULL);
+    SetTimer(g_hwnd, 2, 1000, NULL);   /* часы минутного дохода */
     ShowWindow(g_hwnd, show == SW_SHOWMINIMIZED ? SW_SHOWNORMAL : show);
     UpdateWindow(g_hwnd);
 

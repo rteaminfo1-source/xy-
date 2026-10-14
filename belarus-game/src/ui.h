@@ -51,6 +51,7 @@ void d_unclip(void);
 void d_ornament(int x, int y, int w, int cell, COLORREF a, COLORREF b);
 void d_icon(int kind, int x, int y, int s, COLORREF c);
 void d_bitmap(HDC src, int x, int y, int w, int h);
+void d_pie(int cx, int cy, int r, double frac, COLORREF fill);
 HDC  d_dc(void);
 unsigned *d_bits(void);
 
@@ -62,10 +63,10 @@ enum {
     A_NONE, A_NEW, A_CONTINUE, A_HELP, A_EXIT, A_DIFF, A_START, A_TAB, A_ERAF, A_RESEARCH, A_TECH,
     A_BUILD, A_PROJ, A_HIRE, A_PERSON, A_PRIORITY, A_QUIZ, A_END_TURN, A_CHOICE, A_NEXT, A_CLOSE,
     A_MENU, A_SAVE, A_LOAD, A_THEME, A_TO_TITLE, A_CITY, A_SELL, A_ERA_START, A_FINAL, A_ZOOM,
-    A_PFILTER, A_TIMELINE, A_SCROLLBAR
+    A_PFILTER, A_TIMELINE, A_SCROLLBAR, A_CREDITS
 };
 /* области только для подсказок (без клика) */
-enum { A_HOVER_RES = 100, A_HOVER_ERA, A_HOVER_ACH, A_HOVER_STAT };
+enum { A_HOVER_RES = 100, A_HOVER_ERA, A_HOVER_ACH, A_HOVER_STAT, A_HOVER_MIN };
 void hit(int x, int y, int w, int h, int act, int arg);
 int  hover(int act, int arg);
 void hits_reset(void);
@@ -81,7 +82,7 @@ void w_scrollbar(int x, int y, int h, int content, int view, int scroll);
 
 /* ---------- состояние интерфейса ---------- */
 enum { SCR_TITLE, SCR_GAME };
-enum { M_NONE, M_EVENT, M_ERA, M_FINAL, M_HELP, M_MENU, M_NEWGAME, M_TECH, M_PROJ, M_PERSON, M_CITY };
+enum { M_NONE, M_EVENT, M_ERA, M_FINAL, M_HELP, M_MENU, M_NEWGAME, M_TECH, M_PROJ, M_PERSON, M_CITY, M_CREDITS };
 enum { TAB_TECH, TAB_PROJ, TAB_PEOPLE, TAB_POLICY, TAB_QUIZ, TAB_LOG, TAB_CHARTS, TAB_ACH, TAB_COUNT };
 
 typedef struct {
@@ -99,6 +100,8 @@ typedef struct {
     wchar_t status[260];
     int hasSave;
     int zoom;                    /* проценты */
+    int minuteMs;                /* накоплено до минутного дохода, мс */
+    DWORD minuteLast;            /* время прошлого тика таймера */
     int panelX, panelY, panelW, panelH;
 } UiState;
 
@@ -123,6 +126,7 @@ void ui_key(WPARAM vk);
 void ui_wheel(int delta, int x, int y);
 void ui_after_change(void);
 void ui_hover_status(int act, int arg);
+void ui_minute_tick(void);
 
 /* ui_map.c */
 void map_draw(int x, int y, int w, int h, int interactive);
@@ -133,6 +137,12 @@ void dev_scene(int n);
 
 /* ui_modal.c */
 void modal_draw(void);
+
+/* издатели */
+#define CREDIT_SCHOOL  L"Гимназия № 10 г. Минска"
+#define CREDIT_AUTHOR  L"Биончик Роман"
+#define CREDIT_CLASS   L"учащийся 6 «Г» класса"
+#define APP_VERSION    L"1.1"
 
 /* общие помощники форматирования */
 void fmt_num(double v, wchar_t *buf, int n);

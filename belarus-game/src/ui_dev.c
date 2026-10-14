@@ -71,6 +71,8 @@ void dev_scene(int n)
     case 12: play_until(1600); resolve(&G); U.modal = M_TECH; U.modalArg = tech_index("rocketry"); break;
     case 13: play_until(1986); resolve(&G); U.tab = TAB_LOG; break;
     case 14: play_until(1700); resolve(&G); U.modal = M_CITY; U.modalArg = C_GRODNO; break;
+    case 15: U.screen = SCR_TITLE; U.modal = M_CREDITS; break;                  /* об игре и издатели */
+    case 16: play_until(1517); resolve(&G); U.minuteMs = 52000; break;          /* до минутного дохода 8 секунд */
     }
     if (U.screen == SCR_GAME) {
         U.eraFilter = G.era;
