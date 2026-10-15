@@ -94,6 +94,7 @@ int war_recruit(Game *g, int u)
     g->gold -= cg;
     g->ind -= ci;
     g->units[u]++;
+    game_check_achievements(g);   /* задание «войско не меньше N» засчитывается сразу */
     return 1;
 }
 
