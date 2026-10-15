@@ -131,6 +131,41 @@ typedef struct {
 typedef struct { int era; const wchar_t *q; const wchar_t *a[4]; int correct; const wchar_t *expl; } Quiz;
 typedef struct { const wchar_t *name; const wchar_t *desc; } Achievement;
 
+/* ---------- Задания ----------
+ * Задание открывается, когда игра доходит до эпохи era, и выполняется, если условие
+ * соблюдено в ход с годом <= deadline. Если ход перешёл за deadline, а условие не выполнено,
+ * задание провалено. Задания «на срок» (тип QT_ECO_AT или at = 1) проверяются один раз —
+ * по итогам года deadline (когда игра переходит за него или летопись заканчивается).
+ * Награда начисляется сразу при выполнении: казна, знания, культура, стабильность. */
+enum {
+    QT_TECH,     /* изучить технологию target                          */
+    QT_PROJ,     /* построить стройку target                           */
+    QT_PERSON,   /* пригласить деятеля target                          */
+    QT_POP,      /* население >= num тыс.                              */
+    QT_DEF,      /* оборона (game_def) >= num                          */
+    QT_TECHN,    /* изучено технологий >= num                          */
+    QT_CULT,     /* накопленная культура >= num                        */
+    QT_ECO_AT,   /* экология >= num по итогам года deadline            */
+    QT_STAB,     /* стабильность >= num                                */
+    QT_COUNT
+};
+enum { QS_HIDDEN, QS_ACTIVE, QS_DONE, QS_FAILED };   /* Game.questState[] */
+
+typedef struct {
+    const char    *id;
+    int            era;       /* 1..8: эпоха, с которой задание открыто */
+    int            type;      /* QT_* */
+    const char    *target;    /* id технологии, стройки или деятеля (QT_TECH/QT_PROJ/QT_PERSON), иначе 0 */
+    int            num;       /* порог для численных типов */
+    int            deadline;  /* год-срок */
+    int            at;        /* 1 — проверка только по итогам года-срока (у QT_ECO_AT всегда) */
+    int            city;      /* город для значка на карте (C_*), -1 — без значка */
+    int            gold, sci, cult, stab;   /* награда */
+    const wchar_t *title;
+    const wchar_t *desc;      /* историческая справка, 1–2 предложения */
+    int            ti;        /* индекс цели в TECHS/PROJECTS/PEOPLE, заполняется data_init(); -1 — нет */
+} Quest;
+
 /* ---------- Курс (приоритет) ---------- */
 typedef struct { const wchar_t *name; const wchar_t *desc; int goldPct, sciPct, indPct, defPct, stabAdd, ecoAdd, growAdd; } Priority;
 typedef struct { const wchar_t *name; const wchar_t *desc; int incomePct; int harmPct; int costPct; } Difficulty;
@@ -167,6 +202,8 @@ extern const Quiz  QUIZ[];
 extern const int   QUIZ_COUNT;
 extern const Achievement ACHIEVEMENTS[];
 extern const int   ACH_COUNT;
+extern Quest       QUESTS[];
+extern const int   QUEST_COUNT;
 
 /* Индексы городов */
 enum {
@@ -185,6 +222,7 @@ enum {
 #define MAX_RAND    60
 #define MAX_QUIZ    160
 #define MAX_ACH     32
+#define MAX_QUESTS  48
 #define MAX_TURNS   80
 #define MAX_LOG     360
 #define MAX_MODS    24
@@ -194,7 +232,7 @@ enum {
 enum { Q_HIST, Q_RAND, Q_ERA, Q_FINAL };
 typedef struct { int type, idx; } QItem;
 
-enum { LOG_INFO, LOG_TECH, LOG_BUILD, LOG_PERSON, LOG_EVENT, LOG_WAR, LOG_ERA, LOG_QUIZ, LOG_ACH };
+enum { LOG_INFO, LOG_TECH, LOG_BUILD, LOG_PERSON, LOG_EVENT, LOG_WAR, LOG_ERA, LOG_QUIZ, LOG_ACH, LOG_QUEST };
 typedef struct { int year, kind; wchar_t text[LOG_LEN]; } LogEntry;
 
 typedef struct { Fx fx; int until; wchar_t name[MOD_NAME]; } Mod;
@@ -247,6 +285,9 @@ typedef struct {
     unsigned rng;
     int    over;
     int    lastRand;
+    /* ---- версия 4: задания (поля только дописываются в конец) ---- */
+    unsigned char questState[MAX_QUESTS];   /* QS_* */
+    int    questsDone;
 } Game;
 
 /* Флаги исторических решений */
@@ -280,7 +321,7 @@ typedef struct {
 } Outcome;
 
 typedef struct {
-    int techs, projs, people, pop, stab, eco, cult, ach, quiz, total;
+    int techs, projs, people, pop, stab, eco, cult, ach, quiz, quests, total;  /* quests: 15 за задание */
     const wchar_t *rank;
     wchar_t epilogue[2400];
 } Score;
@@ -342,9 +383,20 @@ void fmt_pop(double popK, wchar_t *buf, int n);
 int  game_has_tech(const Game *g, const char *id);
 int  game_has_proj(const Game *g, const char *id);
 
-int  game_save(const Game *g, FILE *f);
-int  game_load(Game *g, FILE *f);
+/* Задания. game_check_quests открывает задания наступившей эпохи, засчитывает выполненные
+ * (награда + запись LOG_QUEST в летописи) и проваливает просроченные. Движок сам вызывает её
+ * из game_new и из game_check_achievements (то есть после исследования, стройки, найма,
+ * выбора в событии, викторины и в конце хода); UI вызывать её не обязан. */
+void game_check_quests(Game *g);
+int  game_quest_state(const Game *g, int q);                        /* QS_*; вне диапазона — QS_HIDDEN */
+void game_quest_progress(const Game *g, int q, double *cur, double *target);  /* для полосы прогресса; 0/1 из 1 для целей-объектов */
+int  game_quest_count(const Game *g, int state);                    /* сколько заданий в состоянии QS_* */
+void quest_describe_goal(int q, wchar_t *buf, int n);               /* «Изучить «Скрипторий» до 1175 г.» */
+void quest_describe_reward(int q, wchar_t *buf, int n);             /* «казна +22 · знания +8 · культура +8» */
 
-#define GAME_VERSION 3
+int  game_save(const Game *g, FILE *f);
+int  game_load(Game *g, FILE *f);   /* принимает и сохранения версии 3 (до заданий) */
+
+#define GAME_VERSION 4
 
 #endif

@@ -4,6 +4,9 @@
 1 ICON "app.ico"
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"
 
+/* Встроенные рендеры Blender (RCDATA 2–4), генерирует tools/pack_assets.py */
+#include "assets.rc"
+
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION 1,1,0,0
 PRODUCTVERSION 1,1,0,0

@@ -6,6 +6,13 @@ cd "$(dirname "$0")"
 CC=${CC:-x86_64-w64-mingw32-gcc}
 WINDRES=${WINDRES:-x86_64-w64-mingw32-windres}
 mkdir -p build
+# Рендеры Blender (assets/*.png) -> res/*.qoi + src/assets_gen.h + res/assets.rc.
+# Без Python используются уже упакованные файлы из репозитория.
+if command -v python3 >/dev/null 2>&1; then
+    python3 tools/pack_assets.py
+elif [ ! -f src/assets_gen.h ] || [ ! -f res/assets.rc ]; then
+    echo "Нужен python3 для tools/pack_assets.py" >&2; exit 1
+fi
 $WINDRES -c 65001 -I res res/app.rc -O coff -o build/app.res
 $CC -std=c11 -O2 -s -municode -mwindows -static -D__USE_MINGW_ANSI_STDIO=1 \
     -Wall -Wextra -Wno-missing-field-initializers -Wno-unused-parameter \

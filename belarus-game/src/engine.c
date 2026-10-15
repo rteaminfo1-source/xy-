@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <stdarg.h>
+#include <stddef.h>
 
 static const double ERA_SCALE[ERA_COUNT + 1] = { 1, 1.0, 1.8, 2.8, 4.0, 5.5, 5.5, 8.0, 11.0 };
 static const wchar_t *RES_NAMES[R_COUNT] = {
@@ -31,6 +32,13 @@ static int proj_index(const char *id)
 {
     for (int i = 0; i < PROJECT_COUNT; i++)
         if (strcmp(PROJECTS[i].id, id) == 0) return i;
+    return -1;
+}
+
+static int person_index(const char *id)
+{
+    for (int i = 0; i < PEOPLE_COUNT; i++)
+        if (strcmp(PEOPLE[i].id, id) == 0) return i;
     return -1;
 }
 
@@ -62,6 +70,13 @@ void data_init(void)
     for (int i = 0; i < PEOPLE_COUNT; i++) PEOPLE[i].disci = tech_index(PEOPLE[i].discount);
     init_events(HIST_EVENTS, HIST_COUNT);
     init_events(RAND_EVENTS, RAND_COUNT);
+    for (int q = 0; q < QUEST_COUNT; q++) {
+        Quest *Q = &QUESTS[q];
+        Q->ti = !Q->target ? -1 :
+                Q->type == QT_TECH   ? tech_index(Q->target) :
+                Q->type == QT_PROJ   ? proj_index(Q->target) :
+                Q->type == QT_PERSON ? person_index(Q->target) : -1;
+    }
 }
 
 /* ---------- утилиты ---------- */
@@ -597,6 +612,7 @@ void game_new(Game *g, int difficulty, unsigned seed)
     record_history(g);
     game_log(g, LOG_ERA, L"Начало летописи: %ls", ERAS[0].name);
     queue_period(g, 1);
+    game_check_quests(g);
 }
 
 void game_end_turn(Game *g)
@@ -707,6 +723,7 @@ static int all_era_techs(const Game *g, int era)
 
 void game_check_achievements(Game *g)
 {
+    game_check_quests(g);   /* награды заданий могут открыть достижения */
     int got[MAX_ACH] = {0};
     int manuf = game_has_proj(g, "naliboki_glass") + game_has_proj(g, "urechye") +
                 game_has_proj(g, "slutsk_persiyarnya") + game_has_proj(g, "grodno_manufactories");
@@ -737,6 +754,149 @@ void game_check_achievements(Game *g)
         }
 }
 
+/* ---------- задания ---------- */
+static int quest_at(const Quest *q) { return q->type == QT_ECO_AT || q->at; }
+
+void game_quest_progress(const Game *g, int q, double *cur, double *target)
+{
+    double c = 0, t = 1;
+    if (q >= 0 && q < QUEST_COUNT) {
+        const Quest *Q = &QUESTS[q];
+        int i = Q->ti;
+        t = Q->num;
+        switch (Q->type) {
+        case QT_TECH:   c = i >= 0 && g->tech[i];   t = 1; break;
+        case QT_PROJ:   c = i >= 0 && g->proj[i];   t = 1; break;
+        case QT_PERSON: c = i >= 0 && g->person[i]; t = 1; break;
+        case QT_POP:    c = g->pop; break;
+        case QT_DEF:    c = game_def(g); break;
+        case QT_TECHN:  c = game_tech_count(g); break;
+        case QT_CULT:   c = g->cult; break;
+        case QT_ECO_AT: c = g->eco; break;
+        case QT_STAB:   c = g->stab; break;
+        }
+    }
+    if (cur) *cur = c;
+    if (target) *target = t;
+}
+
+static int quest_met(const Game *g, int q)
+{
+    double c, t;
+    game_quest_progress(g, q, &c, &t);
+    return c >= t - 1e-9;
+}
+
+int game_quest_state(const Game *g, int q)
+{
+    return q >= 0 && q < QUEST_COUNT && q < MAX_QUESTS ? g->questState[q] : QS_HIDDEN;
+}
+
+int game_quest_count(const Game *g, int state)
+{
+    int n = 0;
+    for (int q = 0; q < QUEST_COUNT && q < MAX_QUESTS; q++) n += g->questState[q] == state;
+    return n;
+}
+
+/* «имя» — без двойных кавычек, если в имени они уже есть («Интеграл», ЭВМ «Минск») */
+static void quoted(wchar_t *out, int n, const wchar_t *s)
+{
+    if (wcschr(s, L'«')) swprintf(out, n, L"%ls", s);
+    else swprintf(out, n, L"«%ls»", s);
+}
+
+void quest_describe_goal(int q, wchar_t *buf, int n)
+{
+    if (n <= 0) return;
+    buf[0] = 0;
+    if (q < 0 || q >= QUEST_COUNT) return;
+    const Quest *Q = &QUESTS[q];
+    const wchar_t *what = Q->ti < 0 ? L"?" :
+                          Q->type == QT_TECH ? TECHS[Q->ti].name :
+                          Q->type == QT_PROJ ? PROJECTS[Q->ti].name :
+                          Q->type == QT_PERSON ? PEOPLE[Q->ti].name : L"?";
+    wchar_t when[48], pop[32], qw[96];
+    quoted(qw, 96, what);
+    if (quest_at(Q)) {
+        if (Q->deadline >= END_YEAR) swprintf(when, 48, L"к концу летописи (%d)", END_YEAR);
+        else swprintf(when, 48, L"по итогам %d г.", Q->deadline);
+    } else swprintf(when, 48, L"до %d г.", Q->deadline);
+    switch (Q->type) {
+    case QT_TECH:   swprintf(buf, n, L"Изучить %ls %ls", qw, when); break;
+    case QT_PROJ:   swprintf(buf, n, L"Построить %ls %ls", qw, when); break;
+    case QT_PERSON: swprintf(buf, n, L"Пригласить: %ls, %ls", what, when); break;
+    case QT_POP:    fmt_pop(Q->num, pop, 32); swprintf(buf, n, L"Население не меньше %ls %ls", pop, when); break;
+    case QT_DEF:    swprintf(buf, n, L"Оборона не ниже %d %ls", Q->num, when); break;
+    case QT_TECHN:  swprintf(buf, n, L"Изучить не меньше %d технологий %ls", Q->num, when); break;
+    case QT_CULT:   swprintf(buf, n, L"Культура не ниже %d %ls", Q->num, when); break;
+    case QT_ECO_AT: swprintf(buf, n, L"Экология не ниже %d %ls", Q->num, when); break;
+    case QT_STAB:   swprintf(buf, n, L"Стабильность не ниже %d %ls", Q->num, when); break;
+    }
+}
+
+void quest_describe_reward(int q, wchar_t *buf, int n)
+{
+    if (n <= 0) return;
+    buf[0] = 0;
+    if (q < 0 || q >= QUEST_COUNT) return;
+    const Quest *Q = &QUESTS[q];
+    int first = 1;
+    cat_delta(buf, n, L"казна", Q->gold, &first);
+    cat_delta(buf, n, L"знания", Q->sci, &first);
+    cat_delta(buf, n, L"культура", Q->cult, &first);
+    cat_delta(buf, n, L"стабильность", Q->stab, &first);
+}
+
+void game_check_quests(Game *g)
+{
+    int lim = QUEST_COUNT < MAX_QUESTS ? QUEST_COUNT : MAX_QUESTS;
+    /* 1. открыть задания наступившей эпохи (одна запись в летописи) */
+    wchar_t msg[LOG_LEN];
+    int opened = 0, full = 0;
+    msg[0] = 0;
+    for (int q = 0; q < lim; q++) {
+        const Quest *Q = &QUESTS[q];
+        if (g->questState[q] != QS_HIDDEN || Q->era > g->era) continue;
+        if (g->year > Q->deadline) { g->questState[q] = QS_FAILED; continue; }  /* только у старых сохранений */
+        g->questState[q] = QS_ACTIVE;
+        wchar_t t[96];
+        swprintf(t, 96, L"%ls%ls", opened ? L" · " : L"", Q->title);
+        if (!full && wcslen(msg) + wcslen(t) + 24 < LOG_LEN) cat(msg, LOG_LEN, t);   /* запас под «Новые задания: …» */
+        else if (!full) { cat(msg, LOG_LEN, L" · …"); full = 1; }
+        opened++;
+    }
+    if (opened) game_log(g, LOG_QUEST, L"%ls: %ls", opened == 1 ? L"Новое задание" : L"Новые задания", msg);
+    /* 2. засчитать выполненные, провалить просроченные */
+    for (int q = 0; q < lim; q++) {
+        if (g->questState[q] != QS_ACTIVE) continue;
+        const Quest *Q = &QUESTS[q];
+        int past = g->over || g->year > Q->deadline;
+        int ok;
+        if (quest_at(Q)) {
+            if (!past) continue;
+            ok = quest_met(g, q);
+        } else {
+            ok = g->year <= Q->deadline && quest_met(g, q);
+            if (!ok && !past) continue;
+        }
+        if (ok) {
+            g->questState[q] = QS_DONE;
+            g->questsDone++;
+            g->gold += Q->gold;
+            g->sci  += Q->sci;
+            g->cult += Q->cult;
+            g->stab  = clampd(g->stab + Q->stab, 0, 100);
+            wchar_t rw[120];
+            quest_describe_reward(q, rw, 120);
+            game_log(g, LOG_QUEST, L"Задание выполнено: %ls (%ls)", Q->title, rw);
+        } else {
+            g->questState[q] = QS_FAILED;
+            game_log(g, LOG_QUEST, L"Задание провалено: %ls (срок — %d г.)", Q->title, Q->deadline);
+        }
+    }
+}
+
 /* ---------- итог ---------- */
 static int count_branch(const Game *g, int br)
 {
@@ -759,11 +919,13 @@ void game_score(const Game *g, Score *s)
     s->cult   = (int)lround(g->cult / 10.0);
     s->ach    = ach * 25;
     s->quiz   = g->quizRight * 5;
-    s->total  = s->techs + s->projs + s->people + s->pop + s->stab + s->eco + s->cult + s->ach + s->quiz;
-    s->rank = s->total >= 3400 ? L"Страна-лаборатория" :
-              s->total >= 2800 ? L"Технологический узел Европы" :
-              s->total >= 2200 ? L"Сборочный цех с собственным умом" :
-              s->total >= 1600 ? L"Упорный край мастеров" :
+    s->quests = game_quest_count(g, QS_DONE) * 15;
+    s->total  = s->techs + s->projs + s->people + s->pop + s->stab + s->eco + s->cult + s->ach + s->quiz + s->quests;
+    /* пороги подняты в версии 4: задания дают до 15 очков каждое (+ награды) */
+    s->rank = s->total >= 3800 ? L"Страна-лаборатория" :
+              s->total >= 3100 ? L"Технологический узел Европы" :
+              s->total >= 2400 ? L"Сборочный цех с собственным умом" :
+              s->total >= 1700 ? L"Упорный край мастеров" :
                                  L"Хроника трудных времён";
 
     wchar_t *e = s->epilogue;
@@ -814,9 +976,18 @@ int game_load(Game *g, FILE *f)
     unsigned sz = 0;
     Game tmp;
     if (fread(magic, 1, 4, f) != 4 || memcmp(magic, "BYTG", 4) != 0) return 0;
-    if (fread(&sz, sizeof sz, 1, f) != 1 || sz != sizeof tmp) return 0;
-    if (fread(&tmp, sizeof tmp, 1, f) != 1) return 0;
-    if (tmp.version != GAME_VERSION) return 0;
+    if (fread(&sz, sizeof sz, 1, f) != 1) return 0;
+    const size_t v4 = offsetof(Game, questState);   /* размер версии 3 — до полей заданий (+ выравнивание) */
+    memset(&tmp, 0, sizeof tmp);
+    if (sz == sizeof tmp) {
+        if (fread(&tmp, sizeof tmp, 1, f) != 1) return 0;
+        if (tmp.version != GAME_VERSION) return 0;
+    } else if (sz >= v4 && sz <= v4 + 8 && sz < sizeof tmp) {
+        if (fread(&tmp, sz, 1, f) != 1) return 0;
+        if (tmp.version != 3) return 0;
+        memset((char *)&tmp + v4, 0, sizeof tmp - v4);   /* задания: всё с нуля */
+        tmp.version = GAME_VERSION;
+    } else return 0;
     data_init();
     *g = tmp;
     return 1;
