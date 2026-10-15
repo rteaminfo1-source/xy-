@@ -254,11 +254,24 @@ static const char *const SPR_NAMES[29] = {
 };
 
 /* ---- атлас портретов: ячейка PORTRAIT_CELL_W x PORTRAIT_CELL_H, PORTRAIT_COLS в ряд ---- */
-#define ASSETS_HAVE_PORTRAITS 0
-#define PORTRAIT_CELL_W 1
-#define PORTRAIT_CELL_H 1
-#define PORTRAIT_COLS 1
-#define PORTRAIT_COUNT 0
-static const char *const PORTRAIT_IDS[1] = {""};
+#define ASSETS_HAVE_PORTRAITS 1
+#define PORTRAIT_CELL_W 160
+#define PORTRAIT_CELL_H 200
+#define PORTRAIT_COLS 10
+#define PORTRAIT_COUNT 71
+static const char *const PORTRAIT_IDS[71] = {
+    "euphrosyne", "ioann", "bogsha", "kirill", "aleksa", "vitaut",
+    "skaryna", "budny", "sapega", "mamonichi", "bernardoni", "sierotka",
+    "siemienowicz", "simeon", "madzharski", "mk_oginski", "tizenhaus_p", "gilibert",
+    "oginski", "domeyko", "zhilinsky", "chersky", "narkevich", "kupala",
+    "sukhoi", "kosberg", "stepanov", "lopato", "borisevich", "alferov",
+    "klimuk", "kovalyonok", "dobkin", "kisly", "novitsky", "vasilevskaya",
+    "vseslav", "boris_p", "rogvolod", "mindaugas", "gediminas", "algirdas",
+    "jogaila", "casimir4", "sigismund1", "sigismund2", "batory", "sigismund3",
+    "jan_kazimierz", "sobieski", "august2", "poniatowski", "catherine2", "paul1",
+    "alexander1", "nicholas1", "alexander2", "alexander3", "nicholas2", "lenin",
+    "stalin", "khrushchev", "brezhnev", "andropov", "chernenko", "gorbachev",
+    "ponomarenko", "mazurov", "masherov", "shushkevich", "lukashenko"
+};
 
 #endif

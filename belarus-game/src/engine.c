@@ -1,5 +1,6 @@
 /* Игровой движок: экономика, исследования, стройки, события, счёт. Без зависимостей от ОС. */
 #include "game.h"
+#include "war.h"
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
@@ -45,6 +46,14 @@ static int person_index(const char *id)
 int game_has_tech(const Game *g, const char *id) { int i = tech_index(id); return i >= 0 && g->tech[i]; }
 int game_has_proj(const Game *g, const char *id) { int i = proj_index(id); return i >= 0 && g->proj[i]; }
 
+static int province_index(const char *id)
+{
+    if (!id) return -1;
+    for (int i = 0; i < PROVINCE_COUNT; i++)
+        if (strcmp(PROVINCES[i].id, id) == 0) return i;
+    return -1;
+}
+
 static void init_events(Event *ev, int n)
 {
     for (int i = 0; i < n; i++) {
@@ -75,8 +84,10 @@ void data_init(void)
         Q->ti = !Q->target ? -1 :
                 Q->type == QT_TECH   ? tech_index(Q->target) :
                 Q->type == QT_PROJ   ? proj_index(Q->target) :
-                Q->type == QT_PERSON ? person_index(Q->target) : -1;
+                Q->type == QT_PERSON ? person_index(Q->target) :
+                Q->type == QT_PROVINCE ? province_index(Q->target) : -1;
     }
+    war_data_init();
 }
 
 /* ---------- утилиты ---------- */
@@ -214,6 +225,13 @@ void game_income(const Game *g, Income *inc)
     for (int m = 0; m < g->modN; m++)
         if (g->mods[m].until == 0 || g->mods[m].until > g->turn)
             for (int r = 0; r < R_COUNT; r++) inc->mods[r] += g->mods[m].fx.v[r];
+    cities_income(g, inc->cities);
+    provinces_income(g, inc->provs);
+    Army army;
+    war_army(g, &army);
+    inc->army[R_DEF]  = army.defense * 0.25;
+    inc->army[R_GOLD] = -army.upkeep / 10.0 * (g->warKind != WAR_NONE ? 1.5 : 1.0);   /* содержание — после множителей */
+    inc->occMult = war_occupation_mult(g);
 
     const Priority *pr = &PRIORITIES[g->priority];
     const Difficulty *df = &DIFFICULTIES[g->difficulty];
@@ -221,15 +239,17 @@ void game_income(const Game *g, Income *inc)
     double diffK = 1.0 + df->incomePct / 100.0;
 
     for (int r = 0; r < R_COUNT; r++) inc->mult[r] = 1.0;
-    inc->mult[R_GOLD] = (1.0 + pr->goldPct / 100.0) * stabK * diffK;
-    inc->mult[R_SCI]  = (1.0 + pr->sciPct  / 100.0) * stabK * diffK;
-    inc->mult[R_IND]  = (1.0 + pr->indPct  / 100.0) * stabK * diffK;
+    inc->mult[R_GOLD] = (1.0 + pr->goldPct / 100.0) * stabK * diffK * inc->occMult;
+    inc->mult[R_SCI]  = (1.0 + pr->sciPct  / 100.0) * stabK * diffK * inc->occMult;
+    inc->mult[R_IND]  = (1.0 + pr->indPct  / 100.0) * stabK * diffK * inc->occMult;
     inc->mult[R_DEF]  = (1.0 + pr->defPct  / 100.0);
 
     double raw[R_COUNT];
     for (int r = 0; r < R_COUNT; r++)
-        raw[r] = inc->base[r] + inc->popb[r] + inc->techs[r] + inc->projs[r] + inc->people[r] + inc->mods[r];
+        raw[r] = inc->base[r] + inc->popb[r] + inc->techs[r] + inc->projs[r] + inc->people[r] + inc->mods[r]
+               + inc->cities[r] + inc->provs[r] + (r == R_GOLD ? 0.0 : inc->army[r]);
     for (int r = 0; r < R_COUNT; r++) inc->total[r] = raw[r] * inc->mult[r];
+    inc->total[R_GOLD] += inc->army[R_GOLD];
 
     inc->total[R_ECO] = raw[R_ECO] * 0.3 + pr->ecoAdd;
     inc->stabTarget = clampd(42.0 + 52.0 * (1.0 - exp(-raw[R_STAB] / 50.0)) + pr->stabAdd, 5, 97);
@@ -482,7 +502,7 @@ static double war_factor(const Game *g, int severity)
     double def = game_def(g);
     double mit = def / (def + 30.0 + g->era * 18.0);
     double harm = 1.0 + DIFFICULTIES[g->difficulty].harmPct / 100.0;
-    return severity / 100.0 * (1.0 - 0.75 * mit) * harm;
+    return severity / 100.0 * (1.0 - 0.75 * mit) * harm * war_occupation_harm(g);
 }
 
 void game_choose(Game *g, int ch, Outcome *o)
@@ -607,6 +627,7 @@ void game_new(Game *g, int difficulty, unsigned seed)
     g->quizCur = -1;
     g->quizLastAns = -1;
     g->lastRand = -1;
+    g->warTarget = -1;
     g->rng = seed ? seed : 0x1234567u;
     g->popPeak = g->pop;
     record_history(g);
@@ -633,6 +654,8 @@ void game_end_turn(Game *g)
     g->eco += inc.total[R_ECO] + (100.0 - g->eco) * 0.1;
     g->eco = clampd(g->eco, 0, 100);
     g->pop *= pow(1.0 + inc.growYear, years);
+    war_end_turn(g);   /* бои, набеги, оккупация, дезертирство */
+    if (g->pop < 50) g->pop = 50;
     if (g->pop > g->popPeak) g->popPeak = g->pop;
 
     /* устаревшие временные модификаторы убираем */
@@ -656,7 +679,9 @@ void game_end_turn(Game *g)
         game_check_achievements(g);
         return;
     }
+    int oldYear = g->year;
     g->year = TURN_YEARS[g->turn];
+    war_year_changed(g, oldYear);
     if (g->year == 1945) g->pop1945 = g->pop;
     record_history(g);
     int newEra = era_of_year(g->year);
@@ -747,6 +772,11 @@ void game_check_achievements(Game *g)
     got[17] = g->over && g->stab >= 70;
     got[18] = g->aheadOfTime;
     got[19] = g->erasBuilt == 0xFFu;
+    got[20] = war_province_count(g) >= 3;
+    got[21] = g->battlesWon >= 10;
+    int lib = 0;
+    for (int r = 0; r < REGION_COUNT; r++) lib += (g->liberated >> r) & 1u;
+    got[22] = lib >= 3;
     for (int a = 0; a < ACH_COUNT; a++)
         if (got[a] && !g->ach[a]) {
             g->ach[a] = 1;
@@ -774,6 +804,11 @@ void game_quest_progress(const Game *g, int q, double *cur, double *target)
         case QT_CULT:   c = g->cult; break;
         case QT_ECO_AT: c = g->eco; break;
         case QT_STAB:   c = g->stab; break;
+        case QT_PROVINCE: c = i >= 0 && i < MAX_PROVINCES && g->provOwned[i]; t = 1; break;
+        case QT_ARMY:   c = war_army_size(g); break;
+        case QT_LIBERATE:
+            for (int r = 0; r < REGION_COUNT; r++) c += (g->liberated >> r) & 1u;
+            break;
         }
     }
     if (cur) *cur = c;
@@ -815,7 +850,8 @@ void quest_describe_goal(int q, wchar_t *buf, int n)
     const wchar_t *what = Q->ti < 0 ? L"?" :
                           Q->type == QT_TECH ? TECHS[Q->ti].name :
                           Q->type == QT_PROJ ? PROJECTS[Q->ti].name :
-                          Q->type == QT_PERSON ? PEOPLE[Q->ti].name : L"?";
+                          Q->type == QT_PERSON ? PEOPLE[Q->ti].name :
+                          Q->type == QT_PROVINCE ? PROVINCES[Q->ti].name : L"?";
     wchar_t when[48], pop[32], qw[96];
     quoted(qw, 96, what);
     if (quest_at(Q)) {
@@ -832,6 +868,9 @@ void quest_describe_goal(int q, wchar_t *buf, int n)
     case QT_CULT:   swprintf(buf, n, L"Культура не ниже %d %ls", Q->num, when); break;
     case QT_ECO_AT: swprintf(buf, n, L"Экология не ниже %d %ls", Q->num, when); break;
     case QT_STAB:   swprintf(buf, n, L"Стабильность не ниже %d %ls", Q->num, when); break;
+    case QT_PROVINCE: swprintf(buf, n, L"Присоединить землю %ls %ls (вкладка «Армия»)", qw, when); break;
+    case QT_ARMY:   swprintf(buf, n, L"Войско не меньше %d соединений %ls", Q->num, when); break;
+    case QT_LIBERATE: swprintf(buf, n, L"Освободить своими силами областей: %d %ls", Q->num, when); break;
     }
 }
 
@@ -920,7 +959,11 @@ void game_score(const Game *g, Score *s)
     s->ach    = ach * 25;
     s->quiz   = g->quizRight * 5;
     s->quests = game_quest_count(g, QS_DONE) * 15;
-    s->total  = s->techs + s->projs + s->people + s->pop + s->stab + s->eco + s->cult + s->ach + s->quiz + s->quests;
+    int lands = 0, lib = 0;
+    for (int p = 0; p < PROVINCE_COUNT && p < MAX_PROVINCES; p++) lands += g->provOwned[p] != 0;
+    for (int r = 0; r < REGION_COUNT; r++) lib += (g->liberated >> r) & 1u;
+    s->war    = lands * 30 + lib * 25 + (g->battlesWon < 30 ? g->battlesWon : 30) * 3;
+    s->total  = s->techs + s->projs + s->people + s->pop + s->stab + s->eco + s->cult + s->ach + s->quiz + s->quests + s->war;
     /* пороги подняты в версии 4: задания дают до 15 очков каждое (+ награды) */
     s->rank = s->total >= 3800 ? L"Страна-лаборатория" :
               s->total >= 3100 ? L"Технологический узел Европы" :
@@ -954,6 +997,8 @@ void game_score(const Game *g, Score *s)
     else cat(e, n, L"За индустриальный рывок природа заплатила высокую цену: осушенные болота, солеотвалы, загрязнённые реки. ");
     if (g->cult >= 4000) cat(e, n, L"Культура и память сильны: от креста Евфросинии до книг Скорины и «Нашай Нівы» — всё это живёт. ");
     else cat(e, n, L"Многое из культурного наследия утрачено, и его ещё предстоит восстановить. ");
+    if (lands >= 2) cat(e, n, L"Походы прошлых веков расширили земли и торговые пути — их след виден в доходах до сих пор. ");
+    if (lib >= 1) cat(e, n, L"Армия и партизаны освобождали области ещё до операции «Багратион» — тысячи деревень уцелели. ");
     if (g->stab >= 70) cat(e, n, L"Общество спокойно и уверено в завтрашнем дне.");
     else if (g->stab >= 45) cat(e, n, L"Общество проходит через напряжение, но держится.");
     else cat(e, n, L"Общество расколото и устало от кризисов.");
@@ -977,17 +1022,29 @@ int game_load(Game *g, FILE *f)
     Game tmp;
     if (fread(magic, 1, 4, f) != 4 || memcmp(magic, "BYTG", 4) != 0) return 0;
     if (fread(&sz, sizeof sz, 1, f) != 1) return 0;
-    const size_t v4 = offsetof(Game, questState);   /* размер версии 3 — до полей заданий (+ выравнивание) */
+    const size_t v3 = offsetof(Game, questState);   /* размер версии 3 — до полей заданий (+ выравнивание) */
+    const size_t v4 = offsetof(Game, units);        /* размер версии 4 — до армии */
     memset(&tmp, 0, sizeof tmp);
     if (sz == sizeof tmp) {
         if (fread(&tmp, sizeof tmp, 1, f) != 1) return 0;
         if (tmp.version != GAME_VERSION) return 0;
     } else if (sz >= v4 && sz <= v4 + 8 && sz < sizeof tmp) {
         if (fread(&tmp, sz, 1, f) != 1) return 0;
+        if (tmp.version != 4) return 0;
+        memset((char *)&tmp + v4, 0, sizeof tmp - v4);   /* армия: с нуля */
+    } else if (sz >= v3 && sz <= v3 + 8 && sz < sizeof tmp) {
+        if (fread(&tmp, sz, 1, f) != 1) return 0;
         if (tmp.version != 3) return 0;
-        memset((char *)&tmp + v4, 0, sizeof tmp - v4);   /* задания: всё с нуля */
-        tmp.version = GAME_VERSION;
+        memset((char *)&tmp + v3, 0, sizeof tmp - v3);   /* задания и армия: всё с нуля */
     } else return 0;
+    if (tmp.version != GAME_VERSION) {
+        tmp.version = GAME_VERSION;
+        tmp.warTarget = -1;
+        if (tmp.year >= 1941 && tmp.year <= 1944) tmp.occupied = (1u << REGION_COUNT) - 1;
+    }
+    if (tmp.warKind < WAR_NONE || tmp.warKind > WAR_LIBERATION) return 0;
+    if (tmp.warKind == WAR_CONQUEST && (tmp.warTarget < 0 || tmp.warTarget >= PROVINCE_COUNT)) return 0;
+    if (tmp.warKind == WAR_LIBERATION && (tmp.warTarget < 0 || tmp.warTarget >= REGION_COUNT)) return 0;
     data_init();
     *g = tmp;
     return 1;

@@ -1,5 +1,6 @@
 /* Модальные окна: события, эпохи, итоги, справка, меню, новая игра, карточки. */
 #include "ui.h"
+#include "war.h"
 #include "rulers.h"
 #include <stdio.h>
 #include <string.h>
@@ -179,9 +180,9 @@ static int body_final(int x, int y, int w)
     d_text(x, y, s, F_H1, P.ink);
     y += d_font_h(F_H1) + SC(14);
 
-    static const wchar_t *names[10] = { L"Технологии", L"Стройки", L"Деятели", L"Задания", L"Население", L"Стабильность", L"Экология", L"Культура", L"Награды", L"Летописец" };
-    int vals[10] = { sc.techs, sc.projs, sc.people, sc.quests, sc.pop, sc.stab, sc.eco, sc.cult, sc.ach, sc.quiz };
-    wchar_t det[10][64], pop[32];
+    static const wchar_t *names[11] = { L"Технологии", L"Стройки", L"Деятели", L"Задания", L"Население", L"Стабильность", L"Экология", L"Культура", L"Награды", L"Летописец", L"Армия" };
+    int vals[11] = { sc.techs, sc.projs, sc.people, sc.quests, sc.pop, sc.stab, sc.eco, sc.cult, sc.ach, sc.quiz, sc.war };
+    wchar_t det[11][64], pop[32];
     fmt_pop(G.pop, pop, 32);
     int ach = 0;
     for (int a = 0; a < ACH_COUNT; a++) ach += G.ach[a];
@@ -195,8 +196,11 @@ static int body_final(int x, int y, int w)
     fmt_num(G.cult, det[7], 64);
     swprintf(det[8], 64, L"%d из %d", ach, ACH_COUNT);
     swprintf(det[9], 64, L"%d верных ответов", G.quizRight);
+    int lands = 0;
+    for (int p = 0; p < PROVINCE_COUNT && p < MAX_PROVINCES; p++) lands += G.provOwned[p] != 0;
+    swprintf(det[10], 64, L"земель %d · побед %d", lands, G.battlesWon);
     int cols = w >= SC(560) ? 3 : 2, cw = w / cols, ch = SC(54);
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 11; i++) {
         int cx = x + (i % cols) * cw, cy = y + (i / cols) * ch;
         d_text(cx, cy, names[i], F_TINY, P.muted);
         wchar_t v[32];
@@ -204,7 +208,7 @@ static int body_final(int x, int y, int w)
         d_text(cx, cy + SC(15), v, F_H3, P.ink);
         d_text(cx + d_text_w(v, F_H3) + SC(8), cy + SC(19), det[i], F_TINY, P.muted);
     }
-    y += ((10 + cols - 1) / cols) * ch + SC(8);
+    y += ((11 + cols - 1) / cols) * ch + SC(8);
     d_fill(x, y, w, 1, P.line);
     y += SC(14);
     y += d_wrap(x, y, w, sc.epilogue, F_BODY, P.ink, 1) + SC(20);
@@ -286,7 +290,12 @@ static int body_help(int x, int y, int w)
         { L"3D-карта", L"Карта Беларуси построена в Blender: рельеф Белорусской гряды, поля, пущи, болота Полесья, реки, озёра и города. "
                        L"Всё, что вы построили, появляется у своего города 3D-моделью — нажмите на модель, чтобы прочитать о ней. "
                        L"Кнопка «Развернуть» или клавиша M открывает карту во весь экран." },
-        { L"Задания", L"40 исторических заданий: построить, изучить, пригласить или достичь цели к сроку. Флажки на карте показывают, где ждёт задание. "
+        { L"Армия и война", L"Во вкладке «Армия» набирайте войска — от княжеской дружины и крылатых гусар до танковых дивизий; их сила растёт с военными технологиями, "
+                            L"а устаревшие войска слабеют. Войско отбивает набеги, держит осады и смягчает удары войн. В эпохи I–III можно идти в походы: "
+                            L"присоединённые земли дают жителей и доход каждый ход. В 1941–1944 годах освобождайте оккупированные области своими силами." },
+        { L"Города", L"Каждый город особенный: столица, крепость, торговый, научный, промышленный, речной порт, ремёсла… Чем больше строек в городе, "
+                     L"тем выше его уровень и бонус его специализации. Нажмите на город на карте, чтобы узнать о нём." },
+        { L"Задания", L"43 исторических задания: построить, изучить, пригласить, собрать войско, присоединить землю или достичь цели к сроку. Флажки на карте показывают, где ждёт задание. "
                       L"Выполненное задание сразу даёт награду, просроченное проваливается." },
         { L"Правители", L"Во вкладке «Деятели» и в шапке карты — князья, великие князья, короли, императоры, руководители СССР и БССР "
                         L"и главы Республики Беларусь со своими 3D-портретами. Правители — справка: на баланс они не влияют." },
@@ -478,8 +487,33 @@ static int body_person(int x, int y, int w)
 static int body_city(int x, int y, int w)
 {
     int y0 = y, c = U.modalArg;
-    eyebrow(x, &y, IC_BUILD, P.red, L"ГОРОД");
-    y += d_wrap(x, y, w, CITIES[c].name, F_ERA_L, P.ink, 1) + SC(12);
+    const CityProfile *cp = &CITY_PROFILES[c];
+    wchar_t eb[96];
+    swprintf(eb, 96, L"ГОРОД · %ls", SPEC_NAMES[cp->spec]);
+    upper(eb);
+    eyebrow(x, &y, IC_BUILD, P.red, eb);
+    y += d_wrap(x, y, w, CITIES[c].name, F_ERA_L, P.ink, 1) + SC(6);
+    y += d_wrap(x, y, w, cp->desc, F_BODY, P.ink, 1) + SC(12);
+    {
+        int lvl = city_level(&G, c);
+        double b[R_COUNT];
+        city_bonus(&G, c, b);
+        Fx fx;
+        for (int r = 0; r < R_COUNT; r++) fx.v[r] = (int)lround(b[r]);
+        wchar_t fxs[200], s2[400], per[200];
+        fx_describe(&fx, fxs, 200);
+        fx_describe(&SPEC_FX[cp->spec], per, 200);
+        int cap = capital_of_era(G.era) == c;
+        int tw = w - SC(24);
+        if (lvl > 0) swprintf(s2, 400, L"Уровень %d (стройки в городе%ls). Бонус специализации «%ls» каждый ход: %ls.", lvl,
+                              cap ? L" + 2 за столицу эпохи" : L"", SPEC_NAMES[cp->spec], fxs);
+        else swprintf(s2, 400, L"Пока ни одной стройки. Каждая стройка поднимет уровень города, и он начнёт приносить бонус «%ls»: %ls за уровень (растёт с эпохой).",
+                      SPEC_NAMES[cp->spec], per);
+        int h = SC(12) + d_wrap(0, 0, tw, s2, F_SMALL, 0, 0) + SC(12);
+        d_rrect(x, y, w, h, SC(6), mix(P.surface, P.gold, 30), P.gold);
+        d_wrap(x + SC(12), y + SC(12), tw, s2, F_SMALL, P.ink, 1);
+        y += h + SC(14);
+    }
     int any = 0;
     for (int p = 0; p < PROJECT_COUNT; p++) {
         if (PROJECTS[p].city != c) continue;

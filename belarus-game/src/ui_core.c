@@ -551,7 +551,7 @@ void ui_toast(const wchar_t *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    vswprintf(U.toast, 160, fmt, ap);
+    vswprintf(U.toast, sizeof U.toast / sizeof U.toast[0], fmt, ap);
     va_end(ap);
     U.toastUntil = GetTickCount() + 2800;
     SetTimer(g_hwnd, 1, 250, NULL);

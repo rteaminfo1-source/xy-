@@ -1,3 +1,4 @@
 /* assets.rc — СГЕНЕРИРОВАНО tools/pack_assets.py, НЕ РЕДАКТИРОВАТЬ. Включается из app.rc. */
 2 RCDATA "map3d.qoi"
 3 RCDATA "sprites.qoi"
+4 RCDATA "portraits.qoi"

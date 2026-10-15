@@ -147,6 +147,9 @@ enum {
     QT_CULT,     /* накопленная культура >= num                        */
     QT_ECO_AT,   /* экология >= num по итогам года deadline            */
     QT_STAB,     /* стабильность >= num                                */
+    QT_PROVINCE, /* присоединить землю target (id из PROVINCES)        */
+    QT_ARMY,     /* войско >= num соединений                           */
+    QT_LIBERATE, /* освобождено своими силами >= num областей          */
     QT_COUNT
 };
 enum { QS_HIDDEN, QS_ACTIVE, QS_DONE, QS_FAILED };   /* Game.questState[] */
@@ -155,7 +158,7 @@ typedef struct {
     const char    *id;
     int            era;       /* 1..8: эпоха, с которой задание открыто */
     int            type;      /* QT_* */
-    const char    *target;    /* id технологии, стройки или деятеля (QT_TECH/QT_PROJ/QT_PERSON), иначе 0 */
+    const char    *target;    /* id технологии, стройки, деятеля или земли (QT_TECH/QT_PROJ/QT_PERSON/QT_PROVINCE), иначе 0 */
     int            num;       /* порог для численных типов */
     int            deadline;  /* год-срок */
     int            at;        /* 1 — проверка только по итогам года-срока (у QT_ECO_AT всегда) */
@@ -163,7 +166,7 @@ typedef struct {
     int            gold, sci, cult, stab;   /* награда */
     const wchar_t *title;
     const wchar_t *desc;      /* историческая справка, 1–2 предложения */
-    int            ti;        /* индекс цели в TECHS/PROJECTS/PEOPLE, заполняется data_init(); -1 — нет */
+    int            ti;        /* индекс цели в TECHS/PROJECTS/PEOPLE/PROVINCES, заполняется data_init(); -1 — нет */
 } Quest;
 
 /* ---------- Курс (приоритет) ---------- */
@@ -226,6 +229,8 @@ enum {
 #define MAX_TURNS   80
 #define MAX_LOG     360
 #define MAX_MODS    24
+#define MAX_UNITS   20
+#define MAX_PROVINCES 24
 #define LOG_LEN     200
 #define MOD_NAME    48
 
@@ -288,6 +293,17 @@ typedef struct {
     /* ---- версия 4: задания (поля только дописываются в конец) ---- */
     unsigned char questState[MAX_QUESTS];   /* QS_* */
     int    questsDone;
+    /* --- версия 5: армия, войны, провинции, оккупация --- */
+    int    units[MAX_UNITS];          /* соединений каждого типа */
+    int    warKind, warTarget;        /* WAR_* и цель (провинция или область) */
+    int    warProgress, warTurns;
+    unsigned char provOwned[MAX_PROVINCES];   /* 0 — нет, 1 — своя земля, 2 — наследие (после 1795) */
+    unsigned occupied;                /* биты оккупированных областей (1941–1944) */
+    unsigned liberated;               /* области, освобождённые своими силами */
+    int    battlesWon, battlesLost;
+    int    unitsLost;                 /* потеряно соединений */
+    int    warNews;                   /* 1 — в этом ходу был бой: интерфейс покажет сводку */
+    wchar_t warReport[200];           /* итог последнего боя */
 } Game;
 
 /* Флаги исторических решений */
@@ -309,6 +325,8 @@ enum {
 /* Разбивка дохода за ход */
 typedef struct {
     double base[R_COUNT], techs[R_COUNT], projs[R_COUNT], people[R_COUNT], mods[R_COUNT], popb[R_COUNT];
+    double cities[R_COUNT], provs[R_COUNT], army[R_COUNT];   /* города, завоёванные земли, армия (содержание и оборона) */
+    double occMult;                   /* множитель доходов при оккупации */
     double total[R_COUNT];  /* после множителей */
     double mult[R_COUNT];
     double growYear;        /* итоговый рост, доля в год */
@@ -321,7 +339,7 @@ typedef struct {
 } Outcome;
 
 typedef struct {
-    int techs, projs, people, pop, stab, eco, cult, ach, quiz, quests, total;  /* quests: 15 за задание */
+    int techs, projs, people, pop, stab, eco, cult, ach, quiz, quests, war, total;  /* quests: 15 за задание; war: земли, освобождение, победы */
     const wchar_t *rank;
     wchar_t epilogue[2400];
 } Score;
@@ -395,8 +413,8 @@ void quest_describe_goal(int q, wchar_t *buf, int n);               /* «Изу�
 void quest_describe_reward(int q, wchar_t *buf, int n);             /* «казна +22 · знания +8 · культура +8» */
 
 int  game_save(const Game *g, FILE *f);
-int  game_load(Game *g, FILE *f);   /* принимает и сохранения версии 3 (до заданий) */
+int  game_load(Game *g, FILE *f);   /* принимает и сохранения версий 3 и 4 */
 
-#define GAME_VERSION 4
+#define GAME_VERSION 5
 
 #endif

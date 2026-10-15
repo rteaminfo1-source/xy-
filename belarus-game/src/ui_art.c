@@ -10,6 +10,18 @@
 /* assets_gen.h объявляет таблицы как static: отметим их использованными, чтобы не было предупреждений */
 __attribute__((unused)) static const void *art_tables_[] = { MAP3D_PTS, MAP3D_CITY, SPR_NAMES, PORTRAIT_IDS };
 
+/* атлас фигурок войск появился позже остальных: со старым assets_gen.h — заглушки */
+#ifndef ASSETS_HAVE_UNITS
+#define ASSETS_HAVE_UNITS 0
+#define RES_UNITS_QOI 5
+#define UNIT_CELL_W 1
+#define UNIT_CELL_H 1
+#define UNIT_COLS 1
+#define UNIT_ATLAS_COUNT 0
+static const char *const UNIT_IDS[1] = { "" };
+#endif
+__attribute__((unused)) static const void *art_units_[] = { UNIT_IDS };
+
 static unsigned rgb_of(COLORREF c) { return (unsigned)GetRValue(c) << 16 | (unsigned)GetGValue(c) << 8 | GetBValue(c); }
 
 /* Наложение с учётом текущего отсечения панели (прокручиваемые списки). */
@@ -163,4 +175,50 @@ void art_portrait_draw(int idx, int x, int y, int w, int h)
     }
     hit->tick = s_tick;
     blit_clipped(&hit->img, x + (w - dw) / 2, y + (h - dh), 255);
+}
+
+/* ---------- фигурки войск ---------- */
+static Image s_uni;
+static int s_uniTried, s_uniOk;
+#define UCACHE 24
+typedef struct { int idx, w, h; unsigned tick; Image img; } UniCache;
+static UniCache s_uc[UCACHE];
+
+static int units_load(void)
+{
+    if (!s_uniTried) {
+        s_uniTried = 1;
+        s_uniOk = ASSETS_HAVE_UNITS && image_load_resource(RES_UNITS_QOI, &s_uni);
+    }
+    return s_uniOk;
+}
+
+int art_unit_index(const char *id)
+{
+    if (!id || !units_load()) return -1;
+    for (int i = 0; i < UNIT_ATLAS_COUNT; i++)
+        if (strcmp(UNIT_IDS[i], id) == 0) return i;
+    return -1;
+}
+
+void art_unit_draw(int idx, int x, int y, int w, int h)
+{
+    if (!units_load() || idx < 0 || idx >= UNIT_ATLAS_COUNT || w < 8 || h < 8) return;
+    int dw = w, dh = w * UNIT_CELL_H / UNIT_CELL_W;
+    if (dh > h) { dh = h; dw = h * UNIT_CELL_W / UNIT_CELL_H; }
+    s_tick++;
+    UniCache *hit = 0, *old = &s_uc[0];
+    for (int i = 0; i < UCACHE; i++) {
+        if (s_uc[i].img.px && s_uc[i].idx == idx && s_uc[i].w == dw && s_uc[i].h == dh) { hit = &s_uc[i]; break; }
+        if (s_uc[i].tick < old->tick) old = &s_uc[i];
+    }
+    if (!hit) {
+        hit = old;
+        image_free(&hit->img);
+        image_scale(&s_uni, (idx % UNIT_COLS) * UNIT_CELL_W, (idx / UNIT_COLS) * UNIT_CELL_H,
+                    UNIT_CELL_W, UNIT_CELL_H, &hit->img, dw, dh);
+        hit->idx = idx; hit->w = dw; hit->h = dh;
+    }
+    hit->tick = s_tick;
+    blit_clipped(&hit->img, x + (w - dw) / 2, y + (h - dh) / 2, 255);
 }

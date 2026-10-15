@@ -1,6 +1,7 @@
 /* Карта: контур, реки, болота и пущи рисуются в тройном разрешении и сглаживаются усреднением. */
 #include "ui.h"
 #include "map3d.h"
+#include "war.h"
 #include <math.h>
 #include <string.h>
 
@@ -185,12 +186,83 @@ static int city_relevant(int c)
     return 0;
 }
 
-static int capital_of_era(int era)
+/* ---------- слой войны: земли, цель похода, оккупация ---------- */
+typedef struct { const MapXf *xf; int ox, oy; int x, y, w, h; double pxPerKm; } MapProj;
+
+static int proj_pt(const MapProj *pj, double lon, double lat, int *sx, int *sy)
 {
-    if (era == 1) return C_POLOTSK;
-    if (era == 2) return C_NOVOGRUDOK;
-    if (era >= 5) return C_MINSK;
-    return -1;
+    if (pj->xf) {
+        double px, py;
+        if (!map3d_project(lon, lat, &px, &py)) return 0;
+        art_map_point(pj->xf, px, py, sx, sy);
+    } else {
+        geo_xy(lon, lat, 1, sx, sy);
+        *sx += pj->ox; *sy += pj->oy;
+    }
+    return 1;
+}
+
+static void war_overlay(const MapProj *pj, int interactive, int large)
+{
+    if (U.screen != SCR_GAME) return;
+    int pad = SC(10);
+    int clipped = 0, ocx, ocy, ocw, och;
+    if (!d_clip_get(&ocx, &ocy, &ocw, &och)) { d_clip(pj->x, pj->y, pj->w, pj->h); clipped = 1; }
+    /* оккупация: всё темнеет, у центров областей — знаки */
+    if (G.occupied || (G.year >= 1941 && G.year <= 1944)) {
+        if (G.occupied) d_blend(pj->x, pj->y, pj->w, pj->h, RGB(24, 14, 12), 70);
+        for (int r = 0; r < REGION_COUNT; r++) {
+            int c = REGION_CITY[r], sx, sy;
+            if (!proj_pt(pj, CITIES[c].lon, CITIES[c].lat, &sx, &sy)) continue;
+            int occ = (G.occupied >> r) & 1u, target = G.warKind == WAR_LIBERATION && G.warTarget == r;
+            int rr = large ? SC(26) : SC(18);
+            sy += rr + SC(8);
+            COLORREF ac = target ? P.red : occ ? RGB(60, 36, 32) : P.green;
+            d_circle(sx, sy, rr, occ ? mix(P.surface, RGB(40, 24, 20), 200) : mix(P.surface, P.green, 60), ac, target ? 3 : 2);
+            int is = rr;
+            d_icon(occ ? IC_WAR : IC_CHECK, sx - is / 2, sy - is / 2, is, occ ? (target ? P.red : RGB(230, 200, 190)) : P.green);
+            if (large) {
+                int tw = d_text_w(REGION_NAMES[r], F_TINY);
+                d_blend(sx - tw / 2 - SC(4), sy + rr + SC(2), tw + SC(8), d_font_h(F_TINY) + SC(2), P.surface, 200);
+                d_text(sx - tw / 2, sy + rr + SC(3), REGION_NAMES[r], F_TINY, occ ? P.ink : P.green);
+            }
+            if (interactive) hit(sx - rr, sy - rr, rr * 2, rr * 2, A_HOVER_REGION, r);
+        }
+    }
+    /* земли: свои, доступные для похода, цель похода */
+    for (int p = 0; p < PROVINCE_COUNT; p++) {
+        int st = war_province_state(&G, p);
+        int target = G.warKind == WAR_CONQUEST && G.warTarget == p;
+        if (st != PV_OWNED && st != PV_AVAILABLE && !target) continue;
+        int sx, sy;
+        if (!proj_pt(pj, PROVINCES[p].lon, PROVINCES[p].lat, &sx, &sy)) continue;
+        if (sx < pj->x + pad) sx = pj->x + pad;
+        if (sx > pj->x + pj->w - pad) sx = pj->x + pj->w - pad;
+        if (sy < pj->y + pad) sy = pj->y + pad;
+        if (sy > pj->y + pj->h - pad) sy = pj->y + pj->h - pad;
+        int rr = (int)(PROVINCES[p].radiusKm * 0.55 * pj->pxPerKm);
+        int rmax = large ? SC(64) : SC(30);
+        if (rr > rmax) rr = rmax;
+        if (rr < SC(12)) rr = SC(12);
+        COLORREF ac = target ? P.red : st == PV_OWNED ? P.gold : P.blue;
+        d_circle(sx, sy, rr, CLR_INVALID, ac, target ? 3 : 2);
+        if (st == PV_OWNED) d_circle(sx, sy, rr - SC(4), CLR_INVALID, mix(P.gold, P.surface, 120), 1);
+        wchar_t lab[96];
+        if (target) swprintf(lab, 96, L"%ls · поход %d%%", PROVINCES[p].name, G.warProgress < 0 ? 0 : G.warProgress);
+        else if (st == PV_OWNED) swprintf(lab, 96, L"%ls", PROVINCES[p].name);
+        else swprintf(lab, 96, large ? L"%ls · можно в поход" : L"%ls", PROVINCES[p].name);
+        int f = large ? F_SMALL_B : F_TINY;
+        int tw = d_text_w(lab, f), th = d_font_h(f);
+        int lx = sx - tw / 2 + SC(10), ly = sy - th / 2;
+        if (lx < pj->x + SC(2)) lx = pj->x + SC(2);
+        if (lx + tw + SC(26) > pj->x + pj->w) lx = pj->x + pj->w - tw - SC(26);
+        COLORREF bg = st == PV_OWNED && !target ? mix(P.surface, P.gold, 70) : P.surface;
+        d_rrect(lx - SC(22), ly - SC(3), tw + SC(30), th + SC(6), SC(4), bg, ac);
+        d_icon(st == PV_OWNED && !target ? IC_FLAG : IC_WAR, lx - SC(18), ly - SC(1), th + SC(2) > SC(16) ? SC(16) : th + SC(2), ac);
+        d_text(lx, ly, lab, f, P.ink);
+        if (interactive) hit(lx - SC(22), ly - SC(3), tw + SC(30), th + SC(6), A_PROVINCE, p);
+    }
+    if (clipped) d_unclip();
 }
 
 static void map_draw_flat(int x, int y, int w, int h, int interactive)
@@ -260,6 +332,8 @@ static void map_draw_flat(int x, int y, int w, int h, int interactive)
         d_text(lx, ly, CITIES[c].name, f, CITIES[c].major ? P.ink : P.muted);
         if (interactive) hit(cx - SC(9), cy - SC(9), SC(18), SC(18), A_CITY, c);
     }
+    MapProj pj = { 0, x, y, x, y, w, h, s_k / 111.0 };
+    war_overlay(&pj, interactive, w > SC(900));
 }
 
 /* ---------- 3D-карта из Blender ---------- */
@@ -374,6 +448,8 @@ void map_draw_ex(int x, int y, int w, int h, int interactive, int large)
             }
         if (interactive) hit(lx - SC(4), ly - SC(1), tw + SC(8), th + SC(2), A_CITY, c);
     }
+    MapProj pj = { &xf, 0, 0, xf.x, xf.y, xf.w, xf.h, map3d_px_per_km() * xf.s };
+    war_overlay(&pj, interactive, large);
 }
 
 void map_draw(int x, int y, int w, int h, int interactive) { map_draw_ex(x, y, w, h, interactive, 0); }

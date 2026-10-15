@@ -15,6 +15,9 @@ static void section(int x, int *y, const wchar_t *s)
     *y += SC(24);
 }
 
+void tab_section(int x, int *y, const wchar_t *s) { section(x, y, s); }
+COLORREF tab_card_fill(void) { return card_fill(); }
+
 static int chip(int x, int y, const wchar_t *s, int sel, int dim, int act, int arg)
 {
     int w = d_text_w(s, F_SMALL_B) + SC(22), h = SC(28);
@@ -363,21 +366,25 @@ static int tab_policy(int x, int y, int w)
     int labW = w * 34 / 100, numW = (w - labW) / 5;
     for (int c = 0; c < 5; c++) d_text_r(x + labW + (c + 1) * numW - SC(6), y, colN[c], F_TINY, P.muted);
     y += SC(20);
-    static const wchar_t *rowN[8] = { L"Основа", L"Население", L"Технологии", L"Стройки", L"Деятели", L"Решения", L"Множитель", L"Итого" };
-    for (int r = 0; r < 8; r++) {
-        if (r == 7) d_fill(x, y - SC(3), w, 1, P.line);
-        d_text(x, y, rowN[r], r == 7 ? F_SMALL_B : F_SMALL, r == 7 ? P.ink : P.muted);
+    static const wchar_t *rowN[11] = { L"Основа", L"Население", L"Технологии", L"Стройки", L"Деятели", L"Города", L"Земли",
+                                        L"Решения", L"Множитель", L"Армия", L"Итого" };
+    for (int r = 0; r < 11; r++) {
+        if (r == 10) d_fill(x, y - SC(3), w, 1, P.line);
+        d_text(x, y, rowN[r], r == 10 ? F_SMALL_B : F_SMALL, r == 10 ? P.ink : P.muted);
         for (int c = 0; c < 5; c++) {
             int k = colR[c];
             wchar_t s[32];
             double v = r == 0 ? inc.base[k] : r == 1 ? inc.popb[k] : r == 2 ? inc.techs[k] : r == 3 ? inc.projs[k] :
-                       r == 4 ? inc.people[k] : r == 5 ? inc.mods[k] : r == 6 ? inc.mult[k] : inc.total[k];
-            if (r == 6) { swprintf(s, 32, L"\x00D7%.2f", v); for (wchar_t *p = s; *p; p++) if (*p == L'.') *p = L','; }
+                       r == 4 ? inc.people[k] : r == 5 ? inc.cities[k] : r == 6 ? inc.provs[k] : r == 7 ? inc.mods[k] :
+                       r == 8 ? inc.mult[k] : r == 9 ? inc.army[k] : inc.total[k];
+            if (r == 8) { swprintf(s, 32, L"\x00D7%.2f", v); for (wchar_t *p = s; *p; p++) if (*p == L'.') *p = L','; }
             else swprintf(s, 32, L"%ld", lround(v));
-            d_text_r(x + labW + (c + 1) * numW - SC(6), y, s, r == 7 ? F_MONO_B : F_MONO, r == 7 ? P.ink : P.muted);
+            d_text_r(x + labW + (c + 1) * numW - SC(6), y, s, r == 10 ? F_MONO_B : F_MONO, r == 10 ? P.ink : P.muted);
         }
         y += SC(21);
     }
+    y += d_wrap(x, y, w, inc.occMult < 0.999 ? L"Множитель учитывает оккупацию. Содержание армии вычитается из казны после множителя; оборона войска — до него."
+                                             : L"Содержание армии вычитается из казны после множителя; оборона войска — до него.", F_TINY, P.muted, 1) + SC(4);
     y += SC(6);
     wchar_t buf[320];
     swprintf(buf, 320, L"Рост населения: %ls%.2f%% в год. Стабильность стремится к %ld. Экология меняется на %+.1f за ход.",
@@ -655,8 +662,8 @@ static int tab_quests(int x, int y, int w)
             d_rrect(tx, ty, bw, SC(8), SC(4), P.surface2, CLR_INVALID);
             if (fr > 0) d_rrect(tx, ty, (int)(bw * fr) > SC(8) ? (int)(bw * fr) : SC(8), SC(8), SC(4), P.green, CLR_INVALID);
             wchar_t pr[64];
-            if (tgt <= 1.0 && Q->type != QT_POP && Q->type != QT_DEF && Q->type != QT_TECHN && Q->type != QT_CULT &&
-                Q->type != QT_ECO_AT && Q->type != QT_STAB) swprintf(pr, 64, L"%ls", cur >= tgt ? L"готово" : L"ещё не сделано");
+            if (Q->type == QT_TECH || Q->type == QT_PROJ || Q->type == QT_PERSON || Q->type == QT_PROVINCE)
+                swprintf(pr, 64, L"%ls", cur >= tgt ? L"готово" : L"ещё не сделано");
             else { wchar_t a[24], b[24]; fmt_num(cur, a, 24); fmt_num(tgt, b, 24); swprintf(pr, 64, L"%ls / %ls", a, b); }
             d_text(tx + bw + SC(10), ty - SC(4), pr, F_TINY, P.muted);
             ty += SC(16);
@@ -707,8 +714,13 @@ int tab_draw(int tab, int x, int y, int w, int h)
     case TAB_POLICY: return tab_policy(x, y, w);
     case TAB_QUIZ:   return tab_quiz(x, y, w);
     case TAB_LOG:    return tab_log(x, y, w);
-    case TAB_CHARTS: return tab_charts(x, y, w);
-    case TAB_ACH:    return tab_ach(x, y, w);
+    case TAB_ARMY:   return tab_army(x, y, w);
+    case TAB_RESULTS: {
+        int h1 = tab_charts(x, y, w);
+        int yy = y + h1;
+        section(x, &yy, L"НАГРАДЫ");
+        return yy - y + tab_ach(x, yy, w);
+    }
     case TAB_QUESTS: return tab_quests(x, y, w);
     }
     return 0;

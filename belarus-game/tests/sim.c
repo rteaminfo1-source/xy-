@@ -1,6 +1,7 @@
 /* Проверка данных и баланса: сборка на Linux, запуск без графики.
- * gcc -O2 -I../src sim.c ../src/engine.c ../src/data_*.c -lm -o sim && ./sim */
+ * gcc -O2 -I../src sim.c ../src/engine.c ../src/war.c ../src/data_*.c -lm -o sim && ./sim */
 #include "game.h"
+#include "war.h"
 #include <stdio.h>
 #include <string.h>
 #include <locale.h>
@@ -84,7 +85,7 @@ static void check_quests(void)
         if (Q->city < -1 || Q->city >= CITY_COUNT) FAIL("задание %s: город", Q->id);
         if (Q->gold < 0 || Q->sci < 0 || Q->cult < 0 || Q->stab < 0 || Q->gold + Q->sci + Q->cult + Q->stab == 0)
             FAIL("задание %s: награда", Q->id);
-        int isObj = Q->type == QT_TECH || Q->type == QT_PROJ || Q->type == QT_PERSON;
+        int isObj = Q->type == QT_TECH || Q->type == QT_PROJ || Q->type == QT_PERSON || Q->type == QT_PROVINCE;
         if (isObj) {
             if (Q->ti < 0) { FAIL("задание %s: нет цели %s", Q->id, Q->target ? Q->target : "(null)"); continue; }
             if (Q->type == QT_TECH && TECHS[Q->ti].era > dEra) FAIL("задание %s: технология позже срока", Q->id);
@@ -97,6 +98,10 @@ static void check_quests(void)
                 const Person *P = &PEOPLE[Q->ti];
                 if (P->to < ERAS[Q->era - 1].from || P->from > Q->deadline) FAIL("задание %s: деятель вне срока", Q->id);
             }
+            if (Q->type == QT_PROVINCE) {
+                const Province *P = &PROVINCES[Q->ti];
+                if (P->to < ERAS[Q->era - 1].from || P->from > Q->deadline) FAIL("задание %s: земля вне срока", Q->id);
+            }
         } else if (Q->num <= 0) FAIL("задание %s: порог", Q->id);
     }
     printf("Задания: %d; по эпохам:", QUEST_COUNT);
@@ -104,6 +109,149 @@ static void check_quests(void)
     printf("; по типам:");
     for (int t = 0; t < QT_COUNT; t++) printf(" %d", perType[t]);
     printf("\n");
+}
+
+/* Армия, земли, области, города: данные согласованы. */
+static void check_war_data(void)
+{
+    data_init();
+    if (UNIT_COUNT > MAX_UNITS) FAIL("войск %d больше MAX_UNITS", UNIT_COUNT);
+    if (PROVINCE_COUNT > MAX_PROVINCES) FAIL("земель %d больше MAX_PROVINCES", PROVINCE_COUNT);
+    for (int u = 0; u < UNIT_COUNT; u++) {
+        const UnitType *t = &UNIT_TYPES[u];
+        for (int v = u + 1; v < UNIT_COUNT; v++) if (!strcmp(t->id, UNIT_TYPES[v].id)) FAIL("дубль войска %s", t->id);
+        if (t->era < 1 || t->era > ERA_COUNT) FAIL("войско %s: эпоха", t->id);
+        if (t->tech && t->techi < 0) FAIL("войско %s: нет технологии %s", t->id, t->tech);
+        if (t->techi >= 0 && TECHS[t->techi].era > t->era) FAIL("войско %s раньше своей технологии", t->id);
+        if (t->atk <= 0 || t->def <= 0 || t->gold <= 0 || t->ind <= 0 || t->upkeep <= 0) FAIL("войско %s: числа", t->id);
+        if (!t->name || !t->desc) FAIL("войско %s без текста", t->id);
+    }
+    for (int p = 0; p < PROVINCE_COUNT; p++) {
+        const Province *P = &PROVINCES[p];
+        for (int q = p + 1; q < PROVINCE_COUNT; q++) if (!strcmp(P->id, PROVINCES[q].id)) FAIL("дубль земли %s", P->id);
+        if (P->from < TURN_YEARS[0] || P->to <= P->from || P->to >= 1795) FAIL("земля %s: окно %d–%d", P->id, P->from, P->to);
+        int turns = 0;
+        for (int i = 0; i < TURN_COUNT; i++) turns += TURN_YEARS[i] >= P->from && TURN_YEARS[i] <= P->to;
+        if (turns < 2) FAIL("земля %s: в окно попадает ходов: %d", P->id, turns);
+        if (P->era != era_of_year(P->from) && P->era != era_of_year(P->from) + 1) FAIL("земля %s: эпоха %d", P->id, P->era);
+        if (P->lon < 20 || P->lon > 36 || P->lat < 49 || P->lat > 58) FAIL("земля %s: координаты", P->id);
+        if (P->strength <= 0 || P->popK <= 0 || P->fx.v[R_GOLD] <= 0) FAIL("земля %s: числа", P->id);
+        for (int q = 0; q < PROVINCE_COUNT; q++)
+            if (q != p && !strcmp(P->group, PROVINCES[q].group) && P->from <= PROVINCES[q].to && PROVINCES[q].from <= P->to)
+                FAIL("земли %s и %s одной группы пересекаются по годам", P->id, PROVINCES[q].id);
+    }
+    for (int r = 0; r < REGION_COUNT; r++)
+        if (REGION_CITY[r] < 0 || REGION_CITY[r] >= CITY_COUNT || !REGION_NAMES[r]) FAIL("область %d", r);
+    for (int c = 0; c < CITY_COUNT; c++) {
+        if (CITY_PROFILES[c].spec < 0 || CITY_PROFILES[c].spec >= SP_COUNT) FAIL("город %ls: специализация", CITIES[c].name);
+        if (!CITY_PROFILES[c].desc || !CITY_PROFILES[c].desc[0]) FAIL("город %ls: нет описания", CITIES[c].name);
+    }
+    for (int sp = 0; sp < SP_COUNT; sp++) {
+        if (!SPEC_NAMES[sp]) FAIL("специализация %d без имени", sp);
+        int any = 0; for (int r = 0; r < R_COUNT; r++) any |= SPEC_FX[sp].v[r] != 0;
+        if (!any) FAIL("специализация %d без бонуса", sp);
+    }
+    int perSpec[SP_COUNT] = {0};
+    for (int c = 0; c < CITY_COUNT; c++) perSpec[CITY_PROFILES[c].spec]++;
+    printf("Армия: %d видов войск, %d земель для походов, %d областей; городов по специализациям:", UNIT_COUNT, PROVINCE_COUNT, REGION_COUNT);
+    for (int sp = 0; sp < SP_COUNT; sp++) printf(" %d", perSpec[sp]);
+    printf("\n");
+}
+
+static int unit_index(const char *id)
+{
+    for (int u = 0; u < UNIT_COUNT; u++) if (!strcmp(UNIT_TYPES[u].id, id)) return u;
+    return -1;
+}
+static int prov_index(const char *id)
+{
+    for (int p = 0; p < PROVINCE_COUNT; p++) if (!strcmp(PROVINCES[p].id, id)) return p;
+    return -1;
+}
+
+/* Механика войны: набор, предел, война, победа, доход земли, осада, наследие, оккупация. */
+static void test_war_rules(void)
+{
+    static Game g;
+    game_new(&g, 1, 5);
+    int dr = unit_index("druzhina"), cb = unit_index("crossbow"), rf = unit_index("rifle"), pa = unit_index("partisans");
+    int sm = prov_index("smolensk"), sm2 = prov_index("smolensk2");
+    if (dr < 0 || cb < 0 || rf < 0 || pa < 0 || sm < 0 || sm2 < 0) { FAIL("нет опорных войск или земель"); return; }
+    if (g.warTarget != -1 || g.warKind != WAR_NONE) FAIL("в начале игры уже война");
+    if (war_unit_state(&g, dr) != US_AVAILABLE) FAIL("дружина недоступна в начале");
+    if (war_unit_state(&g, cb) != US_LOCKED) FAIL("арбалетчики без технологии");
+    if (war_unit_state(&g, rf) != US_FUTURE) FAIL("стрелковая дивизия в 1100 году");
+    if (war_cannot_declare(&g, WAR_CONQUEST, sm) == 0) FAIL("война без войска разрешена");
+    g.gold = 1000; g.ind = 1000;
+    double gold0 = g.gold;
+    if (!war_recruit(&g, dr) || g.units[dr] != 1 || g.gold != gold0 - war_unit_cost_gold(&g, dr)) FAIL("набор дружины");
+    while (war_recruit(&g, dr)) {}
+    if (war_army_size(&g) != war_army_cap(&g)) FAIL("предел войска %d/%d", war_army_size(&g), war_army_cap(&g));
+    Income inc;
+    game_income(&g, &inc);
+    if (inc.army[R_GOLD] >= 0 || inc.army[R_DEF] <= 0) FAIL("содержание и оборона войска в доходе");
+    if (!war_disband(&g, dr) || war_disband(&g, cb)) FAIL("роспуск");
+    war_recruit(&g, dr);
+    if (war_cannot_declare(&g, WAR_LIBERATION, 0) == 0) FAIL("освобождение без оккупации");
+    if (!war_declare(&g, WAR_CONQUEST, sm)) FAIL("поход на Смоленск не начат: %ls", war_cannot_declare(&g, WAR_CONQUEST, sm));
+    if (war_declare(&g, WAR_CONQUEST, prov_index("podlasie"))) FAIL("вторая война одновременно");
+    int guard = 0;
+    while (g.warKind != WAR_NONE && guard++ < 12) {
+        g.gold = 1000;
+        while (war_recruit(&g, dr)) {}
+        war_end_turn(&g);
+    }
+    if (g.warKind != WAR_NONE) FAIL("война не закончилась за 10 ходов");
+    if (g.provOwned[sm] != 1) {
+        /* поражение тоже исход; для проверки дохода присоединяем силой */
+        g.provOwned[sm] = 1;
+    }
+    if (war_province_count(&g) != 1 || war_province_state(&g, sm) != PV_OWNED) FAIL("земля не присоединена");
+    if (war_province_state(&g, sm2) != PV_FUTURE) FAIL("состояние будущей земли той же группы");
+    game_income(&g, &inc);
+    if (inc.provs[R_GOLD] < PROVINCES[sm].fx.v[R_GOLD] - 1e-9) FAIL("доход земли %.1f", inc.provs[R_GOLD]);
+    /* города: стройка в столице эпохи даёт бонус специализации */
+    double cb0[R_COUNT], cb1[R_COUNT];
+    city_bonus(&g, C_POLOTSK, cb0);
+    if (city_level(&g, C_POLOTSK) < 2) FAIL("столица эпохи без уровня");
+    for (int p = 0; p < PROJECT_COUNT; p++) if (PROJECTS[p].city == C_POLOTSK) { g.proj[p] = 1; break; }
+    city_bonus(&g, C_POLOTSK, cb1);
+    if (cb1[R_SCI] <= cb0[R_SCI]) FAIL("стройка не подняла уровень города");
+    /* осада: Москва берёт Смоленск в 1514 году, если войска нет */
+    memset(g.units, 0, sizeof g.units);
+    g.year = 1530; g.era = 2;
+    war_year_changed(&g, 1510);
+    if (g.provOwned[sm] != 0) FAIL("Смоленск не потерян без войска (оборона %.0f)", war_defense_power(&g));
+    if (war_province_state(&g, sm2) != PV_AVAILABLE) FAIL("Смоленск нельзя отвоевать после потери");
+    /* наследие после 1795 */
+    g.provOwned[sm2] = 1;
+    g.year = 1795; g.era = 4;
+    war_year_changed(&g, 1772);
+    if (g.provOwned[sm2] != 2 || war_province_state(&g, sm2) != PV_LEGACY) FAIL("наследие после разделов");
+    game_income(&g, &inc);
+    if (inc.provs[R_GOLD] <= 0) FAIL("наследие без дохода");
+    /* оккупация 1941–1944 */
+    g.year = 1941; g.era = 6;
+    war_year_changed(&g, 1937);
+    if (war_occupied_count(&g) != REGION_COUNT) FAIL("оккупация не началась");
+    game_income(&g, &inc);
+    if (inc.occMult >= 1.0) FAIL("оккупация не снижает доходы");
+    if (war_raid_chance(&g) != 0) FAIL("набеги во время оккупации");
+    if (war_cannot_declare(&g, WAR_CONQUEST, sm2) == 0) FAIL("походы во время оккупации");
+    g.gold = 100000; g.ind = 100000; g.pop = 9000;
+    g.tech[UNIT_TYPES[rf].techi] = 1;
+    while (war_recruit(&g, rf)) {}
+    if (war_attack_power(&g, WAR_LIBERATION) <= 0) FAIL("нет силы для освобождения");
+    if (!war_declare(&g, WAR_LIBERATION, 2)) FAIL("освобождение Минщины: %ls", war_cannot_declare(&g, WAR_LIBERATION, 2));
+    guard = 0;
+    while (g.warKind != WAR_NONE && guard++ < 12) war_end_turn(&g);
+    if (g.occupied & 4u) FAIL("Минщина не освобождена большой армией");
+    if (!(g.liberated & 4u)) FAIL("освобождение не засчитано");
+    g.year = 1945; g.era = 7;
+    war_year_changed(&g, 1944);
+    if (g.occupied) FAIL("оккупация не закончилась в 1945 году");
+    printf("Война: эта %d ход(а) на Смоленск дружиной, сила области в 1942: %d, набег в эпоху I: %.0f\n",
+           war_eta(&g, WAR_CONQUEST, sm), (g.year = 1942, war_region_strength(&g)), (g.era = 1, war_raid_strength(&g)));
 }
 
 /* Механика заданий: открытие, награда, провал, проверка «на срок», счёт. */
@@ -214,6 +362,18 @@ static void quest_focus(Game *g, int *saveSci, int *saveGold)
                 if (g->ind < game_proj_ind(g, Q->ti) && !g->priority) g->priority = 3;   /* не хватает производства */
             }
         }
+        if (Q->type == QT_ARMY || Q->type == QT_PROVINCE || Q->type == QT_LIBERATE) {
+            int best = -1;
+            for (int u = 0; u < UNIT_COUNT; u++)
+                if (war_unit_state(g, u) == US_AVAILABLE && (best < 0 || UNIT_TYPES[u].atk * war_unit_eff(g, u) > UNIT_TYPES[best].atk * war_unit_eff(g, best))) best = u;
+            int want = Q->type == QT_ARMY ? Q->num : war_army_cap(g);
+            while (best >= 0 && war_army_size(g) < want && war_recruit(g, best)) {}
+            if (best >= 0 && war_army_size(g) < want) *saveGold = 1;
+            if (Q->type == QT_PROVINCE && g->warKind == WAR_NONE && war_eta(g, WAR_CONQUEST, Q->ti) <= 4) war_declare(g, WAR_CONQUEST, Q->ti);
+            if (Q->type == QT_LIBERATE && g->warKind == WAR_NONE)
+                for (int r = 0; r < REGION_COUNT; r++)
+                    if ((g->occupied >> r & 1u) && war_declare(g, WAR_LIBERATION, r)) break;
+        }
         if (Q->type == QT_PERSON && game_person_state(g, Q->ti) == HS_AVAILABLE) {
             if (g->gold >= game_person_cost(g, Q->ti)) game_hire(g, Q->ti);
             else *saveGold = 1;
@@ -221,10 +381,49 @@ static void quest_focus(Game *g, int *saveSci, int *saveGold)
     }
 }
 
+/* Бот-полководец: держит войско лучшего доступного вида, идёт в поход, когда победа близка,
+ * перед 1941 годом копит армию, в 1941–1944 освобождает области. */
+static int armyBot;
+
+static void army_turn(Game *g)
+{
+    int best = -1;
+    double bestV = 0;
+    for (int u = 0; u < UNIT_COUNT; u++)
+        if (war_unit_state(g, u) == US_AVAILABLE) {
+            double v = (UNIT_TYPES[u].atk + UNIT_TYPES[u].def) * war_unit_eff(g, u) / UNIT_TYPES[u].gold;
+            if (v > bestV) { bestV = v; best = u; }
+        }
+    int want = g->era <= 3 ? 3 + 2 * g->era : 3 + g->era;
+    if (g->year >= 1925 && g->year <= 1944) want = 16;
+    if (want > war_army_cap(g)) want = war_army_cap(g);
+    double budget = g->era <= 3 || (g->year >= 1925 && g->year <= 1944) ? g->gold - 5 : g->gold * 0.35;
+    while (best >= 0 && war_army_size(g) < want && war_unit_cost_gold(g, best) <= budget &&
+           g->ind >= war_unit_cost_ind(g, best)) {
+        budget -= war_unit_cost_gold(g, best);
+        if (!war_recruit(g, best)) break;
+    }
+    /* устаревшие войска распускаем, если есть замена */
+    for (int u = 0; u < UNIT_COUNT; u++)
+        if (g->units[u] > 0 && war_unit_eff(g, u) < 0.7 && best >= 0 && best != u) war_disband(g, u);
+    if (g->warKind != WAR_NONE) {
+        if (war_eta(g, g->warKind, g->warTarget) > 6) war_peace(g);
+        return;
+    }
+    if (g->occupied) {
+        for (int r = 0; r < REGION_COUNT; r++)
+            if ((g->occupied >> r & 1u) && war_eta(g, WAR_LIBERATION, r) <= 3) { war_declare(g, WAR_LIBERATION, r); return; }
+        return;
+    }
+    for (int p = 0; p < PROVINCE_COUNT; p++)
+        if (war_province_state(g, p) == PV_AVAILABLE && war_eta(g, WAR_CONQUEST, p) <= 3) { war_declare(g, WAR_CONQUEST, p); return; }
+}
+
 /* Жадный бот: сначала самые дешёвые технологии, затем стройки, затем деятели. */
 static void bot_turn(Game *g, int quizSkill)
 {
     int saveSci = 0, saveGold = 0;
+    if (armyBot) army_turn(g);
     if (questBot) quest_focus(g, &saveSci, &saveGold);
     for (int guard = 0; guard < 200 && !saveSci; guard++) {
         int best = -1, bc = 1 << 30;
@@ -273,7 +472,9 @@ int main(int argc, char **argv)
     setlocale(LC_ALL, "C.UTF-8");
     check_data();
     check_quests();
+    check_war_data();
     test_quest_rules();
+    test_war_rules();
     int verbose = argc > 1 && !strcmp(argv[1], "-v");
     for (int d = 0; d < DIFFICULTY_COUNT; d++) {
         double sumScore = 0, sumTech = 0, sumPop = 0, sumQuest = 0;
@@ -352,6 +553,45 @@ int main(int argc, char **argv)
         }
     }
     questBot = 0;
+    /* бот-полководец: армия, походы, освобождение */
+    armyBot = 1;
+    for (int d = 0; d < DIFFICULTY_COUNT; d++) {
+        double sumScore = 0, sumPop = 0, sumProv = 0, sumWon = 0, sumLost = 0, sumLib = 0, sumUnits = 0, sumPop45 = 0;
+        double sumT = 0, sumP = 0, sumH = 0, sumW = 0;
+        int runs = 20;
+        for (int s = 1; s <= runs; s++) {
+            static Game g;
+            game_new(&g, d, (unsigned)(s * 7919));
+            int maxProv = 0;
+            while (!g.over) {
+                resolve_events(&g);
+                if (g.over) break;
+                bot_turn(&g, 70);
+                if (verbose && s == 1 && d == 1) {
+                    Income inc; game_income(&g, &inc);
+                    Army a; war_army(&g, &a);
+                    printf("%4d э%d поп %6.0f каз %6.0f(+%4.0f, войско %4.0f) войско %2d/%2d атк %5.0f обор %5.0f земли %d окк %d %ls\n",
+                           g.year, g.era, g.pop, g.gold, inc.total[R_GOLD], inc.army[R_GOLD], a.units, war_army_cap(&g),
+                           a.attack, war_defense_power(&g), war_province_count(&g), war_occupied_count(&g),
+                           g.warNews ? g.warReport : L"");
+                }
+                game_end_turn(&g);
+                if (war_province_count(&g) > maxProv) maxProv = war_province_count(&g);
+                if (g.gold < -1e-6) FAIL("отрицательная казна в %d году", g.year);
+                for (int u = 0; u < UNIT_COUNT; u++) if (g.units[u] < 0) FAIL("отрицательное войско");
+            }
+            resolve_events(&g);
+            Score sc;
+            game_score(&g, &sc);
+            int lib = 0; for (int r = 0; r < REGION_COUNT; r++) lib += (g.liberated >> r) & 1u;
+            sumScore += sc.total; sumPop += g.pop; sumProv += maxProv; sumWon += g.battlesWon; sumLost += g.battlesLost;
+            sumLib += lib; sumUnits += g.unitsLost; sumPop45 += g.pop1945;
+            sumT += game_tech_count(&g); sumP += game_proj_count(&g); sumH += game_people_count(&g); sumW += sc.war;
+        }
+        printf("[%ls] бот-полководец: счёт %.0f (техн %.0f, стр %.0f, люди %.0f, армия %.0f), население %.0f тыс. (1945: %.0f), земель %.1f, побед %.1f, поражений %.1f, освобождено %.1f, потеряно соединений %.1f\n",
+               DIFFICULTIES[d].name, sumScore / runs, sumT / runs, sumP / runs, sumH / runs, sumW / runs, sumPop / runs, sumPop45 / runs, sumProv / runs, sumWon / runs, sumLost / runs, sumLib / runs, sumUnits / runs);
+    }
+    armyBot = 0;
     /* минутный доход: растёт с эпохой, не начисляется после финала */
     {
         static Game m;
@@ -418,7 +658,44 @@ int main(int argc, char **argv)
             if (game_load(&b, f)) FAIL("загружено сохранение неверного размера");
             fclose(f);
         }
-        printf("Сохранения: v4 %u байт, v3 %u байт — загружаются оба\n", (unsigned)sizeof(Game), v3);
+        printf("Сохранения: v5 %u байт, v3 %u байт — загружаются оба\n", (unsigned)sizeof(Game), v3);
+    }
+    /* совместимость: сохранение версии 4 (без армии) */
+    {
+        static Game a, b;
+        game_new(&a, 1, 91);
+        for (int t = 0; t < 8; t++) { resolve_events(&a); bot_turn(&a, 70); game_end_turn(&a); }
+        size_t off = offsetof(Game, units);
+        unsigned v4 = (unsigned)((off + _Alignof(Game) - 1) / _Alignof(Game) * _Alignof(Game));
+        static unsigned char blob[sizeof(Game)];
+        memcpy(blob, &a, sizeof a);
+        ((Game *)blob)->version = 4;
+        memset(blob + off, 0xCD, v4 - off);
+        FILE *f = tmpfile();
+        if (f) {
+            fwrite("BYTG", 1, 4, f); fwrite(&v4, sizeof v4, 1, f); fwrite(blob, 1, v4, f);
+            rewind(f);
+            memset(&b, 0x5A, sizeof b);
+            if (!game_load(&b, f)) FAIL("сохранение версии 4 не загрузилось");
+            else {
+                if (b.version != GAME_VERSION || b.warKind != WAR_NONE || b.warTarget != -1 || war_army_size(&b) || b.occupied)
+                    FAIL("армия v4 не обнулена");
+                if (memcmp(&a, &b, offsetof(Game, units))) FAIL("данные v4 искажены");
+                game_end_turn(&b);
+            }
+            fclose(f);
+        }
+        /* испорченная цель войны отвергается */
+        f = tmpfile();
+        if (f) {
+            static Game c;
+            game_new(&c, 1, 3);
+            c.warKind = WAR_CONQUEST; c.warTarget = 999;
+            game_save(&c, f); rewind(f);
+            if (game_load(&b, f)) FAIL("загружена война с неверной целью");
+            fclose(f);
+        }
+        printf("Сохранения: v4 %u байт загружается, армия с нуля\n", v4);
     }
     printf(errors ? "Найдено ошибок: %d\n" : "Ошибок нет\n", errors);
     return errors ? 1 : 0;

@@ -1,6 +1,7 @@
 /* Экраны: титульный и игровой (шапка, лента эпох, карта, вкладки), ввод с мыши и клавиатуры. */
 #include "ui.h"
 #include "rulers.h"
+#include "war.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -8,7 +9,7 @@
 int tab_draw(int tab, int x, int y, int w, int h);   /* ui_tabs.c */
 
 static const wchar_t *TAB_NAMES[TAB_COUNT] = {
-    L"Технологии", L"Стройки", L"Деятели", L"Задания", L"Курс", L"Летописец", L"Летопись", L"Графики", L"Награды"
+    L"Технологии", L"Стройки", L"Деятели", L"Армия", L"Задания", L"Курс", L"Летописец", L"Летопись", L"Итоги"
 };
 
 /* ---------- общие помощники ---------- */
@@ -365,6 +366,7 @@ static void draw_tabs_panel(int x, int y, int w, int h)
         int dot = 0;
         if (i == TAB_QUIZ && !G.over && !G.quizAnswered) dot = 1;
         if (i == TAB_PEOPLE) for (int p = 0; p < PEOPLE_COUNT && !dot; p++) dot = game_person_state(&G, p) == HS_AVAILABLE;
+        if (i == TAB_ARMY) dot = !G.over && ((G.occupied && G.warKind == WAR_NONE) || (G.warKind != WAR_NONE && G.warNews));
         if (i == TAB_QUESTS) for (int q = 0; q < QUEST_COUNT && !dot; q++)
             dot = game_quest_state(&G, q) == QS_ACTIVE && QUESTS[q].deadline < game_next_year(&G);
         if (dot) d_circle(tx + tw - SC(5), ty + SC(6), SC(3), P.red, CLR_INVALID, 1);
@@ -525,6 +527,7 @@ void ui_click(int act, int arg)
             int era = G.era;
             game_end_turn(&G);
             if (G.era != era) { U.eraFilter = G.era; memset(U.scroll, 0, sizeof U.scroll); }
+            if (G.warNews && G.warReport[0]) ui_toast(L"%ls", G.warReport);
             map_invalidate();
             if (!G.over) ui_save();
             ui_after_change();
@@ -563,6 +566,29 @@ void ui_click(int act, int arg)
     case A_MAP_FULL: U.modal = M_MAP; break;
     case A_QUEST: U.modal = M_NONE; U.tab = TAB_QUESTS; U.scroll[TAB_QUESTS] = 0; break;
     case A_RULER: U.modal = M_RULER; U.modalArg = arg; U.modalScroll = 0; break;
+    case A_RECRUIT:
+        if (arg < 0 || arg >= UNIT_COUNT) break;
+        if (war_recruit(&G, arg)) ui_toast(L"В строю: %ls (%d)", UNIT_TYPES[arg].name, G.units[arg]);
+        else if (war_army_size(&G) >= war_army_cap(&G)) ui_toast(L"Войско достигло предела: %d соединений — предел растёт с населением", war_army_cap(&G));
+        else ui_toast(L"Не хватает казны или производства");
+        break;
+    case A_DISBAND:
+        if (arg >= 0 && arg < UNIT_COUNT && war_disband(&G, arg)) ui_toast(L"Распущено: %ls", UNIT_TYPES[arg].name);
+        break;
+    case A_DECLARE: {
+        const wchar_t *why = war_cannot_declare(&G, WAR_CONQUEST, arg);
+        if (why) ui_toast(L"%ls", why);
+        else if (war_declare(&G, WAR_CONQUEST, arg)) { ui_toast(L"Начат поход: %ls. Бой — в конце хода", PROVINCES[arg].name); map_invalidate(); }
+        break;
+    }
+    case A_LIBERATE: {
+        const wchar_t *why = war_cannot_declare(&G, WAR_LIBERATION, arg);
+        if (why) ui_toast(L"%ls", why);
+        else if (war_declare(&G, WAR_LIBERATION, arg)) { ui_toast(L"Начата операция: %ls. Бой — в конце хода", REGION_NAMES[arg]); map_invalidate(); }
+        break;
+    }
+    case A_PEACE: war_peace(&G); ui_toast(L"Война окончена"); map_invalidate(); break;
+    case A_PROVINCE: U.modal = M_NONE; U.tab = TAB_ARMY; break;
     }
     ui_invalidate();
 }
@@ -683,6 +709,27 @@ void ui_hover_status(int act, int arg)
         swprintf(buf, 260, L"%ls — %ls, %d–%d (%ls)", RULERS[arg].name, RULERS[arg].title, RULERS[arg].from, RULERS[arg].to, STATE_NAMES[RULERS[arg].state]);
     else if (act == A_HOVER_ACH && arg >= 0 && arg < ACH_COUNT)
         swprintf(buf, 260, L"%ls — %ls", ACHIEVEMENTS[arg].name, ACHIEVEMENTS[arg].desc);
+    else if ((act == A_RECRUIT || act == A_DISBAND || act == A_HOVER_UNIT) && arg >= 0 && arg < UNIT_COUNT) {
+        const UnitType *t = &UNIT_TYPES[arg];
+        if (act == A_DISBAND) swprintf(buf, 260, L"Распустить одно соединение «%ls»: содержание уменьшится, деньги не вернутся.", t->name);
+        else swprintf(buf, 260, L"%ls — %ls", t->name, t->desc);
+    } else if ((act == A_DECLARE || act == A_PROVINCE) && arg >= 0 && arg < PROVINCE_COUNT) {
+        wchar_t s[200]; first_sentence(PROVINCES[arg].desc, s, 200);
+        swprintf(buf, 260, L"%ls (%ls, %d–%d): %ls", PROVINCES[arg].name, PROVINCES[arg].owner, PROVINCES[arg].from, PROVINCES[arg].to, s);
+    } else if ((act == A_LIBERATE || act == A_HOVER_REGION) && arg >= 0 && arg < REGION_COUNT) {
+        int occ = (G.occupied >> arg) & 1u;
+        swprintf(buf, 260, L"%ls (центр — %ls): %ls", REGION_NAMES[arg], CITIES[REGION_CITY[arg]].name,
+                 occ ? L"под оккупацией, сила врага слабеет с каждым годом" : L"свободна");
+    } else if (act == A_PEACE) swprintf(buf, 260, L"Закончить войну без победы: войска вернутся, стабильность немного упадёт.");
+    else if (act == A_HOVER_STAT && arg >= 20 && arg <= 23) {
+        static const wchar_t *H[4] = {
+            L"Сколько соединений в строю и сколько можно содержать: предел растёт с населением.",
+            L"Сила наступления: решает исход походов и освобождения. Военные технологии усиливают все войска.",
+            L"Оборона против набегов и осад: войско плюс крепости, замки и оборонные технологии.",
+            L"Каждое соединение стоит казны каждый ход; во время похода — в полтора раза больше. Пустая казна — дезертирство."
+        };
+        swprintf(buf, 260, L"%ls", H[arg - 20]);
+    }
     wcsncpy(U.status, buf, 259);
     U.status[259] = 0;
 }

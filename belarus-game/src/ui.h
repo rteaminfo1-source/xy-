@@ -64,10 +64,11 @@ enum {
     A_NONE, A_NEW, A_CONTINUE, A_HELP, A_EXIT, A_DIFF, A_START, A_TAB, A_ERAF, A_RESEARCH, A_TECH,
     A_BUILD, A_PROJ, A_HIRE, A_PERSON, A_PRIORITY, A_QUIZ, A_END_TURN, A_CHOICE, A_NEXT, A_CLOSE,
     A_MENU, A_SAVE, A_LOAD, A_THEME, A_TO_TITLE, A_CITY, A_SELL, A_ERA_START, A_FINAL, A_ZOOM,
-    A_PFILTER, A_TIMELINE, A_SCROLLBAR, A_CREDITS, A_MAP_FULL, A_QUEST, A_RULER
+    A_PFILTER, A_TIMELINE, A_SCROLLBAR, A_CREDITS, A_MAP_FULL, A_QUEST, A_RULER,
+    A_RECRUIT, A_DISBAND, A_DECLARE, A_LIBERATE, A_PEACE, A_PROVINCE
 };
 /* области только для подсказок (без клика) */
-enum { A_HOVER_RES = 100, A_HOVER_ERA, A_HOVER_ACH, A_HOVER_STAT, A_HOVER_MIN, A_HOVER_SPRITE };
+enum { A_HOVER_RES = 100, A_HOVER_ERA, A_HOVER_ACH, A_HOVER_STAT, A_HOVER_MIN, A_HOVER_SPRITE, A_HOVER_REGION, A_HOVER_UNIT };
 void hit(int x, int y, int w, int h, int act, int arg);
 int  hover(int act, int arg);
 void hits_reset(void);
@@ -84,7 +85,7 @@ void w_scrollbar(int x, int y, int h, int content, int view, int scroll);
 /* ---------- состояние интерфейса ---------- */
 enum { SCR_TITLE, SCR_GAME };
 enum { M_NONE, M_EVENT, M_ERA, M_FINAL, M_HELP, M_MENU, M_NEWGAME, M_TECH, M_PROJ, M_PERSON, M_CITY, M_CREDITS, M_MAP, M_RULER };
-enum { TAB_TECH, TAB_PROJ, TAB_PEOPLE, TAB_QUESTS, TAB_POLICY, TAB_QUIZ, TAB_LOG, TAB_CHARTS, TAB_ACH, TAB_COUNT };
+enum { TAB_TECH, TAB_PROJ, TAB_PEOPLE, TAB_ARMY, TAB_QUESTS, TAB_POLICY, TAB_QUIZ, TAB_LOG, TAB_RESULTS, TAB_COUNT };
 
 typedef struct {
     int screen, modal, modalArg, tab, eraFilter, projFilter;
@@ -96,7 +97,7 @@ typedef struct {
     int evChoice;
     int diffPick;
     int city;                    /* выбранный город, -1 */
-    wchar_t toast[160];
+    wchar_t toast[260];
     DWORD toastUntil;
     wchar_t status[260];
     int hasSave;
@@ -143,6 +144,16 @@ int  art_sprites_available(void);
 void art_sprite_draw(int sprite, int ax, int ay, int size, int alpha);  /* (ax,ay) — точка опоры модели */
 int  art_portrait_index(const char *id);                          /* -1, если портрета нет */
 void art_portrait_draw(int idx, int x, int y, int w, int h);      /* вписать в прямоугольник */
+int  art_unit_index(const char *id);                              /* -1, если фигурки нет */
+void art_unit_draw(int idx, int x, int y, int w, int h);          /* 3D-фигурка войска, вписать в прямоугольник */
+
+/* ui_tabs.c — общие помощники вкладок */
+void     tab_section(int x, int *y, const wchar_t *s);
+COLORREF tab_card_fill(void);
+
+/* ui_army.c */
+int  tab_army(int x, int y, int w);
+void unit_badge(int u, int x, int y, int w, int h, COLORREF border);  /* фигурка или значок */
 int  landmark_sprite(int p);                                      /* ui_landmarks.c */
 
 /* ui_dev.c */

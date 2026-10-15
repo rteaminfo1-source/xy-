@@ -1,5 +1,6 @@
 /* Режим разработчика: BelarusTech.exe --scene=N открывает заданное состояние (для скриншотов и проверки). */
 #include "ui.h"
+#include "war.h"
 #include <string.h>
 
 static void bot_turn(Game *g)
@@ -62,7 +63,7 @@ void dev_scene(int n)
     case 3: game_new(&G, 1, 7u); break;                                   /* старт: окно эпохи */
     case 4: play_until(1510); break;                                      /* событие (Орша/Скорина) */
     case 5: play_until(1960); resolve(&G); U.tab = TAB_TECH; break;
-    case 6: play_until(2024); resolve(&G); U.tab = TAB_CHARTS; break;
+    case 6: play_until(2024); resolve(&G); U.tab = TAB_RESULTS; break;
     case 7: play_until(2030); break;                                      /* итоги */
     case 8: play_until(1905); resolve(&G); U.tab = TAB_POLICY; break;
     case 9: play_until(1772); resolve(&G); U.tab = TAB_QUIZ; G.quizCur = -1; G.quizAnswered = 0; break;
@@ -79,6 +80,32 @@ void dev_scene(int n)
     case 20: play_until(1861); resolve(&G); U.tab = TAB_PEOPLE; break;               /* правители и деятели */
     case 21: play_until(1950); resolve(&G); U.modal = M_RULER; U.modalArg = 25; break; /* карточка правителя */
     case 22: play_until(1700); resolve(&G); U.modal = M_MAP; break;                  /* карта XVII века */
+    case 23: case 24: {                                                             /* армия и поход, 1340 */
+        play_until(1340); resolve(&G);
+        G.gold += 400; G.ind += 200;
+        int kh = -1;
+        for (int u = 0; u < UNIT_COUNT; u++) if (!strcmp(UNIT_TYPES[u].id, "druzhina")) kh = u;
+        for (int i = 0; i < 5 && kh >= 0; i++) war_recruit(&G, kh);
+        for (int p = 0; p < PROVINCE_COUNT; p++) if (!strcmp(PROVINCES[p].id, "smolensk")) G.provOwned[p] = 1;
+        for (int p = 0; p < PROVINCE_COUNT; p++) if (!strcmp(PROVINCES[p].id, "volhynia")) { war_declare(&G, WAR_CONQUEST, p); G.warProgress = 45; }
+        swprintf(G.warReport, 200, L"Поход на землю «Волынь»: продвижение 45%% (за ход +45). Войско цело.");
+        U.tab = TAB_ARMY;
+        if (n == 24) U.modal = M_MAP;
+        break;
+    }
+    case 25: case 26: {                                                             /* оккупация 1942 */
+        play_until(1942); resolve(&G);
+        G.gold += 3000; G.ind += 2000;
+        int best = -1;
+        for (int u = 0; u < UNIT_COUNT; u++) if (war_unit_state(&G, u) == US_AVAILABLE) best = u;
+        for (int i = 0; i < 12 && best >= 0; i++) war_recruit(&G, best);
+        G.occupied &= ~(1u << 5); G.liberated |= 1u << 5;
+        war_declare(&G, WAR_LIBERATION, 2);
+        U.tab = TAB_ARMY;
+        if (n == 26) U.modal = M_MAP;
+        break;
+    }
+    case 27: play_until(1700); resolve(&G); U.modal = M_CITY; U.modalArg = C_SLUTSK; break;  /* профиль города */
     }
     if (U.screen == SCR_GAME) {
         U.eraFilter = G.era;
