@@ -74,6 +74,11 @@ void dev_scene(int n)
     case 15: U.screen = SCR_TITLE; U.modal = M_CREDITS; break;                  /* об игре и издатели */
     case 16: play_until(1517); resolve(&G); U.minuteMs = 52000; break;          /* до минутного дохода 8 секунд */
     case 17: U.screen = SCR_TITLE; U.hasSave = 1; break;                         /* титул с кнопкой «Продолжить» */
+    case 18: play_until(2024); resolve(&G); U.modal = M_MAP; break;                  /* 3D-карта во весь экран */
+    case 19: play_until(1490); resolve(&G); U.tab = TAB_QUESTS; break;               /* задания */
+    case 20: play_until(1861); resolve(&G); U.tab = TAB_PEOPLE; break;               /* правители и деятели */
+    case 21: play_until(1950); resolve(&G); U.modal = M_RULER; U.modalArg = 25; break; /* карточка правителя */
+    case 22: play_until(1700); resolve(&G); U.modal = M_MAP; break;                  /* карта XVII века */
     }
     if (U.screen == SCR_GAME) {
         U.eraFilter = G.era;

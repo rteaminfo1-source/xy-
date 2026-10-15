@@ -301,14 +301,23 @@ void d_blend(int x, int y, int w, int h, COLORREF c, int a)
     }
 }
 
+static int s_clipOn, s_clipX, s_clipY, s_clipW, s_clipH;
+
+int d_clip_get(int *x, int *y, int *w, int *h)
+{
+    *x = s_clipX; *y = s_clipY; *w = s_clipW; *h = s_clipH;
+    return s_clipOn;
+}
+
 void d_clip(int x, int y, int w, int h)
 {
+    s_clipOn = 1; s_clipX = x; s_clipY = y; s_clipW = w; s_clipH = h;
     HRGN rg = CreateRectRgn(x, y, x + w, y + h);
     SelectClipRgn(s_dc, rg);
     DeleteObject(rg);
 }
 
-void d_unclip(void) { SelectClipRgn(s_dc, NULL); }
+void d_unclip(void) { s_clipOn = 0; SelectClipRgn(s_dc, NULL); }
 
 void d_bitmap(HDC src, int x, int y, int w, int h) { BitBlt(s_dc, x, y, w, h, src, 0, 0, SRCCOPY); }
 
@@ -448,6 +457,18 @@ void d_icon(int kind, int x, int y, int s, COLORREF c)
     case IC_CHECK:
         d_line(x + 3, cy, x + s / 2 - 1, y + s - 4, c, t + 1);
         d_line(x + s / 2 - 1, y + s - 4, x + s - 3, y + 4, c, t + 1);
+        break;
+    case IC_FLAG:  /* флажок задания */
+        d_line(x + s / 4, y + 1, x + s / 4, y + s - 1, c, t);
+        p[0].x = x + s / 4; p[0].y = y + 2; p[1].x = x + s - 2; p[1].y = y + s / 4 + 1;
+        p[2].x = x + s / 4; p[2].y = y + s / 2 + 1; p[3] = p[0];
+        d_poly(p, 4, c, CLR_INVALID, 1);
+        break;
+    case IC_CROWN: /* корона правителя */
+        p[0].x = x + 2; p[0].y = y + s - 3; p[1].x = x + 2; p[1].y = y + s / 3; p[2].x = x + s / 3; p[2].y = cy;
+        p[3].x = cx; p[3].y = y + 3; p[4].x = x + s * 2 / 3; p[4].y = cy; p[5].x = x + s - 2; p[5].y = y + s / 3;
+        p[6].x = x + s - 2; p[6].y = y + s - 3; p[7] = p[0];
+        d_poly(p, 8, CLR_INVALID, c, t);
         break;
     }
 }

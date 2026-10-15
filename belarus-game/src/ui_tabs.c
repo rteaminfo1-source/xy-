@@ -1,5 +1,6 @@
 /* Содержимое вкладок правой панели. Каждая функция рисует с учётом прокрутки и возвращает высоту содержимого. */
 #include "ui.h"
+#include "rulers.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -209,13 +210,8 @@ static void person_card(int i, int x, int y, int w, int h)
     COLORREF fill = st == HS_ACTIVE ? mix(card_fill(), P.blue, 24) : card_fill();
     d_rrect(x, y, w, h, SC(6), fill, hv ? P.muted : P.line);
     hit(x, y, w, h, A_PERSON, i);
-    /* медальон с инициалами */
-    int r = SC(20), mx = x + SC(14) + r, my = y + SC(14) + r;
-    d_circle(mx, my, r, st == HS_MISSED ? P.surface2 : P.redSoft, st == HS_ACTIVE ? P.blue : P.line, 2);
-    wchar_t ini[4] = { R->name[0], 0, 0, 0 };
-    const wchar_t *sp = wcsrchr(R->name, L' ');
-    if (sp && sp[1]) ini[1] = sp[1];
-    d_text_c(mx - r, my - d_font_h(F_ERA_S) / 2, 2 * r, ini, F_ERA_S, st == HS_MISSED ? P.muted : P.red);
+    /* 3D-портрет (или инициалы, если портретов нет) */
+    portrait_box(R->id, R->name, x + SC(10), y + SC(10), SC(46), SC(58), st == HS_ACTIVE ? P.blue : P.line);
     int px = x + SC(66), pw = w - SC(76);
     d_ellipsis(px, y + SC(8), pw, R->name, F_H3, st == HS_MISSED ? P.muted : P.ink);
     wchar_t buf[300];
@@ -272,6 +268,31 @@ static int tab_people(int x, int y, int w)
     y += d_wrap(x, y, w, L"Мастера, учёные и просветители приходят в своё время. Пригласите их, пока окно открыто: "
                          L"деятель даёт доход каждый ход и удешевляет свою технологию на 35%. После окна остаётся наследие — половина эффекта.",
                 F_SMALL, P.muted, 1) + SC(14);
+    {
+        int rl[3], nr = rulers_in_period(G.year, game_next_year(&G), rl, 3);
+        if (nr) {
+            section(x, &y, L"ПРАВИТЕЛИ СЕЙЧАС");
+            for (int i = 0; i < nr; i++) {
+                const Ruler *R = &RULERS[rl[i]];
+                int pw = SC(64), ph = SC(80), tx = x + pw + SC(26), tw = w - pw - SC(38);
+                wchar_t s[200];
+                swprintf(s, 200, L"%ls · %ls, %d–%d", R->title, STATE_NAMES[R->state], R->from, R->to);
+                int hd = d_wrap(0, 0, tw, R->desc, F_SMALL, 0, 0);
+                int ch = SC(12) + d_font_h(F_H3) + SC(2) + d_font_h(F_TINY) + SC(6) + hd + SC(12);
+                if (ch < ph + SC(20)) ch = ph + SC(20);
+                int hv = hover(A_RULER, rl[i]);
+                d_rrect(x, y, w, ch, SC(6), mix(card_fill(), P.gold, 30), hv ? P.gold : P.line);
+                portrait_box(R->id, R->name, x + SC(10), y + SC(10), pw, ph, P.gold);
+                int ty = y + SC(10);
+                d_ellipsis(tx, ty, tw, R->name, F_H3, P.ink); ty += d_font_h(F_H3) + SC(2);
+                d_ellipsis(tx, ty, tw, s, F_TINY, P.gold); ty += d_font_h(F_TINY) + SC(6);
+                d_wrap(tx, ty, tw, R->desc, F_SMALL, P.ink, 1);
+                hit(x, y, w, ch, A_RULER, rl[i]);
+                y += ch + SC(10);
+            }
+            y += SC(6);
+        }
+    }
     section(x, &y, L"МОЖНО ПРИГЛАСИТЬ СЕЙЧАС");
     if (!people_list(x, &y, w, HS_AVAILABLE, 99)) { y += d_wrap(x, y, w, L"Сейчас никого нет — новые деятели появятся в следующих ходах.", F_BODY, P.muted, 1) + SC(12); }
     if (count_state(HS_ACTIVE)) { section(x, &y, L"В КОМАНДЕ"); people_list(x, &y, w, HS_ACTIVE, 99); }
@@ -288,6 +309,30 @@ static int tab_people(int x, int y, int w)
                 wcsncat(buf, PEOPLE[i].name, 1199 - wcslen(buf));
             }
         y += d_wrap(x, y, w, buf, F_SMALL, P.muted, 1) + SC(10);
+    }
+    {
+        int any = 0;
+        for (int k = 0; k < RULER_COUNT; k++) any |= RULERS[k].from <= G.year;
+        if (any) {
+            wchar_t t[80];
+            swprintf(t, 80, L"ВСЕ ПРАВИТЕЛИ ДО %d ГОДА", G.year);
+            section(x, &y, t);
+            int cw = SC(66), chh = SC(82), gap = SC(10), cx = x;
+            for (int k = 0; k < RULER_COUNT; k++) {
+                if (RULERS[k].from > G.year) continue;
+                if (cx + cw > x + w) { cx = x; y += chh + SC(34); }
+                int hv = hover(A_RULER, k);
+                portrait_box(RULERS[k].id, RULERS[k].name, cx, y, cw, chh, hv ? P.gold : P.line);
+                const wchar_t *sp = wcsrchr(RULERS[k].name, L' ');
+                d_ellipsis(cx - SC(4), y + chh + SC(3), cw + SC(8), sp ? sp + 1 : RULERS[k].name, F_TINY, P.ink);
+                wchar_t yr[24];
+                swprintf(yr, 24, L"%d–%d", RULERS[k].from, RULERS[k].to);
+                d_ellipsis(cx - SC(4), y + chh + SC(17), cw + SC(8), yr, F_TINY, P.muted);
+                hit(cx, y, cw, chh + SC(30), A_RULER, k);
+                cx += cw + gap;
+            }
+            y += chh + SC(40);
+        }
     }
     return y - y0 + SC(12);
 }
@@ -429,6 +474,7 @@ static int tab_log(int x, int y, int w)
         case LOG_ERA: ic = IC_CULT; c = P.red; break;
         case LOG_QUIZ: ic = IC_QUIZ; c = P.green; break;
         case LOG_ACH: ic = IC_CHECK; c = P.gold; break;
+        case LOG_QUEST: ic = IC_FLAG; c = P.red; break;
         default: ic = IC_POLIT; c = P.muted; break;
         }
         int h = d_wrap(x + SC(84), y, w - SC(84), e->text, F_SMALL, P.ink, 0);
@@ -561,6 +607,96 @@ static int tab_ach(int x, int y, int w)
     return y - y0 + SC(10);
 }
 
+/* ---------- задания ---------- */
+static int tab_quests(int x, int y, int w)
+{
+    int y0 = y;
+    int done = game_quest_count(&G, QS_DONE), act = game_quest_count(&G, QS_ACTIVE), fail = game_quest_count(&G, QS_FAILED);
+    wchar_t buf[400];
+    swprintf(buf, 400, L"Выполнено %d из %d · активных %d · провалено %d. Флажки на карте отмечают города, где ждут задания; награда приходит сразу.",
+             done, QUEST_COUNT, act, fail);
+    y += d_wrap(x, y, w, buf, F_SMALL, P.muted, 1) + SC(14);
+    section(x, &y, L"АКТИВНЫЕ ЗАДАНИЯ");
+    int next = game_next_year(&G), shown = 0;
+    for (int q = 0; q < QUEST_COUNT; q++) {
+        if (game_quest_state(&G, q) != QS_ACTIVE) continue;
+        const Quest *Q = &QUESTS[q];
+        wchar_t goal[200], rew[200];
+        quest_describe_goal(q, goal, 200);
+        quest_describe_reward(q, rew, 200);
+        int tw = w - SC(32);
+        int hd = d_wrap(0, 0, tw, Q->desc, F_SMALL, 0, 0);
+        int hg = d_wrap(0, 0, tw, goal, F_SMALL_B, 0, 0);
+        int ch = SC(12) + d_font_h(F_H3) + SC(4) + hg + SC(4) + hd + SC(10) + SC(8) + SC(8) + d_font_h(F_TINY) + SC(12);
+        int urgent = Q->deadline < next;
+        if (y + ch > U.panelY - SC(40) && y < U.panelY + U.panelH + SC(40)) {
+            d_rrect(x, y, w, ch, SC(6), card_fill(), urgent ? P.red : P.line);
+            d_fill(x + 1, y + SC(10), SC(4), ch - SC(20), urgent ? P.red : P.gold);
+            int tx = x + SC(16), ty = y + SC(12);
+            d_icon(IC_FLAG, tx, ty + SC(2), SC(16), P.red);
+            d_ellipsis(tx + SC(22), ty, tw - SC(150), Q->title, F_H3, P.ink);
+            /* срок */
+            wchar_t dl[64];
+            int left = Q->deadline - G.year;
+            if (urgent) swprintf(dl, 64, L"срок в этом ходу (%d)", Q->deadline);
+            else swprintf(dl, 64, L"до %d · %d лет", Q->deadline, left);
+            int dw = w_pill(x + w - SC(16) - d_text_w(dl, F_TINY) - SC(12), ty + SC(2), dl, urgent ? P.onAccent : P.ink, urgent ? P.red : P.surface2);
+            (void)dw;
+            ty += d_font_h(F_H3) + SC(4);
+            ty += d_wrap(tx, ty, tw, goal, F_SMALL_B, P.ink, 1) + SC(4);
+            ty += d_wrap(tx, ty, tw, Q->desc, F_SMALL, P.muted, 1) + SC(10);
+            /* прогресс */
+            double cur = 0, tgt = 1;
+            game_quest_progress(&G, q, &cur, &tgt);
+            double fr = tgt > 0 ? cur / tgt : 0;
+            if (fr > 1) fr = 1;
+            if (fr < 0) fr = 0;
+            int bw = tw - SC(150);
+            d_rrect(tx, ty, bw, SC(8), SC(4), P.surface2, CLR_INVALID);
+            if (fr > 0) d_rrect(tx, ty, (int)(bw * fr) > SC(8) ? (int)(bw * fr) : SC(8), SC(8), SC(4), P.green, CLR_INVALID);
+            wchar_t pr[64];
+            if (tgt <= 1.0 && Q->type != QT_POP && Q->type != QT_DEF && Q->type != QT_TECHN && Q->type != QT_CULT &&
+                Q->type != QT_ECO_AT && Q->type != QT_STAB) swprintf(pr, 64, L"%ls", cur >= tgt ? L"готово" : L"ещё не сделано");
+            else { wchar_t a[24], b[24]; fmt_num(cur, a, 24); fmt_num(tgt, b, 24); swprintf(pr, 64, L"%ls / %ls", a, b); }
+            d_text(tx + bw + SC(10), ty - SC(4), pr, F_TINY, P.muted);
+            ty += SC(16);
+            swprintf(buf, 400, L"Награда: %ls", rew);
+            d_ellipsis(tx, ty, tw - (Q->city >= 0 ? SC(120) : 0), buf, F_TINY, P.gold);
+            if (Q->city >= 0) {
+                int cx = x + w - SC(16) - SC(110);
+                int hv = hover(A_CITY, Q->city);
+                d_rrect(cx, ty - SC(4), SC(110), SC(22), SC(11), hv ? P.blueSoft : P.surface2, CLR_INVALID);
+                d_text_c(cx, ty - SC(1), SC(110), CITIES[Q->city].name, F_TINY, P.blue);
+                hit(cx, ty - SC(4), SC(110), SC(22), A_CITY, Q->city);
+            }
+        }
+        y += ch + SC(10);
+        shown++;
+    }
+    if (!shown) y += d_wrap(x, y, w, L"Активных заданий нет — новые откроются в следующей эпохе.", F_BODY, P.muted, 1) + SC(12);
+    for (int pass = 0; pass < 2; pass++) {
+        int st = pass == 0 ? QS_DONE : QS_FAILED;
+        if (!game_quest_count(&G, st)) continue;
+        y += SC(6);
+        section(x, &y, pass == 0 ? L"ВЫПОЛНЕННЫЕ" : L"ПРОВАЛЕННЫЕ");
+        for (int q = 0; q < QUEST_COUNT; q++) {
+            if (game_quest_state(&G, q) != st) continue;
+            wchar_t goal[200];
+            quest_describe_goal(q, goal, 200);
+            d_icon(pass == 0 ? IC_CHECK : IC_LOCK, x, y + SC(1), SC(16), pass == 0 ? P.green : P.muted);
+            d_ellipsis(x + SC(24), y, w - SC(24), QUESTS[q].title, F_SMALL_B, pass == 0 ? P.ink : P.muted);
+            d_ellipsis(x + SC(24), y + SC(18), w - SC(24), goal, F_TINY, P.muted);
+            y += SC(40);
+        }
+    }
+    int hidden = game_quest_count(&G, QS_HIDDEN);
+    if (hidden) {
+        swprintf(buf, 400, L"Ещё %d заданий откроются в следующих эпохах.", hidden);
+        y += SC(4) + d_wrap(x, y + SC(4), w, buf, F_SMALL, P.muted, 1);
+    }
+    return y - y0 + SC(14);
+}
+
 int tab_draw(int tab, int x, int y, int w, int h)
 {
     (void)h;
@@ -573,6 +709,7 @@ int tab_draw(int tab, int x, int y, int w, int h)
     case TAB_LOG:    return tab_log(x, y, w);
     case TAB_CHARTS: return tab_charts(x, y, w);
     case TAB_ACH:    return tab_ach(x, y, w);
+    case TAB_QUESTS: return tab_quests(x, y, w);
     }
     return 0;
 }

@@ -52,21 +52,22 @@ void d_ornament(int x, int y, int w, int cell, COLORREF a, COLORREF b);
 void d_icon(int kind, int x, int y, int s, COLORREF c);
 void d_bitmap(HDC src, int x, int y, int w, int h);
 void d_pie(int cx, int cy, int r, double frac, COLORREF fill);
+int  d_clip_get(int *x, int *y, int *w, int *h);   /* 1 — отсечение включено */
 HDC  d_dc(void);
 unsigned *d_bits(void);
 
 enum { IC_GOLD, IC_SCI, IC_IND, IC_POP, IC_STAB, IC_CULT, IC_ECO, IC_DEF,
-       IC_POLIT, IC_WAR, IC_DISASTER, IC_SPACE, IC_PERSON, IC_BUILD, IC_TECH, IC_QUIZ, IC_LOCK, IC_CHECK, IC_COUNT };
+       IC_POLIT, IC_WAR, IC_DISASTER, IC_SPACE, IC_PERSON, IC_BUILD, IC_TECH, IC_QUIZ, IC_LOCK, IC_CHECK, IC_FLAG, IC_CROWN, IC_COUNT };
 
 /* ---------- области нажатия ---------- */
 enum {
     A_NONE, A_NEW, A_CONTINUE, A_HELP, A_EXIT, A_DIFF, A_START, A_TAB, A_ERAF, A_RESEARCH, A_TECH,
     A_BUILD, A_PROJ, A_HIRE, A_PERSON, A_PRIORITY, A_QUIZ, A_END_TURN, A_CHOICE, A_NEXT, A_CLOSE,
     A_MENU, A_SAVE, A_LOAD, A_THEME, A_TO_TITLE, A_CITY, A_SELL, A_ERA_START, A_FINAL, A_ZOOM,
-    A_PFILTER, A_TIMELINE, A_SCROLLBAR, A_CREDITS
+    A_PFILTER, A_TIMELINE, A_SCROLLBAR, A_CREDITS, A_MAP_FULL, A_QUEST, A_RULER
 };
 /* области только для подсказок (без клика) */
-enum { A_HOVER_RES = 100, A_HOVER_ERA, A_HOVER_ACH, A_HOVER_STAT, A_HOVER_MIN };
+enum { A_HOVER_RES = 100, A_HOVER_ERA, A_HOVER_ACH, A_HOVER_STAT, A_HOVER_MIN, A_HOVER_SPRITE };
 void hit(int x, int y, int w, int h, int act, int arg);
 int  hover(int act, int arg);
 void hits_reset(void);
@@ -82,8 +83,8 @@ void w_scrollbar(int x, int y, int h, int content, int view, int scroll);
 
 /* ---------- состояние интерфейса ---------- */
 enum { SCR_TITLE, SCR_GAME };
-enum { M_NONE, M_EVENT, M_ERA, M_FINAL, M_HELP, M_MENU, M_NEWGAME, M_TECH, M_PROJ, M_PERSON, M_CITY, M_CREDITS };
-enum { TAB_TECH, TAB_PROJ, TAB_PEOPLE, TAB_POLICY, TAB_QUIZ, TAB_LOG, TAB_CHARTS, TAB_ACH, TAB_COUNT };
+enum { M_NONE, M_EVENT, M_ERA, M_FINAL, M_HELP, M_MENU, M_NEWGAME, M_TECH, M_PROJ, M_PERSON, M_CITY, M_CREDITS, M_MAP, M_RULER };
+enum { TAB_TECH, TAB_PROJ, TAB_PEOPLE, TAB_QUESTS, TAB_POLICY, TAB_QUIZ, TAB_LOG, TAB_CHARTS, TAB_ACH, TAB_COUNT };
 
 typedef struct {
     int screen, modal, modalArg, tab, eraFilter, projFilter;
@@ -130,13 +131,26 @@ void ui_minute_tick(void);
 
 /* ui_map.c */
 void map_draw(int x, int y, int w, int h, int interactive);
+void map_draw_ex(int x, int y, int w, int h, int interactive, int large);
 void map_invalidate(void);
+
+/* ui_art.c — встроенные рендеры Blender (карта, постройки, портреты) */
+typedef struct { int x, y, w, h; double s; int sx, sy; } MapXf;   /* экран = x + (px - sx) * s */
+int  art_map_available(void);
+int  art_map_draw(int x, int y, int w, int h, MapXf *xf);        /* 1 — нарисована 3D-карта */
+void art_map_point(const MapXf *xf, double px, double py, int *sx, int *sy);
+int  art_sprites_available(void);
+void art_sprite_draw(int sprite, int ax, int ay, int size, int alpha);  /* (ax,ay) — точка опоры модели */
+int  art_portrait_index(const char *id);                          /* -1, если портрета нет */
+void art_portrait_draw(int idx, int x, int y, int w, int h);      /* вписать в прямоугольник */
+int  landmark_sprite(int p);                                      /* ui_landmarks.c */
 
 /* ui_dev.c */
 void dev_scene(int n);
 
 /* ui_modal.c */
 void modal_draw(void);
+void portrait_box(const char *id, const wchar_t *initials, int x, int y, int w, int h, COLORREF ring);
 
 /* издатели */
 #define CREDIT_SCHOOL  L"Гимназия № 10 г. Минска"

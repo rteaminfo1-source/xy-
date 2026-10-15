@@ -90,3 +90,15 @@ int rulers_in_period(int year, int nextYear, int *out, int max)
         if (RULERS[i].from < nextYear && RULERS[i].to >= year) out[n++] = i;
     return n;
 }
+
+int ruler_at(int year)
+{
+    int best = -1;
+    for (int pass = 0; pass < 2 && best < 0; pass++)
+        for (int i = 0; i < RULER_COUNT; i++) {
+            if (RULERS[i].from > year || RULERS[i].to < year) continue;
+            if (pass == 0 && RULERS[i].state == ST_BSSR) continue;
+            if (best < 0 || RULERS[i].from > RULERS[best].from) best = i;
+        }
+    return best;
+}

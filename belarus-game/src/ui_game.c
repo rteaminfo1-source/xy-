@@ -1,5 +1,6 @@
 /* Экраны: титульный и игровой (шапка, лента эпох, карта, вкладки), ввод с мыши и клавиатуры. */
 #include "ui.h"
+#include "rulers.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -7,7 +8,7 @@
 int tab_draw(int tab, int x, int y, int w, int h);   /* ui_tabs.c */
 
 static const wchar_t *TAB_NAMES[TAB_COUNT] = {
-    L"Технологии", L"Стройки", L"Деятели", L"Курс", L"Летописец", L"Летопись", L"Графики", L"Награды"
+    L"Технологии", L"Стройки", L"Деятели", L"Задания", L"Курс", L"Летописец", L"Летопись", L"Графики", L"Награды"
 };
 
 /* ---------- общие помощники ---------- */
@@ -295,8 +296,27 @@ static void draw_map_panel(int x, int y, int w, int h)
 {
     d_rrect(x, y, w, h, SC(8), P.surface, P.line);
     int pad = SC(14);
-    d_ellipsis(x + pad, y + SC(10), w - 2 * pad, ERAS[G.era - 1].polity, F_ERA_M, P.ink);
-    d_text(x + pad, y + SC(10) + d_font_h(F_ERA_M), L"Карта земель · контур современной границы для ориентира", F_TINY, P.muted);
+    /* справа: кнопка «развернуть» и правитель эпохи */
+    int bw = SC(96), bx = x + w - pad - bw;
+    w_button(bx, y + SC(12), bw, SC(28), L"Развернуть", B_SECONDARY, 1, A_MAP_FULL, 0);
+    int titleR = bx - SC(10);
+    int ri = ruler_at(G.year);
+    if (ri >= 0 && w > SC(520)) {
+        const Ruler *R = &RULERS[ri];
+        int rw = SC(176), rx = bx - SC(10) - rw, ry = y + SC(8);
+        int ph = SC(44), pw = ph * 4 / 5;
+        int hv = hover(A_RULER, ri);
+        if (hv) d_rrect(rx - SC(4), ry - SC(2), rw + SC(8), ph + SC(4), SC(6), P.surface2, CLR_INVALID);
+        portrait_box(R->id, R->name, rx, ry, pw, ph, P.gold);
+        d_text(rx + pw + SC(8), ry + SC(4), L"Правит", F_TINY, P.muted);
+        d_ellipsis(rx + pw + SC(8), ry + SC(18), rw - pw - SC(10), R->name, F_SMALL_B, P.ink);
+        hit(rx - SC(4), ry - SC(2), rw + SC(8), ph + SC(4), A_RULER, ri);
+        titleR = rx - SC(10);
+    }
+    d_ellipsis(x + pad, y + SC(10), titleR - x - pad, ERAS[G.era - 1].polity, F_ERA_M, P.ink);
+    d_ellipsis(x + pad, y + SC(10) + d_font_h(F_ERA_M), titleR - x - pad,
+               art_map_available() ? L"3D-карта: постройки появляются у городов · флажки — задания" : L"Карта земель · контур современной границы для ориентира",
+               F_TINY, P.muted);
     int top = y + SC(16) + d_font_h(F_ERA_M) + d_font_h(F_TINY);
     int foot = SC(56);
     map_draw(x + 2, top, w - 4, h - (top - y) - foot, 1);
@@ -345,6 +365,8 @@ static void draw_tabs_panel(int x, int y, int w, int h)
         int dot = 0;
         if (i == TAB_QUIZ && !G.over && !G.quizAnswered) dot = 1;
         if (i == TAB_PEOPLE) for (int p = 0; p < PEOPLE_COUNT && !dot; p++) dot = game_person_state(&G, p) == HS_AVAILABLE;
+        if (i == TAB_QUESTS) for (int q = 0; q < QUEST_COUNT && !dot; q++)
+            dot = game_quest_state(&G, q) == QS_ACTIVE && QUESTS[q].deadline < game_next_year(&G);
         if (dot) d_circle(tx + tw - SC(5), ty + SC(6), SC(3), P.red, CLR_INVALID, 1);
         hit(tx, ty, tw, th, A_TAB, i);
         tx += tw + SC(2);
@@ -389,7 +411,7 @@ static void draw_game(void)
     int sy = g_h - statusH;
     d_fill(0, sy, g_w, statusH, P.surface);
     d_fill(0, sy, g_w, 1, P.line);
-    const wchar_t *keys = L"Enter — ход · 1–8 — вкладки · Ctrl+S — сохранить · Ctrl+колесо — масштаб · F1 — справка";
+    const wchar_t *keys = L"Enter — ход · 1–9 — вкладки · M — карта · Ctrl+S — сохранить · Ctrl+колесо — масштаб · F1 — справка";
     int kw = d_text_w(keys, F_TINY);
     d_text(g_w - pad - kw, sy + (statusH - d_font_h(F_TINY)) / 2, keys, F_TINY, P.muted);
     wchar_t def[200];
@@ -538,6 +560,9 @@ void ui_click(int act, int arg)
     }
     case A_ZOOM: ui_zoom(arg); break;
     case A_CREDITS: U.modal = M_CREDITS; U.modalScroll = 0; break;
+    case A_MAP_FULL: U.modal = M_MAP; break;
+    case A_QUEST: U.modal = M_NONE; U.tab = TAB_QUESTS; U.scroll[TAB_QUESTS] = 0; break;
+    case A_RULER: U.modal = M_RULER; U.modalArg = arg; U.modalScroll = 0; break;
     }
     ui_invalidate();
 }
@@ -563,7 +588,7 @@ void ui_key(WPARAM vk)
         return;
     }
     if (U.modal != M_NONE) {
-        if (vk == VK_ESCAPE || vk == VK_RETURN) close_modal();
+        if (vk == VK_ESCAPE || vk == VK_RETURN || (U.modal == M_MAP && vk == 'M')) close_modal();
         else if (vk == VK_DOWN || vk == VK_NEXT) { U.modalScroll += vk == VK_NEXT ? SC(300) : SC(40); ui_invalidate(); }
         else if (vk == VK_UP || vk == VK_PRIOR) { U.modalScroll -= vk == VK_PRIOR ? SC(300) : SC(40); if (U.modalScroll < 0) U.modalScroll = 0; ui_invalidate(); }
         return;
@@ -574,7 +599,8 @@ void ui_key(WPARAM vk)
     }
     if (vk == VK_RETURN) ui_click(G.over ? A_FINAL : A_END_TURN, 0);
     else if (vk == VK_ESCAPE || vk == VK_F10) ui_click(A_MENU, 0);
-    else if (vk >= '1' && vk <= '8') { U.tab = (int)(vk - '1'); ui_invalidate(); }
+    else if (vk >= '1' && vk <= '9') { U.tab = (int)(vk - '1'); ui_invalidate(); }
+    else if (vk == 'M') { U.modal = M_MAP; ui_invalidate(); }
     else if (vk == VK_TAB) { U.tab = (U.tab + (GetKeyState(VK_SHIFT) < 0 ? TAB_COUNT - 1 : 1)) % TAB_COUNT; ui_invalidate(); }
     else if (vk == VK_DOWN || vk == VK_NEXT || vk == VK_UP || vk == VK_PRIOR || vk == VK_HOME || vk == VK_END) {
         int d = vk == VK_DOWN ? SC(40) : vk == VK_UP ? -SC(40) : vk == VK_NEXT ? U.view - SC(40) : vk == VK_PRIOR ? -(U.view - SC(40)) : vk == VK_HOME ? -1000000 : 1000000;
@@ -648,6 +674,13 @@ void ui_hover_status(int act, int arg)
         swprintf(buf, 260, L"Минутный доход: каждую минуту игры +%d казны, +%d знаний, +%d производства. Растёт от эпохи к эпохе.",
                  b.gold, b.sci, b.ind);
     }
+    else if (act == A_QUEST && arg >= 0 && arg < QUEST_COUNT) {
+        wchar_t goal[200];
+        quest_describe_goal(arg, goal, 200);
+        swprintf(buf, 260, L"Задание «%ls»: %ls", QUESTS[arg].title, goal);
+    }
+    else if (act == A_RULER && arg >= 0 && arg < RULER_COUNT)
+        swprintf(buf, 260, L"%ls — %ls, %d–%d (%ls)", RULERS[arg].name, RULERS[arg].title, RULERS[arg].from, RULERS[arg].to, STATE_NAMES[RULERS[arg].state]);
     else if (act == A_HOVER_ACH && arg >= 0 && arg < ACH_COUNT)
         swprintf(buf, 260, L"%ls — %ls", ACHIEVEMENTS[arg].name, ACHIEVEMENTS[arg].desc);
     wcsncpy(U.status, buf, 259);

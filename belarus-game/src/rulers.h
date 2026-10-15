@@ -23,4 +23,7 @@ extern const int RULER_COUNT;
  * Возвращает количество найденных. */
 int rulers_in_period(int year, int nextYear, int *out, int max);
 
+/* Главный правитель в году year (не руководитель БССР, если есть союзный); -1 — междуцарствие или нет данных. */
+int ruler_at(int year);
+
 #endif

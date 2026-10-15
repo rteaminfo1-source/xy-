@@ -1,5 +1,6 @@
 /* Карта: контур, реки, болота и пущи рисуются в тройном разрешении и сглаживаются усреднением. */
 #include "ui.h"
+#include "map3d.h"
 #include <math.h>
 #include <string.h>
 
@@ -192,7 +193,7 @@ static int capital_of_era(int era)
     return -1;
 }
 
-void map_draw(int x, int y, int w, int h, int interactive)
+static void map_draw_flat(int x, int y, int w, int h, int interactive)
 {
     if (w < 40 || h < 40) return;
     int marsh = (U.screen == SCR_GAME ? (game_has_tech(&G, "drainage") + 2 * game_has_tech(&G, "land_reclamation")) : 0);
@@ -260,3 +261,119 @@ void map_draw(int x, int y, int w, int h, int interactive)
         if (interactive) hit(cx - SC(9), cy - SC(9), SC(18), SC(18), A_CITY, c);
     }
 }
+
+/* ---------- 3D-карта из Blender ---------- */
+typedef struct { int x, y, spr, proj; } Placed;
+
+/* Места для моделей вокруг города (в долях размера модели); центр оставлен самому городу */
+static const float SLOTS[][2] = {
+    {  0.62f, 0.08f }, { -0.62f, 0.08f }, {  0.00f, 0.42f }, {  1.20f, -0.20f }, { -1.20f, -0.20f },
+    {  0.60f, 0.76f }, { -0.60f, 0.76f }, {  1.22f,  0.50f }, { -1.22f,  0.50f }, {  0.00f, -0.46f },
+};
+
+static void city_point(const MapXf *xf, int c, int *sx, int *sy)
+{
+    double px, py;
+    if (!map3d_city(c, &px, &py) && !map3d_project(CITIES[c].lon, CITIES[c].lat, &px, &py)) { px = 0; py = 0; }
+    art_map_point(xf, px, py, sx, sy);
+}
+
+void map_draw_ex(int x, int y, int w, int h, int interactive, int large)
+{
+    MapXf xf;
+    if (!art_map_draw(x, y, w, h, &xf)) { map_draw_flat(x, y, w, h, interactive); return; }
+    int game = U.screen == SCR_GAME;
+    int size = (int)(xf.w * (large ? 0.050 : 0.078));
+    if (size < SC(30)) size = SC(30);
+    if (size > SC(large ? 116 : 76)) size = SC(large ? 116 : 76);
+    int maxPer = large ? (int)(sizeof SLOTS / sizeof SLOTS[0]) : 4;
+
+    int cx[C_COUNT_], cy[C_COUNT_], extra[C_COUNT_], avail[C_COUNT_], built[C_COUNT_];
+    static Placed pl[MAX_PROJ];
+    int np = 0;
+    for (int c = 0; c < CITY_COUNT; c++) {
+        city_point(&xf, c, &cx[c], &cy[c]);
+        extra[c] = avail[c] = built[c] = 0;
+    }
+    if (game)
+        for (int p = 0; p < PROJECT_COUNT; p++) {
+            int c = PROJECTS[p].city, st = game_proj_state(&G, p);
+            if (st == PS_AVAILABLE) avail[c]++;
+            if (st != PS_DONE) continue;
+            int spr = landmark_sprite(p);
+            if (spr >= 0 && built[c] < maxPer && np < MAX_PROJ) {
+                pl[np].x = cx[c] + (int)(SLOTS[built[c]][0] * size);
+                pl[np].y = cy[c] + (int)(SLOTS[built[c]][1] * size);
+                pl[np].spr = spr;
+                pl[np].proj = p;
+                np++;
+                built[c]++;
+            } else extra[c]++;
+        }
+    /* дальние (выше на экране) рисуются первыми */
+    for (int i = 1; i < np; i++) {
+        Placed v = pl[i];
+        int j = i - 1;
+        while (j >= 0 && pl[j].y > v.y) { pl[j + 1] = pl[j]; j--; }
+        pl[j + 1] = v;
+    }
+    for (int i = 0; i < np; i++) {
+        int hv = interactive && hover(A_PROJ, pl[i].proj);
+        art_sprite_draw(pl[i].spr, pl[i].x, pl[i].y, size, 255);
+        if (hv) d_circle(pl[i].x, pl[i].y, size / 3, CLR_INVALID, P.gold, 2);
+        if (interactive) hit(pl[i].x - size / 3, pl[i].y - size * 2 / 3, size * 2 / 3, size * 2 / 3 + SC(4), A_PROJ, pl[i].proj);
+    }
+
+    /* города: подписи (без наложений), кольца, флажки заданий */
+    int cap = game ? capital_of_era(G.era) : -1;
+    RECT used[C_COUNT_];
+    int nused = 0;
+    for (int pass = 0; pass < 2; pass++)
+    for (int c = 0; c < CITY_COUNT; c++) {
+        if ((pass == 0) != (CITIES[c].major != 0)) continue;
+        int quests = 0;
+        if (game)
+            for (int q = 0; q < QUEST_COUNT; q++)
+                if (QUESTS[q].city == c && game_quest_state(&G, q) == QS_ACTIVE) quests++;
+        int rel = game && (built[c] || extra[c] || avail[c] || quests);
+        if (!CITIES[c].major && !rel && !large) continue;
+        int px = cx[c], py = cy[c];
+        int hv = interactive && hover(A_CITY, c);
+        if (avail[c]) d_circle(px, py, SC(9), CLR_INVALID, P.blue, 2);
+        if (U.city == c || hv) d_circle(px, py, SC(12), CLR_INVALID, P.ink, 2);
+        if (c == cap) {
+            POINT dmd[5] = { { px, py - SC(6) }, { px + SC(6), py }, { px, py + SC(6) }, { px - SC(6), py }, { px, py - SC(6) } };
+            d_poly(dmd, 5, P.red, P.surface, 1);
+        }
+        if (interactive) hit(px - SC(11), py - SC(11), SC(22), SC(22), A_CITY, c);
+        int f = CITIES[c].major ? F_SMALL_B : F_TINY;
+        wchar_t lab[64];
+        if (extra[c]) swprintf(lab, 64, L"%ls +%d", CITIES[c].name, extra[c]);
+        else swprintf(lab, 64, L"%ls", CITIES[c].name);
+        int tw = d_text_w(lab, f), th = d_font_h(f);
+        /* кандидаты: над точкой, под ней, справа, слева */
+        int cand[4][2] = { { px - tw / 2, py - SC(14) - th }, { px - tw / 2, py + SC(10) },
+                           { px + SC(12), py - th / 2 }, { px - SC(12) - tw, py - th / 2 } };
+        int lx = 0, ly = 0, ok = 0;
+        for (int k = 0; k < 4 && !ok; k++) {
+            RECT r = { cand[k][0] - SC(4), cand[k][1] - SC(1), cand[k][0] + tw + SC(4), cand[k][1] + th + SC(1) };
+            int clash = 0;
+            for (int u = 0; u < nused && !clash; u++) { RECT o; clash = IntersectRect(&o, &r, &used[u]); }
+            if (!clash) { lx = cand[k][0]; ly = cand[k][1]; used[nused++] = r; ok = 1; }
+        }
+        if (!ok && !CITIES[c].major && !hv) continue;          /* мелкий город без места — без подписи */
+        if (!ok) { lx = cand[0][0]; ly = cand[0][1]; }
+        d_blend(lx - SC(4), ly - SC(1), tw + SC(8), th + SC(2), P.surface, 185);
+        d_text(lx, ly, lab, f, CITIES[c].major ? P.ink : P.muted);
+        for (int q = 0, k = 0; game && q < QUEST_COUNT; q++)
+            if (QUESTS[q].city == c && game_quest_state(&G, q) == QS_ACTIVE) {
+                int fx = lx - SC(20) - k * SC(16), fy = ly - SC(2);
+                d_icon(IC_FLAG, fx, fy, SC(16), P.red);
+                if (interactive) hit(fx, fy, SC(16), SC(18), A_QUEST, q);
+                k++;
+            }
+        if (interactive) hit(lx - SC(4), ly - SC(1), tw + SC(8), th + SC(2), A_CITY, c);
+    }
+}
+
+void map_draw(int x, int y, int w, int h, int interactive) { map_draw_ex(x, y, w, h, interactive, 0); }
