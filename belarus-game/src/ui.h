@@ -11,6 +11,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "game.h"
+#include "terrain3d.h"
 
 /* ---------- палитра ---------- */
 typedef struct {
@@ -65,8 +66,10 @@ enum {
     A_BUILD, A_PROJ, A_HIRE, A_PERSON, A_PRIORITY, A_QUIZ, A_END_TURN, A_CHOICE, A_NEXT, A_CLOSE,
     A_MENU, A_SAVE, A_LOAD, A_THEME, A_TO_TITLE, A_CITY, A_SELL, A_ERA_START, A_FINAL, A_ZOOM,
     A_PFILTER, A_TIMELINE, A_SCROLLBAR, A_CREDITS, A_MAP_FULL, A_QUEST, A_RULER,
-    A_RECRUIT, A_DISBAND, A_DECLARE, A_LIBERATE, A_PEACE, A_PROVINCE
+    A_RECRUIT, A_DISBAND, A_DECLARE, A_LIBERATE, A_PEACE, A_PROVINCE, A_MAP_CAM
 };
+/* кнопки камеры 3D-карты (аргумент A_MAP_CAM) */
+enum { MC_ZOOM_OUT, MC_ZOOM_IN, MC_ROT_LEFT, MC_ROT_RIGHT, MC_RESET, MC_TILT_UP, MC_TILT_DOWN };
 /* области только для подсказок (без клика) */
 enum { A_HOVER_RES = 100, A_HOVER_ERA, A_HOVER_ACH, A_HOVER_STAT, A_HOVER_MIN, A_HOVER_SPRITE, A_HOVER_REGION, A_HOVER_UNIT };
 void hit(int x, int y, int w, int h, int act, int arg);
@@ -105,6 +108,11 @@ typedef struct {
     int minuteMs;                /* накоплено до минутного дохода, мс */
     DWORD minuteLast;            /* время прошлого тика таймера */
     int panelX, panelY, panelW, panelH;
+    /* 3D-карта: камера и окно, в котором её сейчас можно крутить (заполняется при рисовании) */
+    T3Cam cam;
+    int camInit;
+    int mapVX, mapVY, mapVW, mapVH, mapVOn;
+    int mapFast;                 /* идёт вращение: рисуем без сглаживания */
 } UiState;
 
 extern Game G;
@@ -134,6 +142,12 @@ void ui_minute_tick(void);
 void map_draw(int x, int y, int w, int h, int interactive);
 void map_draw_ex(int x, int y, int w, int h, int interactive, int large);
 void map_invalidate(void);
+int  map3d_on(void);                         /* интерактивная 3D-карта доступна */
+void map_cam_action(int a);                  /* MC_* */
+void map_cam_rotate(double dyaw, double dpitch);
+void map_cam_pan(int fromX, int fromY, int toX, int toY);
+void map_cam_zoom_at(double factor, int sx, int sy);
+int  map_cam_hit(int x, int y);              /* точка внутри окна 3D-карты, где её можно крутить */
 
 /* ui_art.c — встроенные рендеры Blender (карта, постройки, портреты) */
 typedef struct { int x, y, w, h; double s; int sx, sy; } MapXf;   /* экран = x + (px - sx) * s */
@@ -144,6 +158,7 @@ int  art_sprites_available(void);
 void art_sprite_draw(int sprite, int ax, int ay, int size, int alpha);  /* (ax,ay) — точка опоры модели */
 int  art_portrait_index(const char *id);                          /* -1, если портрета нет */
 void art_portrait_draw(int idx, int x, int y, int w, int h);      /* вписать в прямоугольник */
+int  art_terrain_ready(void);                                     /* 1 — 3D-карта загружена */
 int  art_unit_index(const char *id);                              /* -1, если фигурки нет */
 void art_unit_draw(int idx, int x, int y, int w, int h);          /* 3D-фигурка войска, вписать в прямоугольник */
 

@@ -663,6 +663,16 @@ void ui_toggle_theme(void)
 }
 
 /* ---------- оконная процедура ---------- */
+/* перетаскивание 3D-карты: 1 — вращение (левая кнопка), 2 — сдвиг (правая) */
+static int s_drag, s_dragging, s_dragX0, s_dragY0, s_dragLX, s_dragLY;
+
+static void map_fast(HWND h)
+{
+    U.mapFast = 1;
+    SetTimer(h, 3, 220, NULL);      /* после паузы — перерисовать со сглаживанием */
+    ui_invalidate();
+}
+
 static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
 {
     switch (m) {
@@ -679,6 +689,7 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
             ensure_buffer(wdc);
             hits_reset();
             d_unclip();
+            U.mapVOn = 0;
             ui_paint();
             GdiFlush();
             BitBlt(wdc, 0, 0, g_w, g_h, s_dc, 0, 0, SRCCOPY);
@@ -686,8 +697,37 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
         EndPaint(h, &ps);
         return 0;
     }
+    case WM_LBUTTONDOWN:
+    case WM_RBUTTONDOWN: {
+        int x = (short)LOWORD(lp), y = (short)HIWORD(lp);
+        if (map_cam_hit(x, y)) {
+            s_drag = m == WM_LBUTTONDOWN ? 1 : 2;
+            s_dragging = 0;
+            s_dragX0 = s_dragLX = x;
+            s_dragY0 = s_dragLY = y;
+            SetCapture(h);
+        }
+        return 0;
+    }
+    case WM_RBUTTONUP:
+        if (s_drag) { s_drag = s_dragging = 0; ReleaseCapture(); ui_invalidate(); }
+        return 0;
+    case WM_CAPTURECHANGED:
+        if ((HWND)lp != h) s_drag = s_dragging = 0;
+        return 0;
     case WM_MOUSEMOVE: {
         int a, g2;
+        if (s_drag) {
+            int x = (short)LOWORD(lp), y = (short)HIWORD(lp);
+            if (!s_dragging && (abs(x - s_dragX0) > 4 || abs(y - s_dragY0) > 4)) s_dragging = 1;
+            if (s_dragging) {
+                if (s_drag == 1) map_cam_rotate((x - s_dragLX) * 0.35, (y - s_dragLY) * 0.25);
+                else map_cam_pan(s_dragLX, s_dragLY, x, y);
+                s_dragLX = x; s_dragLY = y;
+                map_fast(h);
+                return 0;
+            }
+        }
         hit_at((short)LOWORD(lp), (short)HIWORD(lp), &a, &g2);
         if (a != s_hovAct || g2 != s_hovArg) {
             s_hovAct = a; s_hovArg = g2;
@@ -711,6 +751,12 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
         break;
     case WM_LBUTTONUP: {
         int a, g2;
+        if (s_drag) {
+            int was = s_dragging;
+            s_drag = s_dragging = 0;
+            ReleaseCapture();
+            if (was) { ui_invalidate(); return 0; }      /* это было вращение, а не щелчок */
+        }
         if (hit_at((short)LOWORD(lp), (short)HIWORD(lp), &a, &g2) && a > 0 && a < A_HOVER_RES) ui_click(a, g2);
         /* после действия сетка областей меняется: пересчитаем подсветку */
         s_hovAct = s_hovArg = -1;
@@ -721,6 +767,10 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
         POINT pt = { (short)LOWORD(lp), (short)HIWORD(lp) };
         ScreenToClient(h, &pt);
         if (GetKeyState(VK_CONTROL) < 0) ui_zoom(GET_WHEEL_DELTA_WPARAM(wp) > 0 ? 10 : -10);
+        else if (map_cam_hit(pt.x, pt.y)) {
+            map_cam_zoom_at(pow(1.18, GET_WHEEL_DELTA_WPARAM(wp) / 120.0), pt.x, pt.y);
+            map_fast(h);
+        }
         else ui_wheel(GET_WHEEL_DELTA_WPARAM(wp), pt.x, pt.y);
         return 0;
     }
@@ -738,6 +788,7 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
         break;
     case WM_TIMER:
         if (wp == 2) { ui_minute_tick(); return 0; }
+        if (wp == 3) { KillTimer(h, 3); U.mapFast = 0; ui_invalidate(); return 0; }
         if (GetTickCount() > U.toastUntil) { U.toast[0] = 0; KillTimer(h, 1); }
         ui_invalidate();
         return 0;

@@ -316,6 +316,7 @@ static void draw_map_panel(int x, int y, int w, int h)
     }
     d_ellipsis(x + pad, y + SC(10), titleR - x - pad, ERAS[G.era - 1].polity, F_ERA_M, P.ink);
     d_ellipsis(x + pad, y + SC(10) + d_font_h(F_ERA_M), titleR - x - pad,
+               map3d_on() ? L"3D-карта: колесо — ближе, мышь — повернуть · флажки — задания" :
                art_map_available() ? L"3D-карта: постройки появляются у городов · флажки — задания" : L"Карта земель · контур современной границы для ориентира",
                F_TINY, P.muted);
     int top = y + SC(16) + d_font_h(F_ERA_M) + d_font_h(F_TINY);
@@ -594,6 +595,7 @@ void ui_click(int act, int arg)
     }
     case A_PEACE: { int lib = G.warKind == WAR_LIBERATION; war_peace(&G); ui_toast(L"%ls", lib ? L"Операция остановлена: область остаётся под оккупацией" : L"Поход окончен: войска вернулись без победы"); map_invalidate(); break; }
     case A_PROVINCE: U.modal = M_NONE; U.tab = TAB_ARMY; break;
+    case A_MAP_CAM: map_cam_action(arg); U.mapFast = 0; break;
     }
     ui_invalidate();
 }
@@ -617,6 +619,12 @@ void ui_key(WPARAM vk)
         else if (vk == VK_ESCAPE) close_modal();
         ui_invalidate();
         return;
+    }
+    if (U.modal == M_MAP && map3d_on()) {   /* клавиши камеры на большой карте */
+        int a = vk == VK_LEFT ? MC_ROT_LEFT : vk == VK_RIGHT ? MC_ROT_RIGHT : vk == VK_UP ? MC_TILT_UP : vk == VK_DOWN ? MC_TILT_DOWN :
+                vk == VK_OEM_PLUS || vk == VK_ADD ? MC_ZOOM_IN : vk == VK_OEM_MINUS || vk == VK_SUBTRACT ? MC_ZOOM_OUT :
+                vk == VK_HOME ? MC_RESET : -1;
+        if (a >= 0) { map_cam_action(a); ui_invalidate(); return; }
     }
     if (U.modal != M_NONE) {
         if (vk == VK_ESCAPE || vk == VK_RETURN || (U.modal == M_MAP && vk == 'M')) close_modal();
@@ -726,6 +734,12 @@ void ui_hover_status(int act, int arg)
         swprintf(buf, 260, L"%ls (центр — %ls): %ls", REGION_NAMES[arg], CITIES[REGION_CITY[arg]].name,
                  occ ? L"под оккупацией, сила врага слабеет с каждым годом" : L"свободна");
     } else if (act == A_PEACE) swprintf(buf, 260, L"%ls", G.warKind == WAR_LIBERATION ? L"Остановить операцию: область останется под оккупацией до новой попытки или операции «Багратион»." : L"Закончить поход без победы: войска вернутся, стабильность немного упадёт.");
+    else if (act == A_MAP_CAM && arg >= 0 && arg <= MC_TILT_DOWN) {
+        static const wchar_t *H[7] = { L"Отдалить карту (колесо мыши вниз)", L"Приблизить карту (колесо мыши вверх)",
+            L"Повернуть карту влево (или тяните левой кнопкой мыши)", L"Повернуть карту вправо (или тяните левой кнопкой мыши)",
+            L"Показать всю страну сверху-сбоку, как вначале", L"Смотреть сильнее сверху", L"Смотреть ниже, сбоку" };
+        swprintf(buf, 260, L"%ls", H[arg]);
+    }
     else if (act == A_HOVER_STAT && arg >= 20 && arg <= 23) {
         static const wchar_t *H[4] = {
             L"Сколько соединений в строю и сколько можно содержать: предел растёт с населением.",

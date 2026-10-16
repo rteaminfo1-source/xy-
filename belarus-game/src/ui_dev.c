@@ -106,6 +106,15 @@ void dev_scene(int n)
         break;
     }
     case 27: play_until(1700); resolve(&G); U.modal = M_CITY; U.modalArg = C_SLUTSK; break;  /* профиль города */
+    case 28: case 29: case 30: {                                                     /* 3D-карта: поворот, наклон, приближение */
+        play_until(n == 30 ? 1986 : 1700); resolve(&G);
+        t3d_cam_reset(&U.cam); U.camInit = 1;
+        if (n == 28) { U.cam.yaw = 35; U.cam.pitch = 38; }
+        if (n == 29) { U.cam.yaw = 330; U.cam.pitch = 30; U.cam.zoom = 3.2; t3d_lonlat(27.56, 53.90, &U.cam.tx, &U.cam.ty); }
+        if (n == 30) { U.cam.yaw = 200; U.cam.pitch = 22; U.cam.zoom = 1.25; }
+        if (n != 28) U.modal = M_MAP;
+        break;
+    }
     }
     if (U.screen == SCR_GAME) {
         U.eraFilter = G.era;

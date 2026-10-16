@@ -6,6 +6,7 @@
     assets/sprites.png   + sprites.json     ->  res/sprites.qoi    (RCDATA 3)
     assets/portraits.png + portraits.json   ->  res/portraits.qoi  (RCDATA 4)
     assets/units.png     + units.json       ->  res/units.qoi      (RCDATA 5)
+    assets/terrain.png + terrain_h.png + terrain.json -> res/terrain.qoi, res/terrain_h.qoi (RCDATA 6, 7)
 
 а также src/assets_gen.h (размеры, сетка проекции карты, ячейки атласов) и
 res/assets.rc (строки RCDATA только для имеющихся ассетов; app.rc его включает).
@@ -31,8 +32,8 @@ from array import array
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-RES_IDS = {'map3d': 2, 'sprites': 3, 'portraits': 4, 'units': 5}
-ATTR = {'map3d': 'map', 'sprites': 'spr', 'portraits': 'por', 'units': 'uni'}
+RES_IDS = {'map3d': 2, 'sprites': 3, 'portraits': 4, 'units': 5, 'terrain': 6, 'terrain_h': 7}
+ATTR = {'map3d': 'map', 'sprites': 'spr', 'portraits': 'por', 'units': 'uni', 'terrain': 'ter'}
 
 
 # ---------------------------------------------------------------- QOI ----
@@ -158,7 +159,7 @@ class Pack:
     def __init__(self, root, assets, res, header):
         self.root, self.assets, self.res, self.header = root, assets, res, header
         self.cities = parse_cities(root)
-        self.map = self.spr = self.por = self.uni = None
+        self.map = self.spr = self.por = self.uni = self.ter = None
         self.notes = []
 
     def _qoi(self, name, png):
@@ -274,6 +275,22 @@ class Pack:
     def do_units(self):
         self.uni = self._id_atlas('units')
 
+    # --- интерактивная 3D-карта: вид сверху, высоты, контур плиты ---
+    def do_terrain(self):
+        if not self._have('terrain.png', 'terrain_h.png', 'terrain.json'):
+            return
+        js = self._json('terrain.json')
+        tex = os.path.join(self.assets, 'terrain.png')
+        hgt = os.path.join(self.assets, 'terrain_h.png')
+        tw, th = png_size(tex)
+        nx, ny = png_size(hgt)
+        outline = [(float(p[0]), float(p[1]), float(p[2])) for p in js.get('outline', [])]
+        if len(outline) < 3:
+            raise ValueError('terrain.json: нет контура плиты')
+        self.ter = dict(w=tw, h=th, nx=nx, ny=ny, x0=float(js['x0']), y0=float(js['y0']),
+                        x1=float(js['x1']), y1=float(js['y1']), zb=float(js.get('zbottom', -22.0)),
+                        outline=outline, qoi=self._qoi('terrain', tex), qoi_h=self._qoi('terrain_h', hgt))
+
     def _id_atlas(self, name):
         if not self._have(name + '.png', name + '.json'):
             return None
@@ -301,21 +318,21 @@ class Pack:
                     qoi=self._qoi(name, png))
 
     def _all(self):
-        return [(name, getattr(self, ATTR[name])) for name in ('map3d', 'sprites', 'portraits', 'units')]
+        return [(name, getattr(self, ATTR[name])) for name in ('map3d', 'sprites', 'portraits', 'units', 'terrain')]
 
     def run(self):
         os.makedirs(self.res, exist_ok=True)
         for name, fn in (('map3d', self.do_map), ('sprites', self.do_sprites), ('portraits', self.do_portraits),
-                         ('units', self.do_units)):
+                         ('units', self.do_units), ('terrain', self.do_terrain)):
             try:
                 fn()
             except Exception as e:          # битый ассет не должен ломать сборку
                 print('pack_assets: %s пропущен: %s' % (name, e), file=sys.stderr)
                 setattr(self, ATTR[name], None)
         for name, have in self._all():
-            stale = os.path.join(self.res, name + '.qoi')
-            if not have and os.path.exists(stale):
-                os.remove(stale)
+            for stale in [os.path.join(self.res, name + '.qoi')] + ([os.path.join(self.res, 'terrain_h.qoi')] if name == 'terrain' else []):
+                if not have and os.path.exists(stale):
+                    os.remove(stale)
         write_if_changed(self.header, header_text(self))
         write_if_changed(os.path.join(self.res, 'assets.rc'), rc_text(self))
         for name, d in self._all():
@@ -347,10 +364,11 @@ def _rows(items, per):
 
 
 def header_text(p):
-    m, s, q, u = p.map, p.spr, p.por, p.uni
+    m, s, q, u, t = p.map, p.spr, p.por, p.uni, p.ter
     ncity = len(p.cities) or (len(m['city']) if m else 1)
     L = ['/* assets_gen.h — СГЕНЕРИРОВАНО tools/pack_assets.py, НЕ РЕДАКТИРОВАТЬ (do not edit).',
-         ' * Встроенные рендеры Blender: RCDATA 2 = map3d.qoi, 3 = sprites.qoi, 4 = portraits.qoi, 5 = units.qoi.',
+         ' * Встроенные рендеры Blender: RCDATA 2 = map3d.qoi, 3 = sprites.qoi, 4 = portraits.qoi, 5 = units.qoi,',
+         ' * 6 = terrain.qoi (вид сверху), 7 = terrain_h.qoi (высоты).',
          ' * Если ассета нет, ASSETS_HAVE_* = 0, а остальные определения — безопасные заглушки. */',
          '#ifndef ASSETS_GEN_H', '#define ASSETS_GEN_H', '']
     L += ['/* ---- 3D-карта: пиксели точек сетки (lon0 + i*step, lat0 + j*step), индекс j*NLON + i ---- */',
@@ -407,6 +425,22 @@ def header_text(p):
     else:
         L += ['#define UNIT_CELL_W 1', '#define UNIT_CELL_H 1', '#define UNIT_COLS 1',
               '#define UNIT_ATLAS_COUNT 0', 'static const char *const UNIT_IDS[1] = {""};']
+    L += ['', '/* ---- 3D-карта: прямоугольник (км), сетка высот, низ плиты и контур её борта (x, y, верх) ---- */',
+          '#define ASSETS_HAVE_TERRAIN %d' % (1 if t else 0)]
+    if t:
+        L += ['#define TERRAIN_X0 %s' % _d(round(t['x0'], 4)), '#define TERRAIN_Y0 %s' % _d(round(t['y0'], 4)),
+              '#define TERRAIN_X1 %s' % _d(round(t['x1'], 4)), '#define TERRAIN_Y1 %s' % _d(round(t['y1'], 4)),
+              '#define TERRAIN_TEX_W %d' % t['w'], '#define TERRAIN_TEX_H %d' % t['h'],
+              '#define TERRAIN_NX %d' % t['nx'], '#define TERRAIN_NY %d' % t['ny'],
+              '#define TERRAIN_ZBOTTOM %s' % _d(t['zb']),
+              '#define TERRAIN_OUTLINE_N %d' % len(t['outline']),
+              'static const float TERRAIN_OUTLINE[TERRAIN_OUTLINE_N][3] = {',
+              _rows(['{%s, %s, %s}' % (_f(x), _f(y), _f(z)) for x, y, z in t['outline']], 4), '};']
+    else:
+        L += ['#define TERRAIN_X0 -320.0', '#define TERRAIN_Y0 -272.0', '#define TERRAIN_X1 317.0', '#define TERRAIN_Y1 275.0',
+              '#define TERRAIN_TEX_W 1', '#define TERRAIN_TEX_H 1', '#define TERRAIN_NX 2', '#define TERRAIN_NY 2',
+              '#define TERRAIN_ZBOTTOM -22.0', '#define TERRAIN_OUTLINE_N 1',
+              'static const float TERRAIN_OUTLINE[1][3] = {{0.0f, 0.0f, 0.0f}};']
     L += ['', '#endif', '']
     return '\n'.join(L)
 
@@ -416,6 +450,8 @@ def rc_text(p):
     for name, d in p._all():
         if d:
             L.append('%d RCDATA "%s.qoi"' % (RES_IDS[name], name))
+            if name == 'terrain':
+                L.append('%d RCDATA "terrain_h.qoi"' % RES_IDS['terrain_h'])
     return '\n'.join(L) + '\n'
 
 

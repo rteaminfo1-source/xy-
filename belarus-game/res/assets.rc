@@ -3,3 +3,5 @@
 3 RCDATA "sprites.qoi"
 4 RCDATA "portraits.qoi"
 5 RCDATA "units.qoi"
+6 RCDATA "terrain.qoi"
+7 RCDATA "terrain_h.qoi"

@@ -10,7 +10,8 @@
 typedef struct { int w, h; unsigned *px; } Image;    /* px: w*h, построчно сверху вниз */
 
 /* Идентификаторы RCDATA (res/assets.rc генерирует tools/pack_assets.py). */
-enum { RES_MAP3D_QOI = 2, RES_SPRITES_QOI = 3, RES_PORTRAITS_QOI = 4, RES_UNITS_QOI = 5 };
+enum { RES_MAP3D_QOI = 2, RES_SPRITES_QOI = 3, RES_PORTRAITS_QOI = 4, RES_UNITS_QOI = 5,
+       RES_TERRAIN_QOI = 6, RES_TERRAIN_H_QOI = 7 };
 
 /* Полный декодер QOI (3 или 4 канала). Устойчив к обрезанным и испорченным данным:
  * никогда не читает за пределы буфера. 1 — успех (out заполнен, освобождать

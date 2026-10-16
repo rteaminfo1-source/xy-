@@ -4,6 +4,7 @@
 #include "war.h"
 #include <math.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define SS 3
 #define LATC 0.5920   /* cos(53.7°) */
@@ -186,11 +187,29 @@ static int city_relevant(int c)
     return 0;
 }
 
-/* ---------- слой войны: земли, цель похода, оккупация ---------- */
-typedef struct { const MapXf *xf; int ox, oy; int x, y, w, h; double pxPerKm; int size; } MapProj;
+/* ---------- проекция: 3D-карта, готовый рендер или плоская карта ---------- */
+typedef struct {
+    const MapXf *xf;          /* готовая картинка Blender */
+    const T3View *v;          /* интерактивная 3D-карта */
+    int ox, oy;               /* смещение окна вывода */
+    int x, y, w, h;           /* окно вывода */
+    double pxPerKm;           /* масштаб у цели (3D) или везде (2D) */
+    int size;                 /* базовый размер моделей построек */
+} MapProj;
 
-static int proj_pt(const MapProj *pj, double lon, double lat, int *sx, int *sy)
+/* точка lon/lat на земле; k — пикселей на километр в этой точке */
+static int proj_ll(const MapProj *pj, double lon, double lat, double zAdd, int *sx, int *sy, double *k)
 {
+    if (k) *k = pj->pxPerKm;
+    if (pj->v) {
+        double X, Y, fx, fy, depth;
+        t3d_lonlat(lon, lat, &X, &Y);
+        if (!t3d_project(pj->v, X, Y, t3d_height(X, Y) + zAdd, &fx, &fy, &depth)) return 0;
+        *sx = pj->ox + (int)lround(fx);
+        *sy = pj->oy + (int)lround(fy);
+        if (k) *k = pj->v->f / depth;
+        return 1;
+    }
     if (pj->xf) {
         double px, py;
         if (!map3d_project(lon, lat, &px, &py)) return 0;
@@ -202,6 +221,8 @@ static int proj_pt(const MapProj *pj, double lon, double lat, int *sx, int *sy)
     return 1;
 }
 
+
+/* ---------- слой войны: земли, цель похода, оккупация ---------- */
 static void war_overlay(const MapProj *pj, int interactive, int large)
 {
     if (U.screen != SCR_GAME) return;
@@ -214,9 +235,10 @@ static void war_overlay(const MapProj *pj, int interactive, int large)
         /* кольцо вокруг центра области (модели построек остаются видны) и значок на кольце */
         for (int r = 0; r < REGION_COUNT; r++) {
             int c = REGION_CITY[r], sx, sy;
-            if (!proj_pt(pj, CITIES[c].lon, CITIES[c].lat, &sx, &sy)) continue;
+            double k;
+            if (!proj_ll(pj, CITIES[c].lon, CITIES[c].lat, 0.5, &sx, &sy, &k)) continue;
             int occ = (G.occupied >> r) & 1u, target = G.warKind == WAR_LIBERATION && G.warTarget == r;
-            int ring = pj->size * 11 / 10;
+            int ring = (int)(pj->size * 11 / 10 * (pj->v ? pow(k / pj->pxPerKm, 0.7) : 1.0));
             if (ring < SC(26)) ring = SC(26);
             COLORREF ac = target ? P.red : occ ? RGB(150, 40, 34) : P.green;
             d_circle(sx, sy, ring, CLR_INVALID, ac, target ? 4 : 2);
@@ -238,12 +260,15 @@ static void war_overlay(const MapProj *pj, int interactive, int large)
         int target = G.warKind == WAR_CONQUEST && G.warTarget == p;
         if (st != PV_OWNED && st != PV_AVAILABLE && !target) continue;
         int sx, sy;
-        if (!proj_pt(pj, PROVINCES[p].lon, PROVINCES[p].lat, &sx, &sy)) continue;
+        double k;
+        if (!proj_ll(pj, PROVINCES[p].lon, PROVINCES[p].lat, 0.5, &sx, &sy, &k)) continue;
+        /* на 3D-карте земля за краем кадра просто не видна; на плоской — прижимается к краю */
+        if (pj->v && (sx < pj->x || sx > pj->x + pj->w || sy < pj->y || sy > pj->y + pj->h)) continue;
         if (sx < pj->x + pad) sx = pj->x + pad;
         if (sx > pj->x + pj->w - pad) sx = pj->x + pj->w - pad;
         if (sy < pj->y + pad) sy = pj->y + pad;
         if (sy > pj->y + pj->h - pad) sy = pj->y + pj->h - pad;
-        int rr = (int)(PROVINCES[p].radiusKm * 0.55 * pj->pxPerKm);
+        int rr = (int)(PROVINCES[p].radiusKm * 0.55 * k);
         int rmax = large ? SC(64) : SC(30);
         if (rr > rmax) rr = rmax;
         if (rr < SC(12)) rr = SC(12);
@@ -337,12 +362,12 @@ static void map_draw_flat(int x, int y, int w, int h, int interactive)
         d_text(lx, ly, CITIES[c].name, f, CITIES[c].major ? P.ink : P.muted);
         if (interactive) hit(cx - SC(9), cy - SC(9), SC(18), SC(18), A_CITY, c);
     }
-    MapProj pj = { 0, x, y, x, y, w, h, s_k / 111.0, SC(20) };
+    MapProj pj = { 0, 0, x, y, x, y, w, h, s_k / 111.0, SC(20) };
     war_overlay(&pj, interactive, w > SC(900));
 }
 
-/* ---------- 3D-карта из Blender ---------- */
-typedef struct { int x, y, spr, proj; } Placed;
+/* ---------- модели построек, подписи городов, флажки заданий (поверх любой карты) ---------- */
+typedef struct { int x, y, spr, proj, size; double depth; } Placed;
 
 /* Места для моделей вокруг города (в долях размера модели); центр оставлен самому городу */
 static const float SLOTS[][2] = {
@@ -350,28 +375,47 @@ static const float SLOTS[][2] = {
     {  0.60f, 0.76f }, { -0.60f, 0.76f }, {  1.22f,  0.50f }, { -1.22f,  0.50f }, {  0.00f, -0.46f },
 };
 
-static void city_point(const MapXf *xf, int c, int *sx, int *sy)
+/* центр города; k — пикселей на км, depth — удалённость (для 3D), 0 — город не виден */
+static int proj_city(const MapProj *pj, int c, int *sx, int *sy, double *k, double *depth)
 {
+    *depth = 0;
+    if (pj->v) {
+        double X, Y, fx, fy, d;
+        t3d_lonlat(CITIES[c].lon, CITIES[c].lat, &X, &Y);
+        if (!t3d_project(pj->v, X, Y, t3d_height(X, Y) + 0.3, &fx, &fy, &d)) return 0;
+        *sx = pj->ox + (int)lround(fx);
+        *sy = pj->oy + (int)lround(fy);
+        *k = pj->v->f / d;
+        *depth = d;
+        /* за краем окна — не рисуем (с запасом под модели) */
+        int m = pj->size * 2;
+        return *sx > pj->x - m && *sx < pj->x + pj->w + m && *sy > pj->y - m && *sy < pj->y + pj->h + m;
+    }
     double px, py;
     if (!map3d_city(c, &px, &py) && !map3d_project(CITIES[c].lon, CITIES[c].lat, &px, &py)) { px = 0; py = 0; }
-    art_map_point(xf, px, py, sx, sy);
+    art_map_point(pj->xf, px, py, sx, sy);
+    *k = pj->pxPerKm;
+    *depth = 1000.0 - *sy;            /* чем ниже на картинке, тем ближе */
+    return 1;
 }
 
-void map_draw_ex(int x, int y, int w, int h, int interactive, int large)
+static void map_overlays(const MapProj *pj, int interactive, int large)
 {
-    MapXf xf;
-    if (!art_map_draw(x, y, w, h, &xf)) { map_draw_flat(x, y, w, h, interactive); return; }
     int game = U.screen == SCR_GAME;
-    int size = (int)(xf.w * (large ? 0.050 : 0.078));
-    if (size < SC(30)) size = SC(30);
-    if (size > SC(large ? 116 : 76)) size = SC(large ? 116 : 76);
     int maxPer = large ? (int)(sizeof SLOTS / sizeof SLOTS[0]) : 4;
-
-    int cx[C_COUNT_], cy[C_COUNT_], extra[C_COUNT_], avail[C_COUNT_], built[C_COUNT_];
+    int cx[C_COUNT_], cy[C_COUNT_], vis[C_COUNT_], csz[C_COUNT_], extra[C_COUNT_], avail[C_COUNT_], built[C_COUNT_];
+    double cdepth[C_COUNT_];
     static Placed pl[MAX_PROJ];
     int np = 0;
+    int smax = SC(large ? 170 : 110), smin = SC(18);
     for (int c = 0; c < CITY_COUNT; c++) {
-        city_point(&xf, c, &cx[c], &cy[c]);
+        double k = pj->pxPerKm;
+        vis[c] = proj_city(pj, c, &cx[c], &cy[c], &k, &cdepth[c]);
+        /* модели растут при приближении, но медленнее, чем земля под ними */
+        double sc = pj->v ? pow(k / pj->pxPerKm, 0.7) : 1.0;
+        csz[c] = (int)(pj->size * sc);
+        if (csz[c] < smin) csz[c] = smin;
+        if (csz[c] > smax) csz[c] = smax;
         extra[c] = avail[c] = built[c] = 0;
     }
     if (game)
@@ -381,26 +425,30 @@ void map_draw_ex(int x, int y, int w, int h, int interactive, int large)
             if (st != PS_DONE) continue;
             int spr = landmark_sprite(p);
             if (spr >= 0 && built[c] < maxPer && np < MAX_PROJ) {
-                pl[np].x = cx[c] + (int)(SLOTS[built[c]][0] * size);
-                pl[np].y = cy[c] + (int)(SLOTS[built[c]][1] * size);
-                pl[np].spr = spr;
-                pl[np].proj = p;
-                np++;
+                if (vis[c]) {
+                    pl[np].x = cx[c] + (int)(SLOTS[built[c]][0] * csz[c]);
+                    pl[np].y = cy[c] + (int)(SLOTS[built[c]][1] * csz[c]);
+                    pl[np].spr = spr;
+                    pl[np].proj = p;
+                    pl[np].size = csz[c];
+                    pl[np].depth = cdepth[c] - SLOTS[built[c]][1] * 0.01;
+                    np++;
+                }
                 built[c]++;
             } else extra[c]++;
         }
-    /* дальние (выше на экране) рисуются первыми */
+    /* дальние рисуются первыми */
     for (int i = 1; i < np; i++) {
         Placed v = pl[i];
         int j = i - 1;
-        while (j >= 0 && pl[j].y > v.y) { pl[j + 1] = pl[j]; j--; }
+        while (j >= 0 && pl[j].depth < v.depth) { pl[j + 1] = pl[j]; j--; }
         pl[j + 1] = v;
     }
     for (int i = 0; i < np; i++) {
         int hv = interactive && hover(A_PROJ, pl[i].proj);
-        art_sprite_draw(pl[i].spr, pl[i].x, pl[i].y, size, 255);
-        if (hv) d_circle(pl[i].x, pl[i].y, size / 3, CLR_INVALID, P.gold, 2);
-        if (interactive) hit(pl[i].x - size / 3, pl[i].y - size * 2 / 3, size * 2 / 3, size * 2 / 3 + SC(4), A_PROJ, pl[i].proj);
+        art_sprite_draw(pl[i].spr, pl[i].x, pl[i].y, pl[i].size, 255);
+        if (hv) d_circle(pl[i].x, pl[i].y, pl[i].size / 3, CLR_INVALID, P.gold, 2);
+        if (interactive) hit(pl[i].x - pl[i].size / 3, pl[i].y - pl[i].size * 2 / 3, pl[i].size * 2 / 3, pl[i].size * 2 / 3 + SC(4), A_PROJ, pl[i].proj);
     }
 
     /* города: подписи (без наложений), кольца, флажки заданий */
@@ -409,6 +457,7 @@ void map_draw_ex(int x, int y, int w, int h, int interactive, int large)
     int nused = 0;
     for (int pass = 0; pass < 2; pass++)
     for (int c = 0; c < CITY_COUNT; c++) {
+        if (!vis[c]) continue;
         if ((pass == 0) != (CITIES[c].major != 0)) continue;
         int quests = 0;
         if (game)
@@ -453,8 +502,189 @@ void map_draw_ex(int x, int y, int w, int h, int interactive, int large)
             }
         if (interactive) hit(lx - SC(4), ly - SC(1), tw + SC(8), th + SC(2), A_CITY, c);
     }
-    MapProj pj = { &xf, 0, 0, xf.x, xf.y, xf.w, xf.h, map3d_px_per_km() * xf.s, size };
-    war_overlay(&pj, interactive, large);
+    war_overlay(pj, interactive, large);
+}
+
+/* ---------- старая картинка Blender (если 3D-карты нет) ---------- */
+static void map_draw_art(int x, int y, int w, int h, int interactive, int large)
+{
+    MapXf xf;
+    if (!art_map_draw(x, y, w, h, &xf)) { map_draw_flat(x, y, w, h, interactive); return; }
+    int size = (int)(xf.w * (large ? 0.050 : 0.078));
+    if (size < SC(30)) size = SC(30);
+    if (size > SC(large ? 116 : 76)) size = SC(large ? 116 : 76);
+    MapProj pj = { &xf, 0, 0, 0, xf.x, xf.y, xf.w, xf.h, map3d_px_per_km() * xf.s, size };
+    map_overlays(&pj, interactive, large);
+}
+
+/* ---------- интерактивная 3D-карта ---------- */
+typedef struct { unsigned *px; int w, h, ss, cap; T3Cam cam; unsigned bg; } MapCache;
+static MapCache s_mc[2];                    /* 0 — панель, 1 — карта во весь экран */
+
+int map3d_on(void) { return art_terrain_ready(); }
+
+static void cam_init(void)
+{
+    if (!U.camInit) { t3d_cam_reset(&U.cam); U.camInit = 1; }
+}
+
+static void blit_rows(const unsigned *src, int w, int h, int x, int y)
+{
+    unsigned *dst = d_bits();
+    int cx = 0, cy = 0, cw = g_w, ch = g_h;
+    if (!d_clip_get(&cx, &cy, &cw, &ch)) { cx = 0; cy = 0; cw = g_w; ch = g_h; }
+    int x0 = x > cx ? x : cx, y0 = y > cy ? y : cy;
+    int x1 = x + w < cx + cw ? x + w : cx + cw, y1 = y + h < cy + ch ? y + h : cy + ch;
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 > g_w) x1 = g_w;
+    if (y1 > g_h) y1 = g_h;
+    if (x1 <= x0 || y1 <= y0) return;
+    GdiFlush();
+    for (int yy = y0; yy < y1; yy++)
+        memcpy(dst + (size_t)yy * g_w + x0, src + (size_t)(yy - y) * w + (x0 - x), sizeof(unsigned) * (size_t)(x1 - x0));
+}
+
+static unsigned rgb_dib(COLORREF c) { return (unsigned)GetRValue(c) << 16 | (unsigned)GetGValue(c) << 8 | GetBValue(c); }
+
+static void render_cached(int slot, const T3View *v, int x, int y)
+{
+    MapCache *mc = &s_mc[slot];
+    int w = v->w, h = v->h;
+    int ss = U.mapFast || (double)w * h > 1.1e6 ? 1 : 2;     /* на очень больших окнах сглаживание дорого */
+    unsigned bg = rgb_dib(mix(P.surface, P.bg, 120));
+    if (!mc->px || mc->w != w || mc->h != h || mc->ss < ss || mc->bg != bg || memcmp(&mc->cam, &U.cam, sizeof U.cam)) {
+        if (w * h > mc->cap) {
+            free(mc->px);
+            mc->px = malloc(sizeof(unsigned) * (size_t)w * h);
+            mc->cap = mc->px ? w * h : 0;
+        }
+        if (!mc->px) return;
+        t3d_render(v, mc->px, w, bg, ss);
+        mc->w = w; mc->h = h; mc->ss = ss; mc->bg = bg; mc->cam = U.cam;
+    }
+    blit_rows(mc->px, w, h, x, y);
+}
+
+/* кнопки камеры: −, +, ‹, ›, сброс */
+static void map_controls(int x, int y, int w, int h, int large)
+{
+    static const wchar_t *L[5] = { L"\x2212", L"+", L"\x2039", L"\x203A", L"\x2302" };
+    static const int A[5] = { MC_ZOOM_OUT, MC_ZOOM_IN, MC_ROT_LEFT, MC_ROT_RIGHT, MC_RESET };
+    int bs = SC(large ? 32 : 26), gap = SC(4), n = 5;
+    int bx = x + w - n * (bs + gap) - SC(6), by = y + h - bs - SC(8);
+    for (int i = 0; i < n; i++) {
+        int px = bx + i * (bs + gap);
+        int hv = hover(A_MAP_CAM, A[i]);
+        d_rrect(px, by, bs, bs, SC(6), hv ? P.surface2 : mix(P.surface, P.bg, 60), P.line);
+        if (A[i] == MC_RESET) {
+            /* домик — «показать всю страну» */
+            int cxp = px + bs / 2, cyp = by + bs / 2;
+            POINT roof[4] = { { cxp - SC(7), cyp }, { cxp, cyp - SC(7) }, { cxp + SC(7), cyp }, { cxp - SC(7), cyp } };
+            d_poly(roof, 4, P.ink, CLR_INVALID, 1);
+            d_fill(cxp - SC(5), cyp, SC(10), SC(6), P.ink);
+        } else d_text_c(px, by + (bs - d_font_h(F_H3)) / 2, bs, L[i], F_H3, P.ink);
+        hit(px, by, bs, bs, A_MAP_CAM, A[i]);
+    }
+    if (large) {
+        const wchar_t *hint = L"Колесо — ближе/дальше · левая кнопка — повернуть и наклонить · правая — сдвинуть · стрелки, +/−, Home";
+        int tw = d_text_w(hint, F_TINY);
+        d_blend(x + SC(8), by + bs / 2 - d_font_h(F_TINY) / 2 - SC(3), tw + SC(12), d_font_h(F_TINY) + SC(6), P.surface, 170);
+        d_text(x + SC(14), by + bs / 2 - d_font_h(F_TINY) / 2, hint, F_TINY, P.muted);
+    }
+}
+
+static void map_draw_3d(int x, int y, int w, int h, int interactive, int large)
+{
+    cam_init();
+    T3View v;
+    t3d_view(&U.cam, w, h, &v);
+    render_cached(large ? 1 : 0, &v, x, y);
+    int size = (int)(w * (large ? 0.050 : 0.078));
+    if (size < SC(30)) size = SC(30);
+    if (size > SC(large ? 116 : 76)) size = SC(large ? 116 : 76);
+    MapProj pj = { 0, &v, x, y, x, y, w, h, v.f / v.dist, size };
+    int clipped = 0, ocx, ocy, ocw, och;
+    if (!d_clip_get(&ocx, &ocy, &ocw, &och)) { d_clip(x, y, w, h); clipped = 1; }
+    hits_clip(x, y, w, h);
+    /* всё окно карты — место для вращения (только верхний слой: панель без окон поверх или карта во весь экран) */
+    if (interactive && ((large && U.modal == M_MAP) || (!large && U.modal == M_NONE))) {
+        U.mapVX = x; U.mapVY = y; U.mapVW = w; U.mapVH = h; U.mapVOn = 1;
+    }
+    map_overlays(&pj, interactive, large);
+    if (interactive) map_controls(x, y, w, h, large);
+    hits_unclip();
+    if (clipped) d_unclip();
+}
+
+void map_draw_ex(int x, int y, int w, int h, int interactive, int large)
+{
+    if (w < 40 || h < 40) return;
+    if (!large && U.modal == M_MAP && map3d_on()) { d_fill(x, y, w, h, P.surface); return; }   /* под картой во весь экран — не видно */
+    if (map3d_on()) map_draw_3d(x, y, w, h, interactive, large);
+    else map_draw_art(x, y, w, h, interactive, large);
 }
 
 void map_draw(int x, int y, int w, int h, int interactive) { map_draw_ex(x, y, w, h, interactive, 0); }
+
+/* ---------- управление камерой ---------- */
+int map_cam_hit(int x, int y)
+{
+    return U.mapVOn && map3d_on() && x >= U.mapVX && x < U.mapVX + U.mapVW && y >= U.mapVY && y < U.mapVY + U.mapVH;
+}
+
+void map_cam_rotate(double dyaw, double dpitch)
+{
+    cam_init();
+    U.cam.yaw += dyaw;
+    U.cam.pitch += dpitch;
+    t3d_cam_clamp(&U.cam);
+}
+
+void map_cam_pan(int fromX, int fromY, int toX, int toY)
+{
+    cam_init();
+    if (!U.mapVOn) return;
+    T3View v;
+    t3d_view(&U.cam, U.mapVW, U.mapVH, &v);
+    double ax, ay, bx, by;
+    if (!t3d_unproject(&v, fromX - U.mapVX, fromY - U.mapVY, 9.0, &ax, &ay)) return;
+    if (!t3d_unproject(&v, toX - U.mapVX, toY - U.mapVY, 9.0, &bx, &by)) return;
+    U.cam.tx -= bx - ax;
+    U.cam.ty -= by - ay;
+    t3d_cam_clamp(&U.cam);
+}
+
+void map_cam_zoom_at(double factor, int sx, int sy)
+{
+    cam_init();
+    if (!U.mapVOn) { U.cam.zoom *= factor; t3d_cam_clamp(&U.cam); return; }
+    T3View v;
+    t3d_view(&U.cam, U.mapVW, U.mapVH, &v);
+    double ax, ay, bx, by;
+    int ok = t3d_unproject(&v, sx - U.mapVX, sy - U.mapVY, 9.0, &ax, &ay);
+    U.cam.zoom *= factor;
+    t3d_cam_clamp(&U.cam);
+    /* точка под курсором остаётся под курсором */
+    t3d_view(&U.cam, U.mapVW, U.mapVH, &v);
+    if (ok && t3d_unproject(&v, sx - U.mapVX, sy - U.mapVY, 9.0, &bx, &by)) {
+        U.cam.tx += ax - bx;
+        U.cam.ty += ay - by;
+        t3d_cam_clamp(&U.cam);
+    }
+}
+
+void map_cam_action(int a)
+{
+    cam_init();
+    switch (a) {
+    case MC_ZOOM_IN:  U.cam.zoom *= 1.35; break;
+    case MC_ZOOM_OUT: U.cam.zoom /= 1.35; break;
+    case MC_ROT_LEFT: U.cam.yaw -= 30; break;
+    case MC_ROT_RIGHT: U.cam.yaw += 30; break;
+    case MC_TILT_UP:  U.cam.pitch += 8; break;
+    case MC_TILT_DOWN: U.cam.pitch -= 8; break;
+    case MC_RESET:    t3d_cam_reset(&U.cam); break;
+    }
+    t3d_cam_clamp(&U.cam);
+}

@@ -212,3 +212,21 @@ void art_unit_draw(int idx, int x, int y, int w, int h)
     hit->tick = s_tick;
     blit_clipped(&hit->img, x + (w - dw) / 2, y + (h - dh) / 2, 255);
 }
+
+/* ---------- интерактивная 3D-карта ---------- */
+static int s_terTried, s_terOk;
+
+int art_terrain_ready(void)
+{
+    if (!s_terTried) {
+        s_terTried = 1;
+#if ASSETS_HAVE_TERRAIN
+        Image tex = { 0 }, hm = { 0 };
+        if (image_load_resource(RES_TERRAIN_QOI, &tex) && image_load_resource(RES_TERRAIN_H_QOI, &hm))
+            s_terOk = t3d_init(&tex, &hm);
+        image_free(&tex);
+        image_free(&hm);
+#endif
+    }
+    return s_terOk;
+}
