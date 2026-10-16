@@ -734,6 +734,7 @@ void ui_hover_status(int act, int arg)
         swprintf(buf, 260, L"%ls (центр — %ls): %ls", REGION_NAMES[arg], CITIES[REGION_CITY[arg]].name,
                  occ ? L"под оккупацией, сила врага слабеет с каждым годом" : L"свободна");
     } else if (act == A_PEACE) swprintf(buf, 260, L"%ls", G.warKind == WAR_LIBERATION ? L"Остановить операцию: область останется под оккупацией до новой попытки или операции «Багратион»." : L"Закончить поход без победы: войска вернутся, стабильность немного упадёт.");
+    else if (act == A_HOVER_BATTLE && G.warReport[0]) swprintf(buf, 260, L"%ls", G.warReport);
     else if (act == A_MAP_CAM && arg >= 0 && arg <= MC_TILT_DOWN) {
         static const wchar_t *H[7] = { L"Отдалить карту (колесо мыши вниз)", L"Приблизить карту (колесо мыши вверх)",
             L"Повернуть карту влево (или тяните левой кнопкой мыши)", L"Повернуть карту вправо (или тяните левой кнопкой мыши)",

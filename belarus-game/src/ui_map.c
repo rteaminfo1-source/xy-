@@ -223,6 +223,176 @@ static int proj_ll(const MapProj *pj, double lon, double lat, double zAdd, int *
 
 
 /* ---------- слой войны: земли, цель похода, оккупация ---------- */
+static void km_ll(double X, double Y, double *lon, double *lat) { *lon = 28.0 + X / 65.95; *lat = 53.7 + Y / 111.32; }
+
+/* точка мира (км) с высотой Z над ней — для дуги стрелки; на 2D-картах высота не учитывается */
+static int proj_xyz(const MapProj *pj, double X, double Y, double Z, int *sx, int *sy, double *k)
+{
+    if (pj->v) {
+        double fx, fy, d;
+        if (!t3d_project(pj->v, X, Y, Z, &fx, &fy, &d)) return 0;
+        *sx = pj->ox + (int)lround(fx);
+        *sy = pj->oy + (int)lround(fy);
+        if (k) *k = pj->v->f / d;
+        return 1;
+    }
+    double lon, lat;
+    km_ll(X, Y, &lon, &lat);
+    return proj_ll(pj, lon, lat, 0, sx, sy, k);
+}
+
+/* самое сильное войско игрока — его фигурку несёт стрелка похода */
+static int lead_unit(void)
+{
+    int best = -1;
+    double bv = 0;
+    for (int u = 0; u < UNIT_COUNT && u < MAX_UNITS; u++)
+        if (G.units[u] > 0) {
+            double v = G.units[u] * UNIT_TYPES[u].atk * war_unit_eff(&G, u);
+            if (v > bv) { bv = v; best = u; }
+        }
+    return best;
+}
+
+/* стрелка наступления от S к E (км): дуга над землёй, пройденная часть — ярче, на фронте — войско */
+static void war_arrow(const MapProj *pj, double sx0, double sy0, double ex0, double ey0, double progress, int large)
+{
+    enum { N = 28 };
+    POINT pt[N + 1];
+    int ok[N + 1];
+    double kk[N + 1];
+    double len = sqrt((ex0 - sx0) * (ex0 - sx0) + (ey0 - sy0) * (ey0 - sy0));
+    /* на 2D-картах дугу даёт боковой изгиб */
+    double nx = -(ey0 - sy0) / (len > 1e-9 ? len : 1), ny = (ex0 - sx0) / (len > 1e-9 ? len : 1);
+    for (int i = 0; i <= N; i++) {
+        double t = (double)i / N, X = sx0 + (ex0 - sx0) * t, Y = sy0 + (ey0 - sy0) * t;
+        double Z = 7.0, bend = sin(3.14159265 * t);
+        if (pj->v) { double hz = t3d_height(X, Y); Z = (hz > 3.0 ? hz : 3.0) + 2.0 + len * 0.10 * bend; }
+        else { X += nx * len * 0.12 * bend; Y += ny * len * 0.12 * bend; }
+        int x, y;
+        ok[i] = proj_xyz(pj, X, Y, Z, &x, &y, &kk[i]);
+        pt[i].x = x; pt[i].y = y;
+    }
+    int th = large ? SC(7) : SC(5);
+    int done = (int)(N * (progress < 0 ? 0 : progress > 1 ? 1 : progress) + 0.5);
+    COLORREF dark = RGB(60, 16, 12), red = P.red, pale = mix(P.red, P.surface, 130);
+    for (int i = 0; i < N; i++) {
+        if (!ok[i] || !ok[i + 1]) continue;
+        d_line(pt[i].x, pt[i].y, pt[i + 1].x, pt[i + 1].y, dark, th + SC(3));
+    }
+    for (int i = 0; i < N; i++) {
+        if (!ok[i] || !ok[i + 1]) continue;
+        if (i < done) d_line(pt[i].x, pt[i].y, pt[i + 1].x, pt[i + 1].y, red, th);
+        else if (i % 2 == 0) d_line(pt[i].x, pt[i].y, pt[i + 1].x, pt[i + 1].y, pale, th - SC(1) > 1 ? th - SC(1) : 1);
+    }
+    /* наконечник */
+    if (ok[N] && ok[N - 2]) {
+        double dx = pt[N].x - pt[N - 2].x, dy = pt[N].y - pt[N - 2].y, d = sqrt(dx * dx + dy * dy);
+        if (d > 0.5) {
+            dx /= d; dy /= d;
+            double a = th * 2.6;
+            POINT tri[4] = { { pt[N].x + (int)(dx * a * 0.6), pt[N].y + (int)(dy * a * 0.6) },
+                             { pt[N].x - (int)(dx * a) - (int)(dy * a * 0.8), pt[N].y - (int)(dy * a) + (int)(dx * a * 0.8) },
+                             { pt[N].x - (int)(dx * a) + (int)(dy * a * 0.8), pt[N].y - (int)(dy * a) - (int)(dx * a * 0.8) },
+                             { pt[N].x + (int)(dx * a * 0.6), pt[N].y + (int)(dy * a * 0.6) } };
+            d_poly(tri, 4, done >= N ? red : pale, dark, 1);
+        }
+    }
+    /* фигурка войска на линии фронта */
+    int f = done < 1 ? 1 : done > N - 1 ? N - 1 : done;
+    int u = lead_unit();
+    if (u >= 0 && ok[f]) {
+        int idx = art_unit_index(UNIT_TYPES[u].id);
+        int sz = (int)((large ? SC(70) : SC(48)) * (pj->v ? pow(kk[f] / pj->pxPerKm, 0.6) : 1.0));
+        if (sz < SC(30)) sz = SC(30);
+        if (sz > SC(130)) sz = SC(130);
+        if (idx >= 0) art_unit_draw(idx, pt[f].x - sz / 2, pt[f].y - sz * 9 / 10, sz, sz);
+        else {
+            d_circle(pt[f].x, pt[f].y, SC(11), P.surface, red, 2);
+            d_icon(IC_WAR, pt[f].x - SC(8), pt[f].y - SC(8), SC(16), red);
+        }
+    }
+}
+
+/* «вспышка» на месте последнего боя */
+static void battle_mark(const MapProj *pj, int interactive, int large)
+{
+    if (G.battleTurn != G.turn || G.over) return;
+    int sx, sy;
+    double k;
+    if (!proj_ll(pj, G.battleLon, G.battleLat, 1.0, &sx, &sy, &k)) return;
+    if (sx < pj->x || sx > pj->x + pj->w || sy < pj->y || sy > pj->y + pj->h) return;
+    int r = large ? SC(20) : SC(14);
+    POINT star[17];
+    for (int i = 0; i < 16; i++) {
+        double a = i * 3.14159265 / 8, rr = i % 2 ? r * 0.55 : r;
+        star[i].x = sx + (int)(cos(a) * rr);
+        star[i].y = sy - r / 2 + (int)(sin(a) * rr);
+    }
+    star[16] = star[0];
+    COLORREF c = G.battleWon ? RGB(236, 180, 60) : RGB(214, 64, 44);
+    d_poly(star, 17, c, RGB(60, 16, 12), 1);
+    d_icon(IC_WAR, sx - r / 2, sy - r, r, RGB(40, 16, 12));
+    const wchar_t *lab = G.battleWon ? L"бой: победа" : L"бой: поражение";
+    int f = large ? F_SMALL_B : F_TINY, tw = d_text_w(lab, f), th = d_font_h(f);
+    int lx = sx - tw / 2, ly = sy + r / 2 + SC(4);
+    d_rrect(lx - SC(5), ly - SC(2), tw + SC(10), th + SC(4), SC(4), P.surface, c);
+    d_text(lx, ly, lab, f, G.battleWon ? P.ink : P.red);
+    if (interactive) hit(sx - r, sy - r * 3 / 2, r * 2, r * 2 + th + SC(8), A_HOVER_BATTLE, 0);
+}
+
+/* террасы земель для 3D-карты (и их провинции — для обводки); key — подпись состояния для кэша */
+static T3Blob s_blobs[MAX_PROVINCES];
+static int    s_blobProv[MAX_PROVINCES], s_nblobs;
+
+static int build_blobs(T3Blob *out, int max, unsigned *key)
+{
+    static const float INTERIOR[6][2] = { { -80, 40 }, { 60, -20 }, { -20, 110 }, { 110, 80 }, { -150, -60 }, { 20, -120 } };
+    int n = 0;
+    unsigned h = 2166136261u;
+    if (U.screen != SCR_GAME) { *key = 0; return 0; }
+    for (int p = 0; p < PROVINCE_COUNT && n < max; p++) {
+        int st = war_province_state(&G, p);
+        int target = G.warKind == WAR_CONQUEST && G.warTarget == p;
+        int dup = !G.provOwned[p] && war_group_owner(&G, p) >= 0;
+        if (dup || (st != PV_OWNED && st != PV_AVAILABLE && !target)) continue;
+        T3Blob *b = &out[n];
+        s_blobProv[n] = p;
+        double X, Y;
+        t3d_lonlat(PROVINCES[p].lon, PROVINCES[p].lat, &X, &Y);
+        double R = PROVINCES[p].radiusKm * 1.1;
+        double bx, by;
+        t3d_outline_nearest(X, Y, &bx, &by);
+        double dir0 = atan2(by - Y, bx - X);
+        unsigned hs = (unsigned)p * 2654435761u + 12345u;
+        double ph1 = (hs % 628) / 100.0, ph2 = ((hs >> 10) % 628) / 100.0, ph3 = ((hs >> 20) % 628) / 100.0;
+        b->cx = (float)X; b->cy = (float)Y;
+        b->n = 40;
+        for (int i = 0; i < b->n; i++) {
+            double th = 2 * 3.14159265358979 * i / b->n;
+            double r = R * (1 + 0.12 * sin(3 * th + ph1) + 0.07 * sin(5 * th + ph2) + 0.05 * sin(8 * th + ph3));
+            /* в сторону Беларуси земля дотягивается до плиты и уходит под неё — но только если граница
+             * близко: луч вдоль границы встретит её далеко, и земля расползлась бы на соседние страны */
+            if (cos(th - dir0) > 0.7) {
+                double d = t3d_outline_hit(X, Y, cos(th), sin(th));
+                if (d > 0 && d < R * 1.7 && d + 25 > r) r = d + 25;
+            }
+            b->x[i] = (float)(X + cos(th) * r);
+            b->y[i] = (float)(Y + sin(th) * r);
+        }
+        b->top = (float)(3.4 - 0.07 * n);
+        const float *ip = INTERIOR[p % 6];
+        b->ux = ip[0] - (float)X; b->uy = ip[1] - (float)Y;
+        if (target) { b->tint[0] = 1.18f; b->tint[1] = 0.74f; b->tint[2] = 0.64f; b->grey = 0.25f; }
+        else if (st == PV_OWNED) { b->tint[0] = 1.10f; b->tint[1] = 1.00f; b->tint[2] = 0.72f; b->grey = 0.0f; }
+        else { b->tint[0] = 0.92f; b->tint[1] = 0.95f; b->tint[2] = 1.0f; b->grey = 0.8f; }
+        h = (h ^ (unsigned)(p * 4 + (target ? 3 : st == PV_OWNED ? 2 : 1))) * 16777619u;
+        n++;
+    }
+    *key = h ^ (unsigned)n;
+    return n;
+}
+
 static void war_overlay(const MapProj *pj, int interactive, int large)
 {
     if (U.screen != SCR_GAME) return;
@@ -254,6 +424,26 @@ static void war_overlay(const MapProj *pj, int interactive, int large)
             if (interactive) hit(bx - rr, by - rr, rr * 2, rr * 2, A_HOVER_REGION, r);
         }
     }
+    /* на 3D-карте — обводка террас земель (только снаружи Беларуси, под плитой её не видно) */
+    if (pj->v)
+        for (int b = 0; b < s_nblobs; b++) {
+            const T3Blob *bl = &s_blobs[b];
+            int p = s_blobProv[b], st = war_province_state(&G, p);
+            int target = G.warKind == WAR_CONQUEST && G.warTarget == p;
+            COLORREF ac = target ? P.red : st == PV_OWNED ? RGB(232, 190, 70) : RGB(150, 170, 200);
+            int th = target || st == PV_OWNED ? (large ? 4 : 3) : 2;
+            int px0 = 0, py0 = 0, ok0 = 0;
+            for (int i = 0; i <= bl->n; i++) {
+                int k = i % bl->n, x1, y1;
+                int in = t3d_inside(bl->x[k], bl->y[k]);
+                int ok1 = !in && proj_xyz(pj, bl->x[k], bl->y[k], bl->top, &x1, &y1, 0);
+                if (ok0 && ok1) {
+                    if (st != PV_OWNED && !target && (i & 1)) { /* пунктир: доступна для похода */ }
+                    else d_line(px0, py0, x1, y1, ac, th);
+                }
+                px0 = x1; py0 = y1; ok0 = ok1;
+            }
+        }
     /* земли: свои, доступные для похода, цель похода */
     for (int p = 0; p < PROVINCE_COUNT; p++) {
         int st = war_province_state(&G, p);
@@ -273,8 +463,10 @@ static void war_overlay(const MapProj *pj, int interactive, int large)
         if (rr > rmax) rr = rmax;
         if (rr < SC(12)) rr = SC(12);
         COLORREF ac = target ? P.red : st == PV_OWNED ? P.gold : P.blue;
-        d_circle(sx, sy, rr, CLR_INVALID, ac, target ? 3 : 2);
-        if (st == PV_OWNED) d_circle(sx, sy, rr - SC(4), CLR_INVALID, mix(P.gold, P.surface, 120), 1);
+        if (!pj->v) {   /* на 3D-карте земля видна террасой */
+            d_circle(sx, sy, rr, CLR_INVALID, ac, target ? 3 : 2);
+            if (st == PV_OWNED) d_circle(sx, sy, rr - SC(4), CLR_INVALID, mix(P.gold, P.surface, 120), 1);
+        }
         wchar_t lab[96];
         if (target) swprintf(lab, 96, L"%ls · поход %d%%", PROVINCES[p].name, G.warProgress < 0 ? 0 : G.warProgress);
         else if (st == PV_OWNED) swprintf(lab, 96, L"%ls", PROVINCES[p].name);
@@ -292,6 +484,22 @@ static void war_overlay(const MapProj *pj, int interactive, int large)
         d_text(lx, ly, lab, f, P.ink);
         if (interactive) hit(lx - SC(22), ly - SC(3), tw + SC(30), th + SC(6), A_PROVINCE, p);
     }
+    /* стрелка идущей войны */
+    if (G.warKind == WAR_CONQUEST && G.warTarget >= 0 && G.warTarget < PROVINCE_COUNT) {
+        double X, Y, bx, by, mx, my;
+        t3d_lonlat(PROVINCES[G.warTarget].lon, PROVINCES[G.warTarget].lat, &X, &Y);
+        t3d_outline_nearest(X, Y, &bx, &by);
+        double dl = sqrt(bx * bx + by * by);           /* от границы чуть вглубь страны */
+        mx = bx - bx / (dl > 1 ? dl : 1) * 45.0;
+        my = by - by / (dl > 1 ? dl : 1) * 45.0;
+        war_arrow(pj, mx, my, X, Y, G.warProgress / 100.0, large);
+    } else if (G.warKind == WAR_LIBERATION && G.warTarget >= 0 && G.warTarget < REGION_COUNT) {
+        double X, Y;
+        const City *c = &CITIES[REGION_CITY[G.warTarget]];
+        t3d_lonlat(c->lon, c->lat, &X, &Y);
+        war_arrow(pj, X + 150.0, Y + 20.0, X, Y, G.warProgress / 100.0, large);   /* фронт идёт с востока */
+    }
+    battle_mark(pj, interactive, large);
     if (clipped) d_unclip();
 }
 
@@ -518,7 +726,7 @@ static void map_draw_art(int x, int y, int w, int h, int interactive, int large)
 }
 
 /* ---------- интерактивная 3D-карта ---------- */
-typedef struct { unsigned *px; int w, h, ss, cap; T3Cam cam; unsigned bg; } MapCache;
+typedef struct { unsigned *px; int w, h, ss, cap; T3Cam cam; unsigned bg, extra; } MapCache;
 static MapCache s_mc[2];                    /* 0 — панель, 1 — карта во весь экран */
 
 int map3d_on(void) { return art_terrain_ready(); }
@@ -547,13 +755,13 @@ static void blit_rows(const unsigned *src, int w, int h, int x, int y)
 
 static unsigned rgb_dib(COLORREF c) { return (unsigned)GetRValue(c) << 16 | (unsigned)GetGValue(c) << 8 | GetBValue(c); }
 
-static void render_cached(int slot, const T3View *v, int x, int y)
+static void render_cached(int slot, const T3View *v, int x, int y, unsigned extra)
 {
     MapCache *mc = &s_mc[slot];
     int w = v->w, h = v->h;
     int ss = U.mapFast || (double)w * h > 1.1e6 ? 1 : 2;     /* на очень больших окнах сглаживание дорого */
     unsigned bg = rgb_dib(mix(P.surface, P.bg, 120));
-    if (!mc->px || mc->w != w || mc->h != h || mc->ss < ss || mc->bg != bg || memcmp(&mc->cam, &U.cam, sizeof U.cam)) {
+    if (!mc->px || mc->w != w || mc->h != h || mc->ss < ss || mc->bg != bg || mc->extra != extra || memcmp(&mc->cam, &U.cam, sizeof U.cam)) {
         if (w * h > mc->cap) {
             free(mc->px);
             mc->px = malloc(sizeof(unsigned) * (size_t)w * h);
@@ -561,7 +769,7 @@ static void render_cached(int slot, const T3View *v, int x, int y)
         }
         if (!mc->px) return;
         t3d_render(v, mc->px, w, bg, ss);
-        mc->w = w; mc->h = h; mc->ss = ss; mc->bg = bg; mc->cam = U.cam;
+        mc->w = w; mc->h = h; mc->ss = ss; mc->bg = bg; mc->cam = U.cam; mc->extra = extra;
     }
     blit_rows(mc->px, w, h, x, y);
 }
@@ -599,7 +807,10 @@ static void map_draw_3d(int x, int y, int w, int h, int interactive, int large)
     cam_init();
     T3View v;
     t3d_view(&U.cam, w, h, &v);
-    render_cached(large ? 1 : 0, &v, x, y);
+    unsigned key;
+    s_nblobs = build_blobs(s_blobs, MAX_PROVINCES, &key);
+    t3d_set_blobs(s_blobs, s_nblobs);
+    render_cached(large ? 1 : 0, &v, x, y, key);
     int size = (int)(w * (large ? 0.050 : 0.078));
     if (size < SC(30)) size = SC(30);
     if (size > SC(large ? 116 : 76)) size = SC(large ? 116 : 76);

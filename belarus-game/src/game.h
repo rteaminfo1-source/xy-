@@ -304,6 +304,11 @@ typedef struct {
     int    unitsLost;                 /* потеряно соединений */
     int    warNews;                   /* 1 — в этом ходу был бой: интерфейс покажет сводку */
     wchar_t warReport[200];           /* итог последнего боя */
+    /* --- версия 6: место последнего боя для карты --- */
+    float  battleLon, battleLat;      /* где был бой */
+    int    battleTurn;                /* ход, в котором его показывать (-1 — нет) */
+    int    battleWon;                 /* 1 — победа, 0 — поражение */
+    int    battleKind;                /* WAR_* (0 — набег или осада) */
 } Game;
 
 /* Флаги исторических решений */
@@ -413,8 +418,8 @@ void quest_describe_goal(int q, wchar_t *buf, int n);               /* «Изу�
 void quest_describe_reward(int q, wchar_t *buf, int n);             /* «казна +22 · знания +8 · культура +8» */
 
 int  game_save(const Game *g, FILE *f);
-int  game_load(Game *g, FILE *f);   /* принимает и сохранения версий 3 и 4 */
+int  game_load(Game *g, FILE *f);   /* принимает и сохранения версий 3, 4 и 5 */
 
-#define GAME_VERSION 5
+#define GAME_VERSION 6
 
 #endif

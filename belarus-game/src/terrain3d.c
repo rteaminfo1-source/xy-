@@ -289,9 +289,61 @@ typedef struct { float x, y, z, a, b, c; } VV;       /* вершина в коо
 static int s_rw, s_rh;                               /* размер рабочего буфера */
 static double s_f, s_cx, s_cy;
 
-enum { M_TERRAIN, M_WALL };
+enum { M_TERRAIN, M_WALL, M_BLOB };
 static int   s_mode, s_mipL;
 static float s_shade;
+static float s_tint[3], s_grey;
+
+#define MAX_BLOBS 24
+static T3Blob s_blobs[MAX_BLOBS];
+static int    s_nblobs;
+
+void t3d_set_blobs(const T3Blob *b, int n)
+{
+    if (n < 0) n = 0;
+    if (n > MAX_BLOBS) n = MAX_BLOBS;
+    if (n) memcpy(s_blobs, b, sizeof(T3Blob) * (size_t)n);
+    for (int i = 0; i < n; i++) {
+        if (s_blobs[i].n > T3_BLOB_PTS) s_blobs[i].n = T3_BLOB_PTS;
+        if (s_blobs[i].n < 3) s_blobs[i].n = 0;
+    }
+    s_nblobs = n;
+}
+
+int t3d_inside(double x, double y)
+{
+    int in = 0;
+    for (int i = 0, j = TERRAIN_OUTLINE_N - 1; i < TERRAIN_OUTLINE_N; j = i++) {
+        double xi = TERRAIN_OUTLINE[i][0], yi = TERRAIN_OUTLINE[i][1], xj = TERRAIN_OUTLINE[j][0], yj = TERRAIN_OUTLINE[j][1];
+        if ((yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) in = !in;
+    }
+    return in;
+}
+
+void t3d_outline_nearest(double x, double y, double *ox, double *oy)
+{
+    double best = 1e30;
+    *ox = x; *oy = y;
+    for (int i = 0; i < TERRAIN_OUTLINE_N; i++) {
+        double dx = TERRAIN_OUTLINE[i][0] - x, dy = TERRAIN_OUTLINE[i][1] - y, d = dx * dx + dy * dy;
+        if (d < best) { best = d; *ox = TERRAIN_OUTLINE[i][0]; *oy = TERRAIN_OUTLINE[i][1]; }
+    }
+}
+
+double t3d_outline_hit(double x, double y, double dx, double dy)
+{
+    double best = -1;
+    for (int i = 0; i < TERRAIN_OUTLINE_N; i++) {
+        const float *a = TERRAIN_OUTLINE[i], *b = TERRAIN_OUTLINE[(i + 1) % TERRAIN_OUTLINE_N];
+        double ex = b[0] - a[0], ey = b[1] - a[1];
+        double den = dx * ey - dy * ex;
+        if (fabs(den) < 1e-12) continue;
+        double t = ((a[0] - x) * ey - (a[1] - y) * ex) / den;      /* вдоль луча */
+        double u = ((a[0] - x) * dy - (a[1] - y) * dx) / den;      /* вдоль ребра */
+        if (t > 0 && u >= 0 && u <= 1 && (best < 0 || t < best)) best = t;
+    }
+    return best;
+}
 
 static inline unsigned bilerp(unsigned a, unsigned b, unsigned f)   /* f: 0..256 */
 {
@@ -303,15 +355,14 @@ static inline unsigned bilerp(unsigned a, unsigned b, unsigned f)   /* f: 0..256
 static inline unsigned tex_sample(const Image *m, float u, float v)
 {
     float tu = u * m->w - 0.5f, tv = v * m->h - 0.5f;
-    int x0 = (int)floorf(tu), y0 = (int)floorf(tv);
+    /* за краем (и NaN) — прижимаем к краю; оба соседа выборки тоже внутри картинки */
+    if (!(tu >= 0.0f)) tu = 0.0f;
+    if (!(tv >= 0.0f)) tv = 0.0f;
+    if (tu > (float)(m->w - 1)) tu = (float)(m->w - 1);
+    if (tv > (float)(m->h - 1)) tv = (float)(m->h - 1);
+    int x0 = (int)tu, y0 = (int)tv;
     unsigned fx = (unsigned)((tu - x0) * 256.0f), fy = (unsigned)((tv - y0) * 256.0f);
-    int x1 = x0 + 1, y1 = y0 + 1;
-    if (x0 < 0) x0 = 0;
-    if (y0 < 0) y0 = 0;
-    if (x1 > m->w - 1) x1 = m->w - 1;
-    if (y1 > m->h - 1) y1 = m->h - 1;
-    if (x0 > m->w - 1) x0 = m->w - 1;
-    if (y0 > m->h - 1) y0 = m->h - 1;
+    int x1 = x0 + 1 < m->w ? x0 + 1 : x0, y1 = y0 + 1 < m->h ? y0 + 1 : y0;
     if (fx > 256) fx = 256;
     if (fy > 256) fy = 256;
     const unsigned *r0 = m->px + (size_t)y0 * m->w, *r1 = m->px + (size_t)y1 * m->w;
@@ -380,6 +431,18 @@ static void raster(const RV *p0, const RV *p1, const RV *p2)
                     unsigned r = ((t >> 16) & 255u) * 255u / al, g = ((t >> 8) & 255u) * 255u / al, b = (t & 255u) * 255u / al;
                     col = (r > 255 ? 255 : r) << 16 | (g > 255 ? 255 : g) << 8 | (b > 255 ? 255 : b);
                 } else col = t & 0xFFFFFFu;
+            } else if (s_mode == M_BLOB) {
+                float u = (ax * px + ay * py + a0) * z, v = (bx * px + by * py + b0) * z;
+                unsigned t = tex_sample(mip, u, v);
+                unsigned al = t >> 24;
+                float r, g, b;
+                if (al < 16) { r = 150; g = 160; b = 110; }        /* вне Беларуси на текстуре — просто поле */
+                else { r = (float)((t >> 16) & 255u) * 255.0f / al; g = (float)((t >> 8) & 255u) * 255.0f / al; b = (float)(t & 255u) * 255.0f / al; }
+                float l = 0.3f * r + 0.59f * g + 0.11f * b;
+                r += (l - r) * s_grey; g += (l - g) * s_grey; b += (l - b) * s_grey;
+                r *= s_tint[0]; g *= s_tint[1]; b *= s_tint[2];
+                unsigned R = r > 255 ? 255u : r < 0 ? 0u : (unsigned)r, Gc = g > 255 ? 255u : g < 0 ? 0u : (unsigned)g, B = b > 255 ? 255u : b < 0 ? 0u : (unsigned)b;
+                col = R << 16 | Gc << 8 | B;
             } else {
                 float wz = (cx_ * px + cy_ * py + c0) * z, s = (ax * px + ay * py + a0) * z;
                 unsigned c = wall_color(wz, s);
@@ -407,7 +470,7 @@ static inline RV to_screen(const VV *v)
 /* mip-уровень по отношению площадей текстуры и экрана */
 static int pick_mip(const VV *v, int n, const RV *s)
 {
-    if (s_mode != M_TERRAIN) return 0;
+    if (s_mode == M_WALL) return 0;
     double ta = 0, sa = 0;
     for (int i = 1; i + 1 < n; i++) {
         ta += fabs((v[i].a - v[0].a) * (v[i + 1].b - v[0].b) - (v[i + 1].a - v[0].a) * (v[i].b - v[0].b));
@@ -562,6 +625,53 @@ void t3d_render(const T3View *v, unsigned *dst, int stride, unsigned bg, int ss)
             VV t0[3] = { q[0], q[1], q[3] }, t1[3] = { q[0], q[3], q[2] };
             draw_poly(t0, 3);
             draw_poly(t1, 3);
+        }
+    }
+
+    /* присоединённые земли: террасы с текстурой и стенками */
+    for (int bi = 0; bi < s_nblobs; bi++) {
+        const T3Blob *bl = &s_blobs[bi];
+        if (bl->n < 3) continue;
+        const double L[3] = { -0.5786, -0.5786, 0.5736 };
+        /* стенки */
+        s_mode = M_WALL;
+        double cum = bi * 97.0;
+        for (int i = 0; i < bl->n; i++) {
+            int i2 = (i + 1) % bl->n;
+            double ex = bl->x[i2] - bl->x[i], ey = bl->y[i2] - bl->y[i], len = sqrt(ex * ex + ey * ey);
+            if (len < 1e-6) continue;
+            double nx = ey / len, ny = -ex / len;                       /* точки идут против часовой: наружу — вправо */
+            double mx = (bl->x[i] + bl->x[i2]) / 2 - v->eye[0], my = (bl->y[i] + bl->y[i2]) / 2 - v->eye[1];
+            double s0 = cum;
+            cum += len;
+            if (nx * mx + ny * my >= 0) continue;
+            double d = nx * L[0] + ny * L[1];
+            s_shade = (float)(0.62 + 0.38 * (d > 0 ? d : 0) - 0.12 * (d < 0 ? -d : 0));
+            VV q[4];
+            view_pt(v, bl->x[i], bl->y[i], bl->top, &q[0]); q[0].a = (float)s0; q[0].c = bl->top;
+            view_pt(v, bl->x[i2], bl->y[i2], bl->top, &q[1]); q[1].a = (float)cum; q[1].c = bl->top;
+            view_pt(v, bl->x[i2], bl->y[i2], TERRAIN_ZBOTTOM, &q[2]); q[2].a = (float)cum; q[2].c = (float)TERRAIN_ZBOTTOM;
+            view_pt(v, bl->x[i], bl->y[i], TERRAIN_ZBOTTOM, &q[3]); q[3].a = (float)s0; q[3].c = (float)TERRAIN_ZBOTTOM;
+            for (int k = 0; k < 4; k++) q[k].b = 0;
+            draw_poly(q, 4);
+        }
+        /* верх: веер от центра, текстура — участок вида сверху со сдвигом */
+        s_mode = M_BLOB;
+        s_tint[0] = bl->tint[0]; s_tint[1] = bl->tint[1]; s_tint[2] = bl->tint[2];
+        s_grey = bl->grey;
+        double W = s_x1 - s_x0, H = s_y1 - s_y0;
+        VV c;
+        view_pt(v, bl->cx, bl->cy, bl->top, &c);
+        c.a = (float)((bl->cx + bl->ux - s_x0) / W); c.b = (float)((s_y1 - (bl->cy + bl->uy)) / H); c.c = 0;
+        for (int i = 0; i < bl->n; i++) {
+            int i2 = (i + 1) % bl->n;
+            VV t[3];
+            t[0] = c;
+            view_pt(v, bl->x[i], bl->y[i], bl->top, &t[1]);
+            t[1].a = (float)((bl->x[i] + bl->ux - s_x0) / W); t[1].b = (float)((s_y1 - (bl->y[i] + bl->uy)) / H); t[1].c = 0;
+            view_pt(v, bl->x[i2], bl->y[i2], bl->top, &t[2]);
+            t[2].a = (float)((bl->x[i2] + bl->ux - s_x0) / W); t[2].b = (float)((s_y1 - (bl->y[i2] + bl->uy)) / H); t[2].c = 0;
+            draw_poly(t, 3);
         }
     }
 

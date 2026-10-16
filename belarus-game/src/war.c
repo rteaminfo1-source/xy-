@@ -344,6 +344,16 @@ double war_occupation_harm(const Game *g)
     return 1.0 + 0.04 * war_occupied_count(g);
 }
 
+/* место боя для карты; ahead = 1, если игрок увидит его в следующем ходу (бой в конце хода) */
+static void mark_battle(Game *g, double lon, double lat, int won, int kind, int ahead)
+{
+    g->battleLon = (float)lon;
+    g->battleLat = (float)lat;
+    g->battleTurn = g->turn + ahead;
+    g->battleWon = won;
+    g->battleKind = kind;
+}
+
 /* ---------- набеги ---------- */
 static const double RAID_P[ERA_COUNT + 1] = { 0, 0.25, 0.25, 0.25, 0.10, 0.20, 0.0, 0.06, 0.06 };
 static const double RAID_E[ERA_COUNT + 1] = { 0, 18, 50, 110, 120, 220, 0, 300, 320 };
@@ -394,6 +404,7 @@ static void raid(Game *g)
     double E = war_raid_strength(g) * (0.7 + 0.6 * wrnd01(g));
     double D = war_defense_power(g) * (0.8 + 0.4 * wrnd01(g));
     g->warNews = 1;
+    if (!peace) mark_battle(g, CITIES[RAID_CITIES[g->era][k]].lon, CITIES[RAID_CITIES[g->era][k]].lat, D >= E, WAR_NONE, 1);
     if (D >= E) {
         long loot = lround(5 * era_scale(g->era));
         g->gold += loot;
@@ -450,6 +461,8 @@ static void battle(Game *g)
     g->warProgress += gain;
     int lost = lose_units(g, 0.10 * E / (A + E + 1e-9));
     if (kind == WAR_CONQUEST) g->stab = clampw(g->stab - 1.5, 0, 100);
+    if (kind == WAR_CONQUEST) mark_battle(g, PROVINCES[t].lon, PROVINCES[t].lat, gain > 0, kind, 1);
+    else mark_battle(g, CITIES[REGION_CITY[t]].lon, CITIES[REGION_CITY[t]].lat, gain > 0, kind, 1);
 
     if (g->warProgress >= 100) {
         g->battlesWon++;
@@ -546,6 +559,7 @@ void war_year_changed(Game *g, int oldYear)
             double E = war_province_strength(g, q) * (0.8 + 0.4 * wrnd01(g));
             double D = war_defense_power(g) * (0.8 + 0.4 * wrnd01(g));
             g->warNews = 1;
+            mark_battle(g, PROVINCES[p].lon, PROVINCES[p].lat, D >= E, WAR_NONE, 0);
             if (D >= E) {
                 g->battlesWon++;
                 swprintf(g->warReport, 200, L"%ls пыталось отнять землю «%ls» — осада отбита!", PROVINCES[q].owner, PROVINCES[p].name);

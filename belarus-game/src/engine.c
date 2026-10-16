@@ -628,6 +628,7 @@ void game_new(Game *g, int difficulty, unsigned seed)
     g->quizLastAns = -1;
     g->lastRand = -1;
     g->warTarget = -1;
+    g->battleTurn = -1;
     g->rng = seed ? seed : 0x1234567u;
     g->popPeak = g->pop;
     record_history(g);
@@ -1024,10 +1025,17 @@ int game_load(Game *g, FILE *f)
     if (fread(&sz, sizeof sz, 1, f) != 1) return 0;
     const size_t v3 = offsetof(Game, questState);   /* размер версии 3 — до полей заданий (+ выравнивание) */
     const size_t v4 = offsetof(Game, units);        /* размер версии 4 — до армии */
+    const size_t v5 = offsetof(Game, battleLon);    /* размер версии 5 — до места боя */
     memset(&tmp, 0, sizeof tmp);
     if (sz == sizeof tmp) {
         if (fread(&tmp, sizeof tmp, 1, f) != 1) return 0;
         if (tmp.version != GAME_VERSION) return 0;
+    } else if (sz >= v5 && sz <= v5 + 8 && sz < sizeof tmp) {
+        if (fread(&tmp, sz, 1, f) != 1) return 0;
+        if (tmp.version != 5) return 0;
+        memset((char *)&tmp + v5, 0, sizeof tmp - v5);   /* места боя ещё нет */
+        tmp.battleTurn = -1;
+        tmp.version = GAME_VERSION;
     } else if (sz >= v4 && sz <= v4 + 8 && sz < sizeof tmp) {
         if (fread(&tmp, sz, 1, f) != 1) return 0;
         if (tmp.version != 4) return 0;
@@ -1040,6 +1048,7 @@ int game_load(Game *g, FILE *f)
     if (tmp.version != GAME_VERSION) {
         tmp.version = GAME_VERSION;
         tmp.warTarget = -1;
+        tmp.battleTurn = -1;
         if (tmp.year >= 1941 && tmp.year <= 1944) tmp.occupied = (1u << REGION_COUNT) - 1;
     }
     if (tmp.warKind < WAR_NONE || tmp.warKind > WAR_LIBERATION) return 0;

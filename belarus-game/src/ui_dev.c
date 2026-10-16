@@ -106,6 +106,29 @@ void dev_scene(int n)
         break;
     }
     case 27: play_until(1700); resolve(&G); U.modal = M_CITY; U.modalArg = C_SLUTSK; break;  /* профиль города */
+    case 31: case 32: case 33: {                                                     /* война на 3D-карте */
+        play_until(n == 33 ? 1942 : 1340); resolve(&G);
+        G.gold += 3000; G.ind += 2000;
+        int best = -1;
+        for (int u = 0; u < UNIT_COUNT; u++) if (war_unit_state(&G, u) == US_AVAILABLE) best = u;
+        for (int i = 0; i < 8 && best >= 0; i++) war_recruit(&G, best);
+        t3d_cam_reset(&U.cam); U.camInit = 1;
+        if (n == 33) {
+            G.occupied &= ~(1u << 5); G.liberated |= 1u << 5;
+            war_declare(&G, WAR_LIBERATION, 2); G.warProgress = 40;
+            G.battleLon = 27.56f; G.battleLat = 53.90f;
+            G.battleTurn = G.turn; G.battleWon = 1;
+            U.cam.zoom = 1.6; U.cam.pitch = 40; t3d_lonlat(28.6, 53.9, &U.cam.tx, &U.cam.ty);
+        } else {
+            for (int p = 0; p < PROVINCE_COUNT; p++) if (!strcmp(PROVINCES[p].id, "smolensk") || !strcmp(PROVINCES[p].id, "latgale")) G.provOwned[p] = 1;
+            for (int p = 0; p < PROVINCE_COUNT; p++) if (!strcmp(PROVINCES[p].id, "volhynia")) { war_declare(&G, WAR_CONQUEST, p); G.warProgress = 55; }
+            G.battleLon = 25.3f; G.battleLat = 51.6f; G.battleTurn = G.turn; G.battleWon = 1;
+            if (n == 32) { U.cam.yaw = 20; U.cam.pitch = 36; U.cam.zoom = 1.05; }
+        }
+        U.modal = n == 31 ? M_NONE : M_MAP;
+        if (n == 31) U.tab = TAB_ARMY;
+        break;
+    }
     case 28: case 29: case 30: {                                                     /* 3D-карта: поворот, наклон, приближение */
         play_until(n == 30 ? 1986 : 1700); resolve(&G);
         t3d_cam_reset(&U.cam); U.camInit = 1;

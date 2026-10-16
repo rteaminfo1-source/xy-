@@ -71,7 +71,7 @@ enum {
 /* кнопки камеры 3D-карты (аргумент A_MAP_CAM) */
 enum { MC_ZOOM_OUT, MC_ZOOM_IN, MC_ROT_LEFT, MC_ROT_RIGHT, MC_RESET, MC_TILT_UP, MC_TILT_DOWN };
 /* области только для подсказок (без клика) */
-enum { A_HOVER_RES = 100, A_HOVER_ERA, A_HOVER_ACH, A_HOVER_STAT, A_HOVER_MIN, A_HOVER_SPRITE, A_HOVER_REGION, A_HOVER_UNIT };
+enum { A_HOVER_RES = 100, A_HOVER_ERA, A_HOVER_ACH, A_HOVER_STAT, A_HOVER_MIN, A_HOVER_SPRITE, A_HOVER_REGION, A_HOVER_UNIT, A_HOVER_BATTLE };
 void hit(int x, int y, int w, int h, int act, int arg);
 int  hover(int act, int arg);
 void hits_reset(void);

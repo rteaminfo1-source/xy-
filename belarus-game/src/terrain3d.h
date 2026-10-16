@@ -38,6 +38,26 @@ double t3d_height(double X, double Y);           /* высота верха пл
 void   t3d_lonlat(double lon, double lat, double *X, double *Y);
 void   t3d_bounds(double *x0, double *y0, double *x1, double *y1);
 
+/* Дополнительные земли (присоединённые, цель похода, доступные для похода): плоские террасы
+ * с земляными стенками, пристыкованные к плите. Многоугольник — звёздный относительно (cx, cy).
+ * Верх ниже рельефа Беларуси, поэтому край, заходящий под плиту, прячется. Текстура — участок
+ * вида сверху со сдвигом (ux, uy) км, окрашенный множителями tint (1 — без изменений). */
+#define T3_BLOB_PTS 48
+typedef struct {
+    float cx, cy, top;
+    int   n;
+    float x[T3_BLOB_PTS], y[T3_BLOB_PTS];
+    float ux, uy;
+    float tint[3];
+    float grey;            /* 0..1 — обесцвечивание */
+} T3Blob;
+void   t3d_set_blobs(const T3Blob *b, int n);   /* копируется; n = 0 — убрать */
+/* Пересечение луча из (x, y) по направлению (dx, dy) с контуром плиты: расстояние или -1. */
+double t3d_outline_hit(double x, double y, double dx, double dy);
+/* Ближайшая к (x, y) точка контура плиты; работает и без загруженной карты. */
+void   t3d_outline_nearest(double x, double y, double *ox, double *oy);
+int    t3d_inside(double x, double y);              /* 1 — точка внутри контура плиты (Беларуси) */
+
 /* Рисует карту в буфер dst (0x00RRGGBB, шаг строки stride) размером v->w x v->h.
  * bg — цвет фона, ss — сглаживание (1 — быстро, при вращении; 2 — 4 отсчёта на пиксель). */
 void   t3d_render(const T3View *v, unsigned *dst, int stride, unsigned bg, int ss);

@@ -658,7 +658,7 @@ int main(int argc, char **argv)
             if (game_load(&b, f)) FAIL("загружено сохранение неверного размера");
             fclose(f);
         }
-        printf("Сохранения: v5 %u байт, v3 %u байт — загружаются оба\n", (unsigned)sizeof(Game), v3);
+        printf("Сохранения: v6 %u байт, v3 %u байт — загружаются оба\n", (unsigned)sizeof(Game), v3);
     }
     /* совместимость: сохранение версии 4 (без армии) */
     {
@@ -696,6 +696,32 @@ int main(int argc, char **argv)
             fclose(f);
         }
         printf("Сохранения: v4 %u байт загружается, армия с нуля\n", v4);
+    }
+    /* совместимость: сохранение версии 5 (без места последнего боя) */
+    {
+        static Game a, b;
+        game_new(&a, 1, 93);
+        for (int t = 0; t < 8; t++) { resolve_events(&a); bot_turn(&a, 70); game_end_turn(&a); }
+        size_t off = offsetof(Game, battleLon);
+        unsigned v5 = (unsigned)((off + _Alignof(Game) - 1) / _Alignof(Game) * _Alignof(Game));
+        static unsigned char blob[sizeof(Game)];
+        memcpy(blob, &a, sizeof a);
+        ((Game *)blob)->version = 5;
+        memset(blob + off, 0xEE, v5 - off);
+        FILE *f = tmpfile();
+        if (f) {
+            fwrite("BYTG", 1, 4, f); fwrite(&v5, sizeof v5, 1, f); fwrite(blob, 1, v5, f);
+            rewind(f);
+            memset(&b, 0x5A, sizeof b);
+            if (!game_load(&b, f)) FAIL("сохранение версии 5 не загрузилось");
+            else {
+                if (b.version != GAME_VERSION || b.battleTurn != -1) FAIL("место боя v5 не сброшено");
+                if (memcmp(&a, &b, off)) FAIL("данные v5 искажены");
+                game_end_turn(&b);
+            }
+            fclose(f);
+        }
+        printf("Сохранения: v5 %u байт загружается\n", v5);
     }
     printf(errors ? "Найдено ошибок: %d\n" : "Ошибок нет\n", errors);
     return errors ? 1 : 0;
