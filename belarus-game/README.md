@@ -13,6 +13,8 @@
 ![Титульный экран](screenshots/title.png)
 ![1960 год: карта и технологии](screenshots/game-1960.png)
 ![Историческое событие: битва под Оршей](screenshots/event-orsha.png)
+![Армия: поход на Волынь, 3D-фигурки войск, земли на карте](screenshots/army-1340.png)
+![1942 год: оккупация и освобождение областей](screenshots/occupation-1942.png)
 
 *Скриншоты сняты под Wine, поэтому шрифты заменены; в Windows используются Segoe UI, Palatino, Cambria, Bahnschrift и Consolas — у каждой эпохи свой.*
 
