@@ -553,7 +553,7 @@ void ui_toast(const wchar_t *fmt, ...)
     va_start(ap, fmt);
     vswprintf(U.toast, sizeof U.toast / sizeof U.toast[0], fmt, ap);
     va_end(ap);
-    U.toastUntil = GetTickCount() + 2800;
+    U.toastUntil = GetTickCount() + 2800 + 35 * (DWORD)wcslen(U.toast);   /* длинное сообщение — дольше */
     SetTimer(g_hwnd, 1, 250, NULL);
     ui_invalidate();
 }

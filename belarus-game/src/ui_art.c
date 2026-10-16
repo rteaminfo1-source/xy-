@@ -8,19 +8,9 @@
 #include <string.h>
 
 /* assets_gen.h объявляет таблицы как static: отметим их использованными, чтобы не было предупреждений */
-__attribute__((unused)) static const void *art_tables_[] = { MAP3D_PTS, MAP3D_CITY, SPR_NAMES, PORTRAIT_IDS };
+__attribute__((unused)) static const void *art_tables_[] = { MAP3D_PTS, MAP3D_CITY, SPR_NAMES, PORTRAIT_IDS, UNIT_IDS };
 
-/* атлас фигурок войск появился позже остальных: со старым assets_gen.h — заглушки */
-#ifndef ASSETS_HAVE_UNITS
-#define ASSETS_HAVE_UNITS 0
-#define RES_UNITS_QOI 5
-#define UNIT_CELL_W 1
-#define UNIT_CELL_H 1
-#define UNIT_COLS 1
-#define UNIT_ATLAS_COUNT 0
-static const char *const UNIT_IDS[1] = { "" };
-#endif
-__attribute__((unused)) static const void *art_units_[] = { UNIT_IDS };
+
 
 static unsigned rgb_of(COLORREF c) { return (unsigned)GetRValue(c) << 16 | (unsigned)GetGValue(c) << 8 | GetBValue(c); }
 

@@ -134,6 +134,11 @@ static int group_owner(const Game *g, int p)
     return -1;
 }
 
+int war_group_owner(const Game *g, int p)
+{
+    return p >= 0 && p < PROVINCE_COUNT ? group_owner(g, p) : -1;
+}
+
 int war_province_state(const Game *g, int p)
 {
     if (p < 0 || p >= PROVINCE_COUNT || p >= MAX_PROVINCES) return PV_CLOSED;
@@ -172,15 +177,47 @@ double war_enemy_power(const Game *g, int kind, int target)
     return 0;
 }
 
+/* Сколько боёв осталось до закрытия окна: поход — до года PROVINCES[].to, освобождение — до 1944 года. */
+int war_battles_left(const Game *g, int kind, int target)
+{
+    int ongoing = g->warKind == kind && g->warTarget == target;
+    int cap = 10 - (ongoing ? g->warTurns : 0), n = 0;
+    int last = kind == WAR_CONQUEST && target >= 0 && target < PROVINCE_COUNT ? PROVINCES[target].to : OCC_TO;
+    for (int t = g->turn; t < TURN_COUNT && n < cap; t++) {
+        if (TURN_YEARS[t] > last) break;
+        n++;
+    }
+    return n;
+}
+
+/* Ожидаемое число ходов до победы: прогноз по ходам с учётом силы врага в каждом году,
+ * закрытия окна похода (или конца оккупации) и предела в 10 ходов. 99 — не успеть. */
 int war_eta(const Game *g, int kind, int target)
 {
-    double A = war_attack_power(g, kind), E = war_enemy_power(g, kind, target);
+    double A = war_attack_power(g, kind);
     if (A <= 0) return 99;
-    double gain = 200.0 * A / (A + E) - 60.0;
-    if (gain <= 0.5) return 99;
-    int left = 100 - (g->warKind == kind && g->warTarget == target ? g->warProgress : 0);
-    int t = (int)ceil(left / gain);
-    return t < 1 ? 1 : t > 99 ? 99 : t;
+    if (kind == WAR_CONQUEST && (target < 0 || target >= PROVINCE_COUNT)) return 99;
+    int ongoing = g->warKind == kind && g->warTarget == target;
+    double prog = ongoing ? g->warProgress : 0;
+    int cap = 10 - (ongoing ? g->warTurns : 0), n = 0;
+    int first = kind == WAR_CONQUEST ? PROVINCES[target].from : OCC_FROM;
+    int last  = kind == WAR_CONQUEST ? PROVINCES[target].to   : OCC_TO;
+    for (int t = g->turn; t < TURN_COUNT && n < cap; t++) {
+        int y = TURN_YEARS[t];
+        if (y > last) break;
+        if (y < first) continue;
+        double E;
+        if (kind == WAR_CONQUEST) {
+            int e = era_of_year(y), pe = PROVINCES[target].era;
+            if (e < g->era) e = g->era;
+            if (e < pe) e = pe;
+            E = lround(PROVINCES[target].strength * era_scale(e) / era_scale(pe) * cost_k(g));
+        } else E = lround(280.0 * (1.0 - 0.2 * (y - OCC_FROM)) * cost_k(g));
+        prog += 200.0 * A / (A + E) - 60.0;
+        n++;
+        if (prog >= 100) return n;
+    }
+    return 99;
 }
 
 /* ---------- объявление войны ---------- */
@@ -310,6 +347,7 @@ double war_occupation_harm(const Game *g)
 /* ---------- набеги ---------- */
 static const double RAID_P[ERA_COUNT + 1] = { 0, 0.25, 0.25, 0.25, 0.10, 0.20, 0.0, 0.06, 0.06 };
 static const double RAID_E[ERA_COUNT + 1] = { 0, 18, 50, 110, 120, 220, 0, 300, 320 };
+static const double RAID_POP[ERA_COUNT + 1] = { 0, 0.006, 0.006, 0.006, 0.001, 0.002, 0, 0, 0 };   /* доля погибших */
 static const wchar_t *RAIDERS[ERA_COUNT + 1][4] = {
     { 0 },
     { L"Набег половцев", L"Поход меченосцев", L"Набег ятвягов", L"Рать соседнего князя" },
@@ -366,7 +404,7 @@ static void raid(Game *g)
         else swprintf(g->warReport, 200, L"%ls. Бой у города %ls выигран! Трофеи: казна +%ld.", who, city, loot);
     } else {
         double goldLoss = g->gold * 0.15;
-        double popLoss = g->pop * 0.006 * (1.0 + DIFFICULTIES[g->difficulty].harmPct / 100.0);
+        double popLoss = g->pop * RAID_POP[g->era] * (1.0 + DIFFICULTIES[g->difficulty].harmPct / 100.0);
         g->gold -= goldLoss;
         g->ind *= 0.9;
         g->pop -= popLoss;
@@ -376,8 +414,12 @@ static void raid(Game *g)
         int lost = war_army_size(g) > 0 ? lose_units(g, 0.15) : 0;
         wchar_t ps[32];
         fmt_pop(popLoss, ps, 32);
-        swprintf(g->warReport, 200, L"%ls. Враг прорвался к городу %ls: разграблено %ld казны, погибших — %ls%ls", who, city,
-                 lround(goldLoss), ps, lost ? L" Войско понесло потери." : L" Нужно больше войск и крепостей.");
+        if (popLoss >= 0.5)
+            swprintf(g->warReport, 200, L"%ls. Враг прорвался к городу %ls: разграблено %ld казны, погибших — %ls%ls", who, city,
+                     lround(goldLoss), ps, lost ? L" Войско понесло потери." : L" Нужно больше войск и крепостей.");
+        else
+            swprintf(g->warReport, 200, L"%ls. Граница у города %ls не удержана: ущерб — %ld казны, производство −10%%.%ls", who, city,
+                     lround(goldLoss), lost ? L" Войско понесло потери." : L" Нужно больше войск и крепостей.");
     }
     game_log(g, LOG_WAR, L"%ls", g->warReport);
 }
@@ -484,7 +526,9 @@ void war_year_changed(Game *g, int oldYear)
     int y = g->year;
     /* поход, у которого закрылось окно, заканчивается перемирием */
     if (g->warKind == WAR_CONQUEST && y > PROVINCES[g->warTarget].to) {
-        game_log(g, LOG_WAR, L"Перемирие: время похода на %ls прошло", PROVINCES[g->warTarget].name);
+        swprintf(g->warReport, 200, L"Перемирие: время похода на землю «%ls» прошло — земля не взята.", PROVINCES[g->warTarget].name);
+        g->warNews = 1;
+        game_log(g, LOG_WAR, L"%ls", g->warReport);
         end_war(g);
     }
     /* осады: прежний владелец пытается вернуть землю, когда для неё открывается новая эпоха */
@@ -530,6 +574,10 @@ void war_year_changed(Game *g, int oldYear)
         int left = war_occupied_count(g);
         if (left) game_log(g, LOG_WAR, L"Операция «Багратион» освободила оставшиеся области: %d", left);
         g->occupied = 0;
-        if (g->warKind == WAR_LIBERATION) end_war(g);
+        if (g->warKind == WAR_LIBERATION) {
+            swprintf(g->warReport, 200, L"Операция «Багратион» завершила освобождение: %ls свободна.", REGION_NAMES[g->warTarget]);
+            g->warNews = 1;
+            end_war(g);
+        }
     }
 }

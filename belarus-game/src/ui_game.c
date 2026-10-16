@@ -426,12 +426,17 @@ static void draw_game(void)
 static void draw_toast(void)
 {
     if (!U.toast[0]) return;
-    int w = d_text_w(U.toast, F_BODY_B) + SC(40), h = SC(42);
+    /* длинные сообщения (сводки боёв) переносятся по строкам */
+    int maxw = g_w * 6 / 10 > SC(420) ? g_w * 6 / 10 : SC(420);
+    int tw = d_text_w(U.toast, F_BODY_B);
+    if (tw > maxw - SC(40)) tw = maxw - SC(40);
+    int th = d_wrap(0, 0, tw, U.toast, F_BODY_B, 0, 0);
+    int w = tw + SC(40), h = th + SC(24) > SC(42) ? th + SC(24) : SC(42);
     int x = g_w - w - SC(20), y = g_h - SC(28) - h - SC(14);
     d_rrect(x + SC(2), y + SC(3), w, h, SC(8), mix(P.bg, P.shadow, 120), CLR_INVALID);
     d_rrect(x, y, w, h, SC(8), P.ink, CLR_INVALID);
     d_fill(x + SC(12), y + SC(12), SC(4), h - SC(24), P.red);
-    d_text(x + SC(24), y + (h - d_font_h(F_BODY_B)) / 2, U.toast, F_BODY_B, P.surface);
+    d_wrap(x + SC(24), y + (h - th) / 2, tw, U.toast, F_BODY_B, P.surface, 1);
 }
 
 void ui_paint(void)

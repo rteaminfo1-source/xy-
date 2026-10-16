@@ -187,7 +187,7 @@ static int city_relevant(int c)
 }
 
 /* ---------- слой войны: земли, цель похода, оккупация ---------- */
-typedef struct { const MapXf *xf; int ox, oy; int x, y, w, h; double pxPerKm; } MapProj;
+typedef struct { const MapXf *xf; int ox, oy; int x, y, w, h; double pxPerKm; int size; } MapProj;
 
 static int proj_pt(const MapProj *pj, double lon, double lat, int *sx, int *sy)
 {
@@ -211,22 +211,25 @@ static void war_overlay(const MapProj *pj, int interactive, int large)
     /* оккупация: всё темнеет, у центров областей — знаки */
     if (G.occupied || (G.year >= 1941 && G.year <= 1944)) {
         if (G.occupied) d_blend(pj->x, pj->y, pj->w, pj->h, RGB(24, 14, 12), 70);
+        /* кольцо вокруг центра области (модели построек остаются видны) и значок на кольце */
         for (int r = 0; r < REGION_COUNT; r++) {
             int c = REGION_CITY[r], sx, sy;
             if (!proj_pt(pj, CITIES[c].lon, CITIES[c].lat, &sx, &sy)) continue;
             int occ = (G.occupied >> r) & 1u, target = G.warKind == WAR_LIBERATION && G.warTarget == r;
-            int rr = large ? SC(26) : SC(18);
-            sy += rr + SC(8);
-            COLORREF ac = target ? P.red : occ ? RGB(60, 36, 32) : P.green;
-            d_circle(sx, sy, rr, occ ? mix(P.surface, RGB(40, 24, 20), 200) : mix(P.surface, P.green, 60), ac, target ? 3 : 2);
-            int is = rr;
-            d_icon(occ ? IC_WAR : IC_CHECK, sx - is / 2, sy - is / 2, is, occ ? (target ? P.red : RGB(230, 200, 190)) : P.green);
+            int ring = pj->size * 11 / 10;
+            if (ring < SC(26)) ring = SC(26);
+            COLORREF ac = target ? P.red : occ ? RGB(150, 40, 34) : P.green;
+            d_circle(sx, sy, ring, CLR_INVALID, ac, target ? 4 : 2);
+            int rr = large ? SC(14) : SC(10);
+            int bx = sx - ring * 71 / 100, by = sy + ring * 71 / 100;
+            d_circle(bx, by, rr, occ ? RGB(40, 24, 20) : mix(P.surface, P.green, 60), ac, 2);
+            d_icon(occ ? IC_WAR : IC_CHECK, bx - rr * 6 / 10, by - rr * 6 / 10, rr * 12 / 10, occ ? (target ? P.red : RGB(230, 200, 190)) : P.green);
             if (large) {
                 int tw = d_text_w(REGION_NAMES[r], F_TINY);
-                d_blend(sx - tw / 2 - SC(4), sy + rr + SC(2), tw + SC(8), d_font_h(F_TINY) + SC(2), P.surface, 200);
-                d_text(sx - tw / 2, sy + rr + SC(3), REGION_NAMES[r], F_TINY, occ ? P.ink : P.green);
+                d_blend(bx - tw / 2 - SC(4), by + rr + SC(2), tw + SC(8), d_font_h(F_TINY) + SC(2), P.surface, 200);
+                d_text(bx - tw / 2, by + rr + SC(3), REGION_NAMES[r], F_TINY, occ ? P.ink : P.green);
             }
-            if (interactive) hit(sx - rr, sy - rr, rr * 2, rr * 2, A_HOVER_REGION, r);
+            if (interactive) hit(bx - rr, by - rr, rr * 2, rr * 2, A_HOVER_REGION, r);
         }
     }
     /* земли: свои, доступные для похода, цель похода */
@@ -254,8 +257,10 @@ static void war_overlay(const MapProj *pj, int interactive, int large)
         int f = large ? F_SMALL_B : F_TINY;
         int tw = d_text_w(lab, f), th = d_font_h(f);
         int lx = sx - tw / 2 + SC(10), ly = sy - th / 2;
-        if (lx < pj->x + SC(2)) lx = pj->x + SC(2);
-        if (lx + tw + SC(26) > pj->x + pj->w) lx = pj->x + pj->w - tw - SC(26);
+        if (lx - SC(22) < pj->x + SC(2)) lx = pj->x + SC(24);
+        if (lx + tw + SC(10) > pj->x + pj->w - SC(2)) lx = pj->x + pj->w - tw - SC(12);
+        if (ly - SC(3) < pj->y + SC(2)) ly = pj->y + SC(5);
+        if (ly + th + SC(3) > pj->y + pj->h - SC(2)) ly = pj->y + pj->h - th - SC(5);
         COLORREF bg = st == PV_OWNED && !target ? mix(P.surface, P.gold, 70) : P.surface;
         d_rrect(lx - SC(22), ly - SC(3), tw + SC(30), th + SC(6), SC(4), bg, ac);
         d_icon(st == PV_OWNED && !target ? IC_FLAG : IC_WAR, lx - SC(18), ly - SC(1), th + SC(2) > SC(16) ? SC(16) : th + SC(2), ac);
@@ -332,7 +337,7 @@ static void map_draw_flat(int x, int y, int w, int h, int interactive)
         d_text(lx, ly, CITIES[c].name, f, CITIES[c].major ? P.ink : P.muted);
         if (interactive) hit(cx - SC(9), cy - SC(9), SC(18), SC(18), A_CITY, c);
     }
-    MapProj pj = { 0, x, y, x, y, w, h, s_k / 111.0 };
+    MapProj pj = { 0, x, y, x, y, w, h, s_k / 111.0, SC(20) };
     war_overlay(&pj, interactive, w > SC(900));
 }
 
@@ -448,7 +453,7 @@ void map_draw_ex(int x, int y, int w, int h, int interactive, int large)
             }
         if (interactive) hit(lx - SC(4), ly - SC(1), tw + SC(8), th + SC(2), A_CITY, c);
     }
-    MapProj pj = { &xf, 0, 0, xf.x, xf.y, xf.w, xf.h, map3d_px_per_km() * xf.s };
+    MapProj pj = { &xf, 0, 0, xf.x, xf.y, xf.w, xf.h, map3d_px_per_km() * xf.s, size };
     war_overlay(&pj, interactive, large);
 }
 

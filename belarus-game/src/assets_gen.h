@@ -1,5 +1,5 @@
 /* assets_gen.h — СГЕНЕРИРОВАНО tools/pack_assets.py, НЕ РЕДАКТИРОВАТЬ (do not edit).
- * Встроенные рендеры Blender: RCDATA 2 = map3d.qoi, 3 = sprites.qoi, 4 = portraits.qoi.
+ * Встроенные рендеры Blender: RCDATA 2 = map3d.qoi, 3 = sprites.qoi, 4 = portraits.qoi, 5 = units.qoi.
  * Если ассета нет, ASSETS_HAVE_* = 0, а остальные определения — безопасные заглушки. */
 #ifndef ASSETS_GEN_H
 #define ASSETS_GEN_H
@@ -272,6 +272,18 @@ static const char *const PORTRAIT_IDS[71] = {
     "alexander1", "nicholas1", "alexander2", "alexander3", "nicholas2", "lenin",
     "stalin", "khrushchev", "brezhnev", "andropov", "chernenko", "gorbachev",
     "ponomarenko", "mazurov", "masherov", "shushkevich", "lukashenko"
+};
+
+/* ---- атлас фигурок войск: ячейка UNIT_CELL_W x UNIT_CELL_H, UNIT_COLS в ряд, id как в UNIT_TYPES ---- */
+#define ASSETS_HAVE_UNITS 1
+#define UNIT_CELL_W 160
+#define UNIT_CELL_H 160
+#define UNIT_COLS 4
+#define UNIT_ATLAS_COUNT 16
+static const char *const UNIT_IDS[16] = {
+    "druzhina", "crossbow", "khorugv", "gunners", "musketeers", "hussars",
+    "rockets", "line", "artillery", "rifle", "air", "partisans",
+    "motor", "tank", "missile", "airdef"
 };
 
 #endif

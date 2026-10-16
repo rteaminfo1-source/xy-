@@ -5,6 +5,7 @@
     assets/map3d.png     + map3d_grid.json  ->  res/map3d.qoi      (RCDATA 2)
     assets/sprites.png   + sprites.json     ->  res/sprites.qoi    (RCDATA 3)
     assets/portraits.png + portraits.json   ->  res/portraits.qoi  (RCDATA 4)
+    assets/units.png     + units.json       ->  res/units.qoi      (RCDATA 5)
 
 а также src/assets_gen.h (размеры, сетка проекции карты, ячейки атласов) и
 res/assets.rc (строки RCDATA только для имеющихся ассетов; app.rc его включает).
@@ -30,7 +31,8 @@ from array import array
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-RES_IDS = {'map3d': 2, 'sprites': 3, 'portraits': 4}
+RES_IDS = {'map3d': 2, 'sprites': 3, 'portraits': 4, 'units': 5}
+ATTR = {'map3d': 'map', 'sprites': 'spr', 'portraits': 'por', 'units': 'uni'}
 
 
 # ---------------------------------------------------------------- QOI ----
@@ -156,7 +158,7 @@ class Pack:
     def __init__(self, root, assets, res, header):
         self.root, self.assets, self.res, self.header = root, assets, res, header
         self.cities = parse_cities(root)
-        self.map = self.spr = self.por = None
+        self.map = self.spr = self.por = self.uni = None
         self.notes = []
 
     def _qoi(self, name, png):
@@ -265,12 +267,18 @@ class Pack:
         self.spr = dict(cell=cell, cols=cols, ax=int(round(float(anc[0]))), ay=int(round(float(anc[1]))),
                         names=names, count=count, w=iw, h=ih, qoi=self._qoi('sprites', png))
 
-    # --- атлас портретов ---
+    # --- атласы с ячейками cell_w x cell_h и списком id: портреты и фигурки войск ---
     def do_portraits(self):
-        if not self._have('portraits.png', 'portraits.json'):
-            return
-        png = os.path.join(self.assets, 'portraits.png')
-        js = self._json('portraits.json')
+        self.por = self._id_atlas('portraits')
+
+    def do_units(self):
+        self.uni = self._id_atlas('units')
+
+    def _id_atlas(self, name):
+        if not self._have(name + '.png', name + '.json'):
+            return None
+        png = os.path.join(self.assets, name + '.png')
+        js = self._json(name + '.json')
         iw, ih = png_size(png)
         cell = js.get('cell')
         cw = js.get('cell_w', js.get('cellW', js.get('w')))
@@ -289,24 +297,28 @@ class Pack:
         if not cw or not ch:
             rows = max(1, (len(ids) + cols - 1) // cols)
             cw, ch = cw or iw // cols, ch or ih // rows
-        self.por = dict(cw=int(cw), ch=int(ch), cols=cols, ids=ids, count=len(ids), w=iw, h=ih,
-                        qoi=self._qoi('portraits', png))
+        return dict(cw=int(cw), ch=int(ch), cols=cols, ids=ids, count=len(ids), w=iw, h=ih,
+                    qoi=self._qoi(name, png))
+
+    def _all(self):
+        return [(name, getattr(self, ATTR[name])) for name in ('map3d', 'sprites', 'portraits', 'units')]
 
     def run(self):
         os.makedirs(self.res, exist_ok=True)
-        for name, fn in (('map3d', self.do_map), ('sprites', self.do_sprites), ('portraits', self.do_portraits)):
+        for name, fn in (('map3d', self.do_map), ('sprites', self.do_sprites), ('portraits', self.do_portraits),
+                         ('units', self.do_units)):
             try:
                 fn()
             except Exception as e:          # битый ассет не должен ломать сборку
                 print('pack_assets: %s пропущен: %s' % (name, e), file=sys.stderr)
-                setattr(self, {'map3d': 'map', 'sprites': 'spr', 'portraits': 'por'}[name], None)
-        for name, have in (('map3d', self.map), ('sprites', self.spr), ('portraits', self.por)):
+                setattr(self, ATTR[name], None)
+        for name, have in self._all():
             stale = os.path.join(self.res, name + '.qoi')
             if not have and os.path.exists(stale):
                 os.remove(stale)
         write_if_changed(self.header, header_text(self))
         write_if_changed(os.path.join(self.res, 'assets.rc'), rc_text(self))
-        for name, d in (('map3d', self.map), ('sprites', self.spr), ('portraits', self.por)):
+        for name, d in self._all():
             if d:
                 print('pack_assets: %s %dx%d -> res/%s.qoi (%.0f КБ)' % (
                     name, d['w'], d['h'], name, os.path.getsize(d['qoi']) / 1024.0))
@@ -335,10 +347,10 @@ def _rows(items, per):
 
 
 def header_text(p):
-    m, s, q = p.map, p.spr, p.por
+    m, s, q, u = p.map, p.spr, p.por, p.uni
     ncity = len(p.cities) or (len(m['city']) if m else 1)
     L = ['/* assets_gen.h — СГЕНЕРИРОВАНО tools/pack_assets.py, НЕ РЕДАКТИРОВАТЬ (do not edit).',
-         ' * Встроенные рендеры Blender: RCDATA 2 = map3d.qoi, 3 = sprites.qoi, 4 = portraits.qoi.',
+         ' * Встроенные рендеры Blender: RCDATA 2 = map3d.qoi, 3 = sprites.qoi, 4 = portraits.qoi, 5 = units.qoi.',
          ' * Если ассета нет, ASSETS_HAVE_* = 0, а остальные определения — безопасные заглушки. */',
          '#ifndef ASSETS_GEN_H', '#define ASSETS_GEN_H', '']
     L += ['/* ---- 3D-карта: пиксели точек сетки (lon0 + i*step, lat0 + j*step), индекс j*NLON + i ---- */',
@@ -384,13 +396,24 @@ def header_text(p):
     else:
         L += ['#define PORTRAIT_CELL_W 1', '#define PORTRAIT_CELL_H 1', '#define PORTRAIT_COLS 1',
               '#define PORTRAIT_COUNT 0', 'static const char *const PORTRAIT_IDS[1] = {""};']
+    L += ['', '/* ---- атлас фигурок войск: ячейка UNIT_CELL_W x UNIT_CELL_H, UNIT_COLS в ряд, id как в UNIT_TYPES ---- */',
+          '#define ASSETS_HAVE_UNITS %d' % (1 if u else 0)]
+    if u:
+        ids = u['ids'] or ['']
+        L += ['#define UNIT_CELL_W %d' % u['cw'], '#define UNIT_CELL_H %d' % u['ch'],
+              '#define UNIT_COLS %d' % u['cols'], '#define UNIT_ATLAS_COUNT %d' % u['count'],
+              'static const char *const UNIT_IDS[%d] = {' % len(ids),
+              _rows([_cstr(x) for x in ids], 6), '};']
+    else:
+        L += ['#define UNIT_CELL_W 1', '#define UNIT_CELL_H 1', '#define UNIT_COLS 1',
+              '#define UNIT_ATLAS_COUNT 0', 'static const char *const UNIT_IDS[1] = {""};']
     L += ['', '#endif', '']
     return '\n'.join(L)
 
 
 def rc_text(p):
     L = ['/* assets.rc — СГЕНЕРИРОВАНО tools/pack_assets.py, НЕ РЕДАКТИРОВАТЬ. Включается из app.rc. */']
-    for name, d in (('map3d', p.map), ('sprites', p.spr), ('portraits', p.por)):
+    for name, d in p._all():
         if d:
             L.append('%d RCDATA "%s.qoi"' % (RES_IDS[name], name))
     return '\n'.join(L) + '\n'

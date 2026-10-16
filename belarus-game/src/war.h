@@ -69,6 +69,7 @@ double war_raid_chance(const Game *g);                /* вероятность 
 double war_raid_strength(const Game *g);              /* типичная сила набега */
 double war_enemy_power(const Game *g, int kind, int target);
 int  war_eta(const Game *g, int kind, int target);    /* ожидаемое число ходов до победы; 99 — не победить */
+int  war_battles_left(const Game *g, int kind, int target); /* сколько боёв осталось до закрытия окна */
 int  capital_of_era(int era);                         /* C_* или -1 */
 
 enum { US_LOCKED, US_AVAILABLE, US_FUTURE };
@@ -80,6 +81,7 @@ int  war_disband(Game *g, int u);
 
 enum { PV_FUTURE, PV_AVAILABLE, PV_OWNED, PV_LEGACY, PV_CLOSED };
 int  war_province_state(const Game *g, int p);
+int  war_group_owner(const Game *g, int p);             /* своя земля той же группы (та же земля в другую эпоху) или -1 */
 int  war_province_strength(const Game *g, int p);     /* с учётом года */
 int  war_region_strength(const Game *g);             /* сила оккупантов в текущем году */
 
