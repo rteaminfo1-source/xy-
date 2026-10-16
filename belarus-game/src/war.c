@@ -264,7 +264,7 @@ void war_peace(Game *g)
     if (g->warKind == WAR_NONE) return;
     if (g->warKind == WAR_CONQUEST) {
         g->stab = clampw(g->stab - 1, 0, 100);
-        game_log(g, LOG_WAR, L"Мир без победы: войска вернулись из похода на %ls", PROVINCES[g->warTarget].name);
+        game_log(g, LOG_WAR, L"Мир без победы: войска вернулись из похода на землю «%ls»", PROVINCES[g->warTarget].name);
     } else {
         game_log(g, LOG_WAR, L"Операция остановлена: %ls остаётся под оккупацией", REGION_NAMES[g->warTarget]);
     }
@@ -351,23 +351,23 @@ static const double RAID_POP[ERA_COUNT + 1] = { 0, 0.006, 0.006, 0.006, 0.001, 0
 static const wchar_t *RAIDERS[ERA_COUNT + 1][4] = {
     { 0 },
     { L"Набег половцев", L"Поход меченосцев", L"Набег ятвягов", L"Рать соседнего князя" },
-    { L"Поход Тевтонского ордена", L"Набег крымских татар", L"Ордынский набег", L"Московская рать" },
+    { L"Поход Тевтонского ордена", L"Татарский набег", L"Ордынский набег", L"Московская рать" },
     { L"Набег крымских татар", L"Шведский рейд", L"Московское войско", L"Казацкий загон" },
     { L"Разбойничья шайка", L"Мародёры на тракте", L"Разбойничья шайка", L"Мародёры на тракте" },
-    { L"Вооружённая банда", L"Отряд интервентов", L"Вооружённая банда", L"Отряд интервентов" },
+    { L"Вооружённая банда", L"Конные налётчики", L"Вооружённая банда", L"Конные налётчики" },
     { 0 },
-    { L"Нарушители границы", L"Диверсанты", L"Нарушители границы", L"Диверсанты" },
-    { L"Контрабандисты на границе", L"Нарушение воздушной границы", L"Контрабандисты на границе", L"Нарушение воздушной границы" },
+    { L"Нарушители границы", L"Контрабандисты", L"Нарушители границы", L"Контрабандисты" },
+    { L"Контрабандисты", L"Незаконный провоз грузов", L"Контрабандисты", L"Незаконный провоз грузов" },
 };
 static const int RAID_CITIES[ERA_COUNT + 1][4] = {
     { 0 },
-    { C_POLOTSK, C_TUROV, C_MINSK, C_VITEBSK },
-    { C_GRODNO, C_BREST, C_NOVOGRUDOK, C_LIDA },
-    { C_MOGILEV, C_VITEBSK, C_ORSHA, C_MSTISLAVL },
+    { C_TUROV, C_POLOTSK, C_MINSK, C_VITEBSK },
+    { C_GRODNO, C_BREST, C_NOVOGRUDOK, C_ORSHA },
+    { C_MOGILEV, C_GRODNO, C_MSTISLAVL, C_PINSK },
     { C_BREST, C_GRODNO, C_VITEBSK, C_GOMEL },
-    { C_BREST, C_GRODNO, C_PINSK, C_POLOTSK },
+    { C_MINSK, C_POLOTSK, C_MOZYR, C_BOBRUISK },
     { C_MINSK, C_MINSK, C_MINSK, C_MINSK },
-    { C_BREST, C_GRODNO, C_VITEBSK, C_GOMEL },
+    { C_BREST, C_GRODNO, C_BREST, C_GRODNO },
     { C_BREST, C_GRODNO, C_OSTROVETS, C_GOMEL },
 };
 
@@ -390,6 +390,7 @@ static void raid(Game *g)
     int k = wrnd_n(g, 4);
     const wchar_t *who = RAIDERS[g->era][k];
     const wchar_t *city = CITIES[RAID_CITIES[g->era][k]].name;
+    int peace = g->era >= 7;   /* после 1945 года боёв на границе нет: нарушителей задерживают пограничники */
     double E = war_raid_strength(g) * (0.7 + 0.6 * wrnd01(g));
     double D = war_defense_power(g) * (0.8 + 0.4 * wrnd01(g));
     g->warNews = 1;
@@ -397,24 +398,29 @@ static void raid(Game *g)
         long loot = lround(5 * era_scale(g->era));
         g->gold += loot;
         g->stab = clampw(g->stab + 1, 0, 100);
-        g->battlesWon++;
-        int lost = war_army_size(g) > 0 && E > D * 0.7 ? lose_units(g, 0.05) : 0;
-        if (lost) swprintf(g->warReport, 200, L"%ls. Бой у города %ls выигран! Трофеи: казна +%ld, потеряно соединений: %d.",
+        if (!peace) g->battlesWon++;
+        int lost = !peace && war_army_size(g) > 0 && E > D * 0.7 ? lose_units(g, 0.05) : 0;
+        if (peace) swprintf(g->warReport, 200, L"%ls у города %ls: пограничники пресекли нарушение; штрафы и конфискат — казна +%ld.",
+                            who, city, loot);
+        else if (lost) swprintf(g->warReport, 200, L"%ls. Бой у города %ls выигран! Трофеи: казна +%ld, потеряно соединений: %d.",
                            who, city, loot, lost);
         else swprintf(g->warReport, 200, L"%ls. Бой у города %ls выигран! Трофеи: казна +%ld.", who, city, loot);
     } else {
-        double goldLoss = g->gold * 0.15;
+        double goldLoss = g->gold * (peace ? 0.05 : 0.15);
         double popLoss = g->pop * RAID_POP[g->era] * (1.0 + DIFFICULTIES[g->difficulty].harmPct / 100.0);
         g->gold -= goldLoss;
         g->ind *= 0.9;
         g->pop -= popLoss;
         g->popLostWar += popLoss;
-        g->stab = clampw(g->stab - 2, 0, 100);
-        g->battlesLost++;
-        int lost = war_army_size(g) > 0 ? lose_units(g, 0.15) : 0;
+        g->stab = clampw(g->stab - (peace ? 1 : 2), 0, 100);
+        if (!peace) g->battlesLost++;
+        int lost = !peace && war_army_size(g) > 0 ? lose_units(g, 0.15) : 0;
         wchar_t ps[32];
         fmt_pop(popLoss, ps, 32);
-        if (popLoss >= 0.5)
+        if (peace)
+            swprintf(g->warReport, 200, L"%ls у города %ls: нарушение не пресечено, ущерб — %ld казны, производство −10%%.",
+                     who, city, lround(goldLoss));
+        else if (popLoss >= 0.5)
             swprintf(g->warReport, 200, L"%ls. Враг прорвался к городу %ls: разграблено %ld казны, погибших — %ls%ls", who, city,
                      lround(goldLoss), ps, lost ? L" Войско понесло потери." : L" Нужно больше войск и крепостей.");
         else
@@ -486,9 +492,9 @@ static void battle(Game *g)
         return;
     }
     int pr = g->warProgress < 0 ? 0 : g->warProgress;
-    swprintf(g->warReport, 200, L"%ls%ls%ls: %ls %d%% (за ход %ls%d). %ls", kind == WAR_CONQUEST ? L"Поход на землю «" : L"",
-             name, kind == WAR_CONQUEST ? L"»" : L"", gain >= 0 ? L"продвижение" : L"отступление",
-             pr, gain < 0 ? L"\x2212" : L"+", gain < 0 ? -gain : gain,
+    swprintf(g->warReport, 200, L"%ls%ls%ls: продвижение %d%% (за ход %ls%d%ls). %ls", kind == WAR_CONQUEST ? L"Поход на землю «" : L"",
+             name, kind == WAR_CONQUEST ? L"»" : L"",
+             pr, gain < 0 ? L"\x2212" : L"+", gain < 0 ? -gain : gain, gain < 0 ? L" — войско отступило" : L"",
              lost ? L"Есть потери — пополните войско." : L"Войско цело.");
 }
 

@@ -199,7 +199,7 @@ static int province_card(int p, int x, int y, int w, int draw)
             d_ellipsis(tx, ty, tw, buf, F_SMALL, P.red);
         } else d_ellipsis(tx, ty, tw, L"Земля ваша: доход растёт с каждой эпохой.", F_SMALL, P.muted);
     } else {
-        d_ellipsis(tx, ty, tw, L"После разделов 1795 года — 30% прежнего дохода через торговые связи.", F_SMALL, P.muted);
+        d_ellipsis(tx, ty, tw, L"После третьего раздела Речи Посполитой (1795) — 30% прежнего дохода через торговые связи.", F_SMALL, P.muted);
     }
     ty += SC(20);
     ty += d_wrap(tx, ty, tw, P0->desc, F_TINY, P.muted, 1) + SC(8);
@@ -259,14 +259,22 @@ int tab_army(int x, int y, int w)
                  k, REGION_COUNT, war_occupation_mult(&G), war_region_strength(&G));
         decimal_comma(buf);
         y += notice(x, y, w, P.red, IC_WAR, L"ОККУПАЦИЯ 1941–1944", buf) + SC(10);
+    } else if (war_raid_chance(&G) > 0 && G.era >= 7) {
+        double E = war_raid_strength(&G);
+        swprintf(buf, 600, L"Войн на границе больше нет, но каждый ход с вероятностью %ld%% её пытаются нарушить контрабандисты. "
+                           L"Пограничники и оборона (%ld) против нарушителей (около %ld): пресечённое нарушение — штрафы в казну, "
+                           L"непресечённое — ущерб казне и производству.",
+                 lround(war_raid_chance(&G) * 100), lround(defp), lround(E));
+        y += notice(x, y, w, P.blue, IC_DEF, L"ОХРАНА ГРАНИЦЫ", buf) + SC(10);
     } else if (war_raid_chance(&G) > 0) {
         double E = war_raid_strength(&G);
         const wchar_t *verdict = defp * 0.8 >= E * 1.3 ? L"вы отобьётесь наверняка." :
                                  defp * 1.2 < E * 0.7 ? L"враг сильнее — наберите войска или стройте крепости." :
                                                          L"исход боя не предрешён.";
         swprintf(buf, 600, L"Каждый ход с вероятностью %ld%% на границу нападают. Сила врага около %ld (от %ld до %ld), ваша оборона %ld — %ls "
-                           L"Победа даёт трофеи, поражение — потери казны, производства и людей.",
-                 lround(war_raid_chance(&G) * 100), lround(E), lround(E * 0.7), lround(E * 1.3), lround(defp), verdict);
+                           L"Победа даёт трофеи, поражение — потери казны, производства%ls.",
+                 lround(war_raid_chance(&G) * 100), lround(E), lround(E * 0.7), lround(E * 1.3), lround(defp), verdict,
+                 G.era <= 3 ? L" и людей" : L"");
         y += notice(x, y, w, defp * 1.2 < E * 0.7 ? P.red : P.gold, IC_DEF, L"УГРОЗА НАБЕГОВ", buf) + SC(10);
     }
     if (G.year >= 1921 && G.year < 1941) {
@@ -364,7 +372,8 @@ int tab_army(int x, int y, int w)
         tab_section(x, &y, L"ЗЕМЛИ ДЛЯ ПОХОДОВ");
         y += d_wrap(x, y, w, L"Присоединённая земля сразу даёт жителей и каждый ход — доход, который растёт с эпохой. Окна походов — годы, "
                              L"когда эти земли действительно переходили из рук в руки. В 1795 году, после разделов Речи Посполитой, "
-                             L"земли становятся наследием: остаётся 30% дохода.", F_SMALL, P.muted, 1) + SC(10);
+                             L"земли становятся наследием: остаётся 30% дохода. Это страницы истории XII–XVIII веков: сегодня эти земли "
+                             L"входят в соседние государства — Россию, Украину, Польшу, Литву и Латвию.", F_SMALL, P.muted, 1) + SC(10);
         int order[MAX_PROVINCES], n = 0;
         for (int p = 0; p < PROVINCE_COUNT && n < MAX_PROVINCES; p++) if (prov_shown(p)) order[n++] = p;
         for (int i = 1; i < n; i++) {

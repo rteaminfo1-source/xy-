@@ -574,7 +574,7 @@ void ui_click(int act, int arg)
     case A_RECRUIT:
         if (arg < 0 || arg >= UNIT_COUNT) break;
         if (war_recruit(&G, arg)) ui_toast(L"В строю: %ls (%d)", UNIT_TYPES[arg].name, G.units[arg]);
-        else if (war_army_size(&G) >= war_army_cap(&G)) ui_toast(L"Войско достигло предела: %d соединений — предел растёт с населением", war_army_cap(&G));
+        else if (war_army_size(&G) >= war_army_cap(&G)) ui_toast(L"Войско достигло предела (%d) — предел растёт с населением", war_army_cap(&G));
         else ui_toast(L"Не хватает казны или производства");
         break;
     case A_DISBAND:
@@ -592,7 +592,7 @@ void ui_click(int act, int arg)
         else if (war_declare(&G, WAR_LIBERATION, arg)) { ui_toast(L"Начата операция: %ls. Бой — в конце хода", REGION_NAMES[arg]); map_invalidate(); }
         break;
     }
-    case A_PEACE: war_peace(&G); ui_toast(L"Война окончена"); map_invalidate(); break;
+    case A_PEACE: { int lib = G.warKind == WAR_LIBERATION; war_peace(&G); ui_toast(L"%ls", lib ? L"Операция остановлена: область остаётся под оккупацией" : L"Поход окончен: войска вернулись без победы"); map_invalidate(); break; }
     case A_PROVINCE: U.modal = M_NONE; U.tab = TAB_ARMY; break;
     }
     ui_invalidate();
@@ -725,13 +725,13 @@ void ui_hover_status(int act, int arg)
         int occ = (G.occupied >> arg) & 1u;
         swprintf(buf, 260, L"%ls (центр — %ls): %ls", REGION_NAMES[arg], CITIES[REGION_CITY[arg]].name,
                  occ ? L"под оккупацией, сила врага слабеет с каждым годом" : L"свободна");
-    } else if (act == A_PEACE) swprintf(buf, 260, L"Закончить войну без победы: войска вернутся, стабильность немного упадёт.");
+    } else if (act == A_PEACE) swprintf(buf, 260, L"%ls", G.warKind == WAR_LIBERATION ? L"Остановить операцию: область останется под оккупацией до новой попытки или операции «Багратион»." : L"Закончить поход без победы: войска вернутся, стабильность немного упадёт.");
     else if (act == A_HOVER_STAT && arg >= 20 && arg <= 23) {
         static const wchar_t *H[4] = {
             L"Сколько соединений в строю и сколько можно содержать: предел растёт с населением.",
             L"Сила наступления: решает исход походов и освобождения. Военные технологии усиливают все войска.",
             L"Оборона против набегов и осад: войско плюс крепости, замки и оборонные технологии.",
-            L"Каждое соединение стоит казны каждый ход; во время похода — в полтора раза больше. Пустая казна — дезертирство."
+            L"Каждое соединение стоит казны каждый ход; во время войны (похода или освобождения) — в полтора раза больше. Пустая казна — дезертирство."
         };
         swprintf(buf, 260, L"%ls", H[arg - 20]);
     }
