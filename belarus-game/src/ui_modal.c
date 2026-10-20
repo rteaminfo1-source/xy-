@@ -217,7 +217,7 @@ static int body_final(int x, int y, int w)
     w_button(x + bw + SC(10), y, bw, SC(42), L"Смотреть летопись", B_SECONDARY, 1, A_CLOSE, 0);
     w_button(x + 2 * (bw + SC(10)), y, bw, SC(42), L"Главное меню", B_SECONDARY, 1, A_TO_TITLE, 0);
     y += SC(42) + SC(16);
-    swprintf(s, 200, L"Издатели: %ls · %ls, %ls", CREDIT_SCHOOL, CREDIT_AUTHOR, CREDIT_CLASS);
+    swprintf(s, 200, L"Издатели: %ls %ls · %ls, %ls", CREDIT_SCHOOL, CREDIT_HONOR, CREDIT_AUTHOR, CREDIT_CLASS);
     d_text_c(x, y, w, s, F_TINY, P.muted);
     y += d_font_h(F_TINY);
     return y - y0;
@@ -239,12 +239,14 @@ static int body_credits(int x, int y, int w)
     d_text(x, y, L"ИЗДАТЕЛИ", F_SMALL_B, P.muted);
     SetTextCharacterExtra(d_dc(), 0);
     y += SC(26);
-    int ch = SC(16) + d_font_h(F_H2) + SC(6) + d_font_h(F_H3) + SC(4) + d_font_h(F_BODY) + SC(16);
+    int ch = SC(16) + d_font_h(F_H2) + SC(2) + d_font_h(F_BODY) + SC(8) + d_font_h(F_H3) + SC(4) + d_font_h(F_BODY) + SC(16);
     d_rrect(x, y, w, ch, SC(8), mix(P.surface, P.red, 22), P.red);
     d_fill(x + SC(1), y + SC(12), SC(5), ch - SC(24), P.red);
     int ty = y + SC(16);
     d_text(x + SC(22), ty, CREDIT_SCHOOL, F_H2, P.ink);
-    ty += d_font_h(F_H2) + SC(6);
+    ty += d_font_h(F_H2) + SC(2);
+    d_text(x + SC(22), ty, CREDIT_HONOR, F_BODY, P.ink);
+    ty += d_font_h(F_BODY) + SC(8);
     d_text(x + SC(22), ty, CREDIT_AUTHOR, F_H3, P.red);
     ty += d_font_h(F_H3) + SC(4);
     d_text(x + SC(22), ty, CREDIT_CLASS, F_BODY, P.muted);
@@ -303,7 +305,7 @@ static int body_help(int x, int y, int w)
                       L"Выполненное задание сразу даёт награду, просроченное проваливается." },
         { L"Правители", L"Во вкладке «Деятели» и в шапке карты — князья, великие князья, короли, императоры, руководители СССР и БССР "
                         L"и главы Республики Беларусь со своими 3D-портретами. Правители — справка: на баланс они не влияют." },
-        { L"Издатели", L"Гимназия № 10 г. Минска · Биончик Роман, учащийся 6 «Г» класса." },
+        { L"Издатели", L"Гимназия № 10 г. Минска имени дважды Героя Советского Союза П. Я. Головачёва · Биончик Роман, учащийся 6 «Г» класса." },
     };
     for (int i = 0; i < (int)(sizeof H / sizeof H[0]); i++) {
         d_text(x, y, H[i][0], F_H3, P.red);

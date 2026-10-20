@@ -189,6 +189,7 @@ void portrait_box(const char *id, const wchar_t *initials, int x, int y, int w, 
 
 /* издатели */
 #define CREDIT_SCHOOL  L"Гимназия № 10 г. Минска"
+#define CREDIT_HONOR   L"имени дважды Героя Советского Союза П. Я. Головачёва"
 #define CREDIT_AUTHOR  L"Биончик Роман"
 #define CREDIT_CLASS   L"учащийся 6 «Г» класса"
 #define APP_VERSION    L"1.1"

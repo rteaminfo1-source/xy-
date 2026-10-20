@@ -159,11 +159,14 @@ static void draw_title(void)
              TECH_COUNT, PROJECT_COUNT, PEOPLE_COUNT, HIST_COUNT + RAND_COUNT, QUIZ_COUNT);
     /* издатели — у нижнего орнамента, но никогда не выше низа колонки кнопок */
     int orn = g_h - SC(26) - 9 * cell;
-    int fy = orn - SC(26), cy = fy - SC(24);
-    if (cy < stackBottom + SC(12)) { cy = stackBottom + SC(12); fy = cy + SC(24); }
-    wchar_t cr[200];
-    swprintf(cr, 200, L"Издатели: %ls · %ls, %ls", CREDIT_SCHOOL, CREDIT_AUTHOR, CREDIT_CLASS);
+    int lh = d_font_h(F_SMALL_B) + SC(3);
+    int fy = orn - SC(26), cy = fy - SC(24) - lh;
+    if (cy < stackBottom + SC(12)) { cy = stackBottom + SC(12); fy = cy + lh + SC(24); }
+    wchar_t cr[240];
+    swprintf(cr, 240, L"Издатели: %ls %ls", CREDIT_SCHOOL, CREDIT_HONOR);
     d_text(x0, cy, cr, F_SMALL_B, P.ink);
+    swprintf(cr, 240, L"%ls, %ls", CREDIT_AUTHOR, CREDIT_CLASS);
+    d_text(x0, cy + lh, cr, F_SMALL_B, P.ink);
     if (fy + d_font_h(F_SMALL) <= orn)   /* строка статистики — только если остаётся место */
         d_text(x0, fy, U.status[0] ? U.status : foot, F_SMALL, P.muted);
 }
