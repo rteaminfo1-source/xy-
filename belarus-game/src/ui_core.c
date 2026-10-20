@@ -285,6 +285,14 @@ void d_ellipsis(int x, int y, int w, const wchar_t *s, int f, COLORREF c)
 void d_blend(int x, int y, int w, int h, COLORREF c, int a)
 {
     GdiFlush();
+    int cx, cy, cw, ch;
+    if (d_clip_get(&cx, &cy, &cw, &ch)) {          /* как и GDI, не выходим за отсечение */
+        if (x < cx) { w -= cx - x; x = cx; }
+        if (y < cy) { h -= cy - y; y = cy; }
+        if (x + w > cx + cw) w = cx + cw - x;
+        if (y + h > cy + ch) h = cy + ch - y;
+        if (w <= 0 || h <= 0) return;
+    }
     int x0 = x < 0 ? 0 : x, y0 = y < 0 ? 0 : y;
     int x1 = x + w > s_bw ? s_bw : x + w, y1 = y + h > s_bh ? s_bh : y + h;
     unsigned cr = GetRValue(c), cg = GetGValue(c), cb = GetBValue(c);
@@ -704,10 +712,12 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
         return 0;
     }
     case WM_LBUTTONDOWN:
-    case WM_RBUTTONDOWN: {
+    case WM_RBUTTONDOWN:
+    case WM_LBUTTONDBLCLK:            /* у окна CS_DBLCLKS: второе нажатие приходит так */
+    case WM_RBUTTONDBLCLK: {
         int x = (short)LOWORD(lp), y = (short)HIWORD(lp);
-        if (map_cam_hit(x, y)) {
-            s_drag = m == WM_LBUTTONDOWN ? 1 : 2;
+        if (map_cam_hit(x, y) && !s_drag) {
+            s_drag = m == WM_LBUTTONDOWN || m == WM_LBUTTONDBLCLK ? 1 : 2;
             s_dragging = 0;
             s_dragX0 = s_dragLX = x;
             s_dragY0 = s_dragLY = y;
@@ -715,9 +725,18 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
         }
         return 0;
     }
-    case WM_RBUTTONUP:
-        if (s_drag) { s_drag = s_dragging = 0; ReleaseCapture(); ui_invalidate(); }
+    case WM_RBUTTONUP: {
+        int a, g2, was = 0;
+        if (s_drag == 2) {
+            was = s_dragging;
+            s_drag = s_dragging = 0;
+            ReleaseCapture();
+        } else if (s_drag) return 0;    /* идёт вращение левой кнопкой — правую не трогаем */
+        if (!was && hit_at((short)LOWORD(lp), (short)HIWORD(lp), &a, &g2) && a > 0) ui_rclick(a, g2);
+        s_hovAct = s_hovArg = -1;
+        ui_invalidate();
         return 0;
+    }
     case WM_CAPTURECHANGED:
         if ((HWND)lp != h) s_drag = s_dragging = 0;
         return 0;
@@ -757,6 +776,7 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
         break;
     case WM_LBUTTONUP: {
         int a, g2;
+        if (s_drag == 2) return 0;      /* идёт сдвиг правой кнопкой */
         if (s_drag) {
             int was = s_dragging;
             s_drag = s_dragging = 0;
@@ -831,6 +851,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     apply_scale();
     U.screen = SCR_TITLE;
     U.city = -1;
+    U.selArmy = -1;
     U.diffPick = 1;
     {
         static Game probe;

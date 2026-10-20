@@ -141,6 +141,7 @@ void ui_toggle_theme(void);
 /* ui_game.c */
 void ui_paint(void);
 void ui_click(int act, int arg);
+void ui_rclick(int act, int arg);       /* правая кнопка без перетаскивания */
 void ui_key(WPARAM vk);
 void ui_wheel(int delta, int x, int y);
 void ui_after_change(void);

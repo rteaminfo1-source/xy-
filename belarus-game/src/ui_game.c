@@ -1,5 +1,7 @@
 /* Экраны: титульный и игровой (шапка, лента эпох, карта, вкладки), ввод с мыши и клавиатуры. */
 #include "ui.h"
+#include "mapview.h"
+#include "citynet.h"
 #include "rulers.h"
 #include "war.h"
 #include <stdio.h>
@@ -463,6 +465,8 @@ void ui_after_change(void)
         else if (q.type == Q_ERA) U.modal = M_ERA;
         else U.modal = M_FINAL;
     }
+    /* событий нет — очередь заставок: взлёт ракеты, приближение к Минску в 1984 и т. п. */
+    if (U.modal == M_NONE && !G.over && !fx_ui_idle()) citynet_ui_idle();
     ui_invalidate();
 }
 
@@ -474,9 +478,17 @@ static void close_modal(void)
     ui_after_change();
 }
 
+/* новая партия, загрузка, выход в меню: вид карты и выбор армии — с начала */
+static void reset_view(void)
+{
+    U.camInit = 0;
+    U.selArmy = -1;
+}
+
 static void start_game(void)
 {
     game_new(&G, U.diffPick, GetTickCount() ^ 0x5bd1e995u);
+    reset_view();
     U.minuteMs = 0;
     memset(U.scroll, 0, sizeof U.scroll);
     U.tab = TAB_TECH;
@@ -492,10 +504,13 @@ static void start_game(void)
 
 void ui_click(int act, int arg)
 {
+    /* действия модулей: армии на карте, городской транспорт, анимации */
+    if (front_ui_click(act, arg) || citynet_ui_click(act, arg) || fx_ui_click(act, arg)) { ui_invalidate(); return; }
     switch (act) {
     case A_NEW: U.modal = M_NEWGAME; U.modalScroll = 0; break;
     case A_CONTINUE:
         if (ui_load()) {
+            reset_view();
             U.screen = SCR_GAME; U.modal = M_NONE; U.eraFilter = G.era; U.city = -1;
             memset(U.scroll, 0, sizeof U.scroll);
             map_invalidate();
@@ -517,12 +532,12 @@ void ui_click(int act, int arg)
         break;
     case A_TECH: U.modal = M_TECH; U.modalArg = arg; U.modalScroll = 0; break;
     case A_BUILD:
-        if (game_build(&G, arg)) ui_toast(L"Построено: %ls", PROJECTS[arg].name);
+        if (game_build(&G, arg)) { ui_toast(L"Построено: %ls", PROJECTS[arg].name); citynet_ui_built(arg); }
         else ui_toast(L"Не хватает казны или производства");
         break;
     case A_PROJ: U.modal = M_PROJ; U.modalArg = arg; U.modalScroll = 0; break;
     case A_HIRE:
-        if (game_hire(&G, arg)) ui_toast(L"%ls с вами", PEOPLE[arg].name);
+        if (game_hire(&G, arg)) { ui_toast(L"%ls с вами", PEOPLE[arg].name); fx_ui_hired(arg); }
         else ui_toast(L"Не хватает казны");
         break;
     case A_PERSON: U.modal = M_PERSON; U.modalArg = arg; U.modalScroll = 0; break;
@@ -556,13 +571,13 @@ void ui_click(int act, int arg)
     case A_MENU: U.modal = M_MENU; break;
     case A_SAVE: if (ui_save()) ui_toast(L"Игра сохранена"); else ui_toast(L"Не удалось сохранить"); U.modal = M_NONE; break;
     case A_LOAD:
-        if (ui_load()) { U.modal = M_NONE; U.eraFilter = G.era; map_invalidate(); ui_toast(L"Сохранение загружено"); ui_after_change(); }
+        if (ui_load()) { reset_view(); U.modal = M_NONE; U.eraFilter = G.era; map_invalidate(); ui_toast(L"Сохранение загружено"); ui_after_change(); }
         else ui_toast(L"Сохранение не найдено");
         break;
     case A_TO_TITLE:
         if (U.screen == SCR_GAME && !G.over) ui_save();
         U.hasSave = U.screen == SCR_GAME && !G.over;
-        U.screen = SCR_TITLE; U.modal = M_NONE; map_invalidate();
+        U.screen = SCR_TITLE; U.modal = M_NONE; reset_view(); map_invalidate();
         break;
     case A_CITY: U.city = arg; U.modal = M_CITY; U.modalArg = arg; U.modalScroll = 0; break;
     case A_SELL: {
@@ -603,8 +618,16 @@ void ui_click(int act, int arg)
     ui_invalidate();
 }
 
+/* правая кнопка без перетаскивания (например, приказ армии идти в точку) */
+void ui_rclick(int act, int arg)
+{
+    if (front_ui_rclick(act, arg)) ui_invalidate();
+}
+
 void ui_key(WPARAM vk)
 {
+    if (U.modal == M_CITYNET && citynet_ui_key(vk)) { ui_invalidate(); return; }
+    if (U.modal == M_LAUNCH && fx_ui_key(vk)) { ui_invalidate(); return; }
     if (vk == VK_F1) { U.modal = M_HELP; U.modalScroll = 0; ui_invalidate(); return; }
     if (vk == VK_F2) { ui_toggle_theme(); return; }
     if (U.modal == M_EVENT) {
@@ -682,6 +705,11 @@ void ui_hover_status(int act, int arg)
 {
     wchar_t buf[260];
     buf[0] = 0;
+    /* подсказки модулей */
+    front_ui_hover(act, arg, buf, 260);
+    if (!buf[0]) citynet_ui_hover(act, arg, buf, 260);
+    if (!buf[0]) fx_ui_hover(act, arg, buf, 260);
+    if (buf[0]) { wcsncpy(U.status, buf, 259); U.status[259] = 0; return; }
     static const wchar_t *RES_HELP[8] = {
         L"Казна: оплачивает стройки, деятелей и решения. Растёт от населения, торговли и производства.",
         L"Знания: тратятся на открытия. Растут от школ, типографий, университетов и вопросов летописца.",

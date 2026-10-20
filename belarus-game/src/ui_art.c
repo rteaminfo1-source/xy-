@@ -6,6 +6,7 @@
 #include "map3d.h"
 #include "assets_gen.h"
 #include <string.h>
+#include <math.h>
 
 /* assets_gen.h объявляет таблицы как static: отметим их использованными, чтобы не было предупреждений */
 __attribute__((unused)) static const void *art_tables_[] = { MAP3D_PTS, MAP3D_CITY, SPR_NAMES, PORTRAIT_IDS, UNIT_IDS };
@@ -85,9 +86,18 @@ void art_map_point(const MapXf *xf, double px, double py, int *sx, int *sy)
 /* ---------- модели построек ---------- */
 static Image s_spr;
 static int s_sprTried, s_sprOk;
-typedef struct { int size; unsigned tick; Image img[SPR_COUNT > 0 ? SPR_COUNT : 1]; } SprSet;
-static SprSet s_sets[2];
+/* кэш отмасштабированных моделей: на 3D-карте у каждого города свой размер, поэтому храним
+ * отдельные модели (а не целые наборы), а размер округляем до ступеней ~5% */
+#define SCACHE 160
+typedef struct { int spr, size; unsigned tick; Image img; } SprCache;
+static SprCache s_sc[SCACHE];
 static unsigned s_tick;
+
+static int quant_size(int s)
+{
+    if (s <= 24) return s;
+    return (int)lround(pow(1.05, lround(log((double)s) / log(1.05))));
+}
 
 int art_sprites_available(void)
 {
@@ -98,26 +108,30 @@ int art_sprites_available(void)
     return s_sprOk;
 }
 
-static SprSet *sprite_set(int size)
+static Image *sprite_img(int k, int size)
 {
     s_tick++;
-    for (int i = 0; i < 2; i++)
-        if (s_sets[i].size == size) { s_sets[i].tick = s_tick; return &s_sets[i]; }
-    SprSet *v = s_sets[0].tick <= s_sets[1].tick ? &s_sets[0] : &s_sets[1];
-    for (int k = 0; k < SPR_COUNT; k++) image_free(&v->img[k]);
-    v->size = size;
-    v->tick = s_tick;
-    for (int k = 0; k < SPR_COUNT; k++)
-        image_scale(&s_spr, (k % SPR_COLS) * SPR_CELL, (k / SPR_COLS) * SPR_CELL, SPR_CELL, SPR_CELL, &v->img[k], size, size);
-    return v;
+    SprCache *hit = 0, *old = &s_sc[0];
+    for (int i = 0; i < SCACHE; i++) {
+        if (s_sc[i].img.px && s_sc[i].spr == k && s_sc[i].size == size) { hit = &s_sc[i]; break; }
+        if (s_sc[i].tick < old->tick) old = &s_sc[i];
+    }
+    if (!hit) {
+        hit = old;
+        image_free(&hit->img);
+        image_scale(&s_spr, (k % SPR_COLS) * SPR_CELL, (k / SPR_COLS) * SPR_CELL, SPR_CELL, SPR_CELL, &hit->img, size, size);
+        hit->spr = k; hit->size = size;
+    }
+    hit->tick = s_tick;
+    return &hit->img;
 }
 
 void art_sprite_draw(int sprite, int ax, int ay, int size, int alpha)
 {
     if (!art_sprites_available() || sprite < 0 || sprite >= SPR_COUNT || size < 8) return;
-    SprSet *set = sprite_set(size);
+    size = quant_size(size);
     int dx = ax - SPR_ANCHOR_X * size / SPR_CELL, dy = ay - SPR_ANCHOR_Y * size / SPR_CELL;
-    blit_clipped(&set->img[sprite], dx, dy, alpha);
+    blit_clipped(sprite_img(sprite, size), dx, dy, alpha);
 }
 
 /* ---------- портреты ---------- */
@@ -170,7 +184,7 @@ void art_portrait_draw(int idx, int x, int y, int w, int h)
 /* ---------- фигурки войск ---------- */
 static Image s_uni;
 static int s_uniTried, s_uniOk;
-#define UCACHE 24
+#define UCACHE 64
 typedef struct { int idx, w, h; unsigned tick; Image img; } UniCache;
 static UniCache s_uc[UCACHE];
 
@@ -194,8 +208,8 @@ int art_unit_index(const char *id)
 void art_unit_draw(int idx, int x, int y, int w, int h)
 {
     if (!units_load() || idx < 0 || idx >= UNIT_ATLAS_COUNT || w < 8 || h < 8) return;
-    int dw = w, dh = w * UNIT_CELL_H / UNIT_CELL_W;
-    if (dh > h) { dh = h; dw = h * UNIT_CELL_W / UNIT_CELL_H; }
+    int dw = quant_size(w), dh = dw * UNIT_CELL_H / UNIT_CELL_W;
+    if (dh > h) { dh = quant_size(h); dw = dh * UNIT_CELL_W / UNIT_CELL_H; }
     s_tick++;
     UniCache *hit = 0, *old = &s_uc[0];
     for (int i = 0; i < UCACHE; i++) {

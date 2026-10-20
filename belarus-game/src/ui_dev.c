@@ -1,5 +1,7 @@
 /* Режим разработчика: BelarusTech.exe --scene=N открывает заданное состояние (для скриншотов и проверки). */
 #include "ui.h"
+#include "mapview.h"
+#include "citynet.h"
 #include "war.h"
 #include <string.h>
 
@@ -51,7 +53,11 @@ static void play_until(int year)
         bot_turn(&G);
         game_end_turn(&G);
     }
+    G.cutscenes = ~0u;     /* заставки в сценах не всплывают; сцена модуля сама сбросит нужный бит */
 }
+
+void dev_play_until(int year) { play_until(year); }
+void dev_resolve(void) { resolve(&G); }
 
 void dev_scene(int n)
 {
@@ -138,6 +144,12 @@ void dev_scene(int n)
         if (n != 28) U.modal = M_MAP;
         break;
     }
+    default:                                   /* сцены модулей */
+        if (n >= 40 && n < 50) front_dev_scene(n);
+        else if (n >= 50 && n < 60) states_dev_scene(n);
+        else if (n >= 60 && n < 70) citynet_dev_scene(n);
+        else if (n >= 70 && n < 80) fx_dev_scene(n);
+        break;
     }
     if (U.screen == SCR_GAME) {
         U.eraFilter = G.era;

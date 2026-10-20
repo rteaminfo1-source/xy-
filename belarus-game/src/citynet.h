@@ -39,7 +39,7 @@ extern const int  CITY_NET_COUNT;
 
 enum { NS_FUTURE, NS_LOCKED, NS_AVAILABLE };
 
-void citynet_init(void);                                  /* вызывает data_init() */
+void citynet_init(void);                                  /* зовёт data_init(): индексы технологий */
 int  citynet_of_city(int c);                              /* индекс сети города или -1 */
 int  citynet_state(const Game *g, int n);                 /* NS_* */
 int  citynet_edge_built(const Game *g, int n, int e);

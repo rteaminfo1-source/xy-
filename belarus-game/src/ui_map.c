@@ -1,5 +1,6 @@
 /* Карта: контур, реки, болота и пущи рисуются в тройном разрешении и сглаживаются усреднением. */
 #include "ui.h"
+#include "mapview.h"
 #include "map3d.h"
 #include "war.h"
 #include <math.h>
@@ -188,14 +189,14 @@ static int city_relevant(int c)
 }
 
 /* ---------- проекция: 3D-карта, готовый рендер или плоская карта ---------- */
-typedef struct {
+struct MapProj {
     const MapXf *xf;          /* готовая картинка Blender */
     const T3View *v;          /* интерактивная 3D-карта */
     int ox, oy;               /* смещение окна вывода */
     int x, y, w, h;           /* окно вывода */
     double pxPerKm;           /* масштаб у цели (3D) или везде (2D) */
     int size;                 /* базовый размер моделей построек */
-} MapProj;
+};
 
 /* точка lon/lat на земле; k — пикселей на километр в этой точке */
 static int proj_ll(const MapProj *pj, double lon, double lat, double zAdd, int *sx, int *sy, double *k)
@@ -239,6 +240,29 @@ static int proj_xyz(const MapProj *pj, double X, double Y, double Z, int *sx, in
     double lon, lat;
     km_ll(X, Y, &lon, &lat);
     return proj_ll(pj, lon, lat, 0, sx, sy, k);
+}
+
+/* ---------- доступ для слоёв других модулей (mapview.h) ---------- */
+static int proj_city(const MapProj *pj, int c, int *sx, int *sy, double *k, double *depth);
+
+int  mapv_ll(const MapProj *pj, double lon, double lat, double zAdd, int *sx, int *sy, double *k) { return proj_ll(pj, lon, lat, zAdd, sx, sy, k); }
+int  mapv_xyz(const MapProj *pj, double X, double Y, double Z, int *sx, int *sy, double *k) { return proj_xyz(pj, X, Y, Z, sx, sy, k); }
+void mapv_rect(const MapProj *pj, int *x, int *y, int *w, int *h) { *x = pj->x; *y = pj->y; *w = pj->w; *h = pj->h; }
+const T3View *mapv_view(const MapProj *pj) { return pj->v; }
+double mapv_px_per_km(const MapProj *pj) { return pj->pxPerKm; }
+int  mapv_size(const MapProj *pj) { return pj->size; }
+double mapv_scale(const MapProj *pj, double k) { return pj->v && pj->pxPerKm > 0 ? pow(k / pj->pxPerKm, 0.7) : 1.0; }
+
+int mapv_city(const MapProj *pj, int c, int *sx, int *sy, double *k)
+{
+    double kk = pj->pxPerKm, depth;
+    if (c < 0 || c >= CITY_COUNT) return 0;
+    if (pj->xf || pj->v) {
+        int ok = proj_city(pj, c, sx, sy, &kk, &depth);
+        if (k) *k = kk;
+        return ok;
+    }
+    return proj_ll(pj, CITIES[c].lon, CITIES[c].lat, 0.3, sx, sy, k);
 }
 
 /* самое сильное войско игрока — его фигурку несёт стрелка похода */
@@ -338,7 +362,7 @@ static void battle_mark(const MapProj *pj, int interactive, int large)
     int lx = sx - tw / 2, ly = sy + r / 2 + SC(4);
     d_rrect(lx - SC(5), ly - SC(2), tw + SC(10), th + SC(4), SC(4), P.surface, c);
     d_text(lx, ly, lab, f, G.battleWon ? P.ink : P.red);
-    if (interactive) hit(sx - r, sy - r * 3 / 2, r * 2, r * 2 + th + SC(8), A_HOVER_BATTLE, 0);
+    if (interactive) hit(lx - SC(5), ly - SC(2), tw + SC(10), th + SC(4), A_HOVER_BATTLE, 0);
 }
 
 /* террасы земель для 3D-карты (и их провинции — для обводки); key — подпись состояния для кэша */
@@ -499,6 +523,7 @@ static void war_overlay(const MapProj *pj, int interactive, int large)
         t3d_lonlat(c->lon, c->lat, &X, &Y);
         war_arrow(pj, X + 150.0, Y + 20.0, X, Y, G.warProgress / 100.0, large);   /* фронт идёт с востока */
     }
+    front_overlay(pj, interactive, large);       /* армии, железные дороги, поезда (ui_front.c) */
     battle_mark(pj, interactive, large);
     if (clipped) d_unclip();
 }
@@ -519,6 +544,8 @@ static void map_draw_flat(int x, int y, int w, int h, int interactive)
         s_key = key;
     }
     d_bitmap(s_mdc, x, y, w, h);
+    MapProj pj = { 0, 0, x, y, x, y, w, h, s_k / 111.0, SC(20) };
+    states_overlay(&pj, interactive, w > SC(900));
 
     /* подписи рек */
     static const struct { int r; double lon, lat; } rl[] = { { 0, 28.95, 55.12 }, { 1, 30.55, 53.40 }, { 4, 24.6, 53.53 }, { 5, 26.9, 52.0 } };
@@ -570,7 +597,6 @@ static void map_draw_flat(int x, int y, int w, int h, int interactive)
         d_text(lx, ly, CITIES[c].name, f, CITIES[c].major ? P.ink : P.muted);
         if (interactive) hit(cx - SC(9), cy - SC(9), SC(18), SC(18), A_CITY, c);
     }
-    MapProj pj = { 0, 0, x, y, x, y, w, h, s_k / 111.0, SC(20) };
     war_overlay(&pj, interactive, w > SC(900));
 }
 
@@ -611,6 +637,7 @@ static void map_overlays(const MapProj *pj, int interactive, int large)
 {
     int game = U.screen == SCR_GAME;
     int maxPer = large ? (int)(sizeof SLOTS / sizeof SLOTS[0]) : 4;
+    states_overlay(pj, interactive, large);      /* исторические государства — под всем (ui_states.c) */
     int cx[C_COUNT_], cy[C_COUNT_], vis[C_COUNT_], csz[C_COUNT_], extra[C_COUNT_], avail[C_COUNT_], built[C_COUNT_];
     double cdepth[C_COUNT_];
     static Placed pl[MAX_PROJ];
@@ -710,6 +737,7 @@ static void map_overlays(const MapProj *pj, int interactive, int large)
             }
         if (interactive) hit(lx - SC(4), ly - SC(1), tw + SC(8), th + SC(2), A_CITY, c);
     }
+    if (game) citynet_map_overlay(pj, interactive, large);   /* городской транспорт (ui_city.c) */
     war_overlay(pj, interactive, large);
 }
 
@@ -802,14 +830,76 @@ static void map_controls(int x, int y, int w, int h, int large)
     }
 }
 
+/* полёт камеры (map_cam_fly_to) */
+static struct { int on; T3Cam from, to; DWORD t0; int ms; void (*done)(void); } s_fly;
+
+static double ease(double t) { return t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t); }
+
+static void fly_step(void)
+{
+    if (!s_fly.on) return;
+    double t = (double)(GetTickCount() - s_fly.t0) / (s_fly.ms > 1 ? s_fly.ms : 1);
+    double e = ease(t);
+    /* приближение — по логарифму: равномерно «на глаз» */
+    U.cam.tx = s_fly.from.tx + (s_fly.to.tx - s_fly.from.tx) * e;
+    U.cam.ty = s_fly.from.ty + (s_fly.to.ty - s_fly.from.ty) * e;
+    U.cam.zoom = exp(log(s_fly.from.zoom) + (log(s_fly.to.zoom) - log(s_fly.from.zoom)) * e);
+    U.cam.pitch = s_fly.from.pitch + (s_fly.to.pitch - s_fly.from.pitch) * e;
+    U.cam.yaw = s_fly.from.yaw + (s_fly.to.yaw - s_fly.from.yaw) * e;
+    t3d_cam_clamp(&U.cam);
+    if (t >= 1) {
+        void (*done)(void) = s_fly.done;
+        s_fly.on = 0;
+        U.mapFast = 0;
+        if (done) done();
+        ui_invalidate();
+    } else {
+        U.mapFast = 1;
+        ui_anim_request();
+    }
+}
+
+void map_cam_fly_to(double lon, double lat, double zoom, double pitch, int ms, void (*done)(void))
+{
+    cam_init();
+    s_fly.from = U.cam;
+    s_fly.to = U.cam;
+    t3d_lonlat(lon, lat, &s_fly.to.tx, &s_fly.to.ty);
+    s_fly.to.zoom = zoom;
+    s_fly.to.pitch = pitch;
+    /* поворот — кратчайшим путём к «север сверху» */
+    double y = fmod(U.cam.yaw, 360.0);
+    if (y > 180) y -= 360;
+    if (y < -180) y += 360;
+    s_fly.from.yaw = y;
+    s_fly.to.yaw = 0;
+    t3d_cam_clamp(&s_fly.to);
+    s_fly.t0 = GetTickCount();
+    s_fly.ms = ms;
+    s_fly.done = done;
+    s_fly.on = 1;
+    ui_anim_request();
+    ui_invalidate();
+}
+
+int map_cam_flying(void) { return s_fly.on; }
+
+/* игрок сам взялся за камеру — полёт сразу заканчивается (и его продолжение выполняется) */
+static void fly_finish(void)
+{
+    if (s_fly.on) { s_fly.t0 = GetTickCount() - (DWORD)s_fly.ms - 1; fly_step(); }
+}
+
 static void map_draw_3d(int x, int y, int w, int h, int interactive, int large)
 {
     cam_init();
+    fly_step();
     T3View v;
     t3d_view(&U.cam, w, h, &v);
     unsigned key;
     s_nblobs = build_blobs(s_blobs, MAX_PROVINCES, &key);
     t3d_set_blobs(s_blobs, s_nblobs);
+    key = key * 31u + states_prepare_3d();      /* земли государств (ui_states.c) */
     render_cached(large ? 1 : 0, &v, x, y, key);
     int size = (int)(w * (large ? 0.050 : 0.078));
     if (size < SC(30)) size = SC(30);
@@ -847,6 +937,7 @@ int map_cam_hit(int x, int y)
 void map_cam_rotate(double dyaw, double dpitch)
 {
     cam_init();
+    fly_finish();
     U.cam.yaw += dyaw;
     U.cam.pitch += dpitch;
     t3d_cam_clamp(&U.cam);
@@ -855,12 +946,16 @@ void map_cam_rotate(double dyaw, double dpitch)
 void map_cam_pan(int fromX, int fromY, int toX, int toY)
 {
     cam_init();
+    fly_finish();
     if (!U.mapVOn) return;
     T3View v;
     t3d_view(&U.cam, U.mapVW, U.mapVH, &v);
     double ax, ay, bx, by;
     if (!t3d_unproject(&v, fromX - U.mapVX, fromY - U.mapVY, 9.0, &ax, &ay)) return;
     if (!t3d_unproject(&v, toX - U.mapVX, toY - U.mapVY, 9.0, &bx, &by)) return;
+    /* у самого горизонта сдвиг огромен — ограничиваем шаг */
+    double dx = bx - ax, dy = by - ay, d = sqrt(dx * dx + dy * dy), lim = 120.0 / (U.cam.zoom > 0.3 ? U.cam.zoom : 0.3);
+    if (d > lim) { bx = ax + dx * lim / d; by = ay + dy * lim / d; }
     U.cam.tx -= bx - ax;
     U.cam.ty -= by - ay;
     t3d_cam_clamp(&U.cam);
@@ -869,11 +964,15 @@ void map_cam_pan(int fromX, int fromY, int toX, int toY)
 void map_cam_zoom_at(double factor, int sx, int sy)
 {
     cam_init();
+    fly_finish();
     if (!U.mapVOn) { U.cam.zoom *= factor; t3d_cam_clamp(&U.cam); return; }
     T3View v;
     t3d_view(&U.cam, U.mapVW, U.mapVH, &v);
     double ax, ay, bx, by;
     int ok = t3d_unproject(&v, sx - U.mapVX, sy - U.mapVY, 9.0, &ax, &ay);
+    double bx0, by0, bx1, by1;
+    t3d_bounds(&bx0, &by0, &bx1, &by1);
+    if (ok && (ax < bx0 - 300 || ax > bx1 + 300 || ay < by0 - 300 || ay > by1 + 300)) ok = 0;   /* у горизонта — без привязки */
     U.cam.zoom *= factor;
     t3d_cam_clamp(&U.cam);
     /* точка под курсором остаётся под курсором */
@@ -888,6 +987,7 @@ void map_cam_zoom_at(double factor, int sx, int sy)
 void map_cam_action(int a)
 {
     cam_init();
+    fly_finish();
     switch (a) {
     case MC_ZOOM_IN:  U.cam.zoom *= 1.35; break;
     case MC_ZOOM_OUT: U.cam.zoom /= 1.35; break;

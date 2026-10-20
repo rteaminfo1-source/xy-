@@ -749,6 +749,41 @@ int main(int argc, char **argv)
         }
         printf("Сохранения: v6 %u байт загружается\n", v6);
     }
+    /* версия 7 добавила ход 1984 года: в старом сохранении 1986-го индекс хода сдвигается */
+    {
+        static Game a, b;
+        game_new(&a, 1, 96);
+        while (!a.over && game_next_year(&a) <= 1986) { resolve_events(&a); bot_turn(&a, 70); game_end_turn(&a); }
+        if (a.year != 1986) FAIL("бот не дошёл до 1986 года");
+        int k84 = 0;
+        while (k84 < TURN_COUNT && TURN_YEARS[k84] != 1984) k84++;
+        if (k84 >= TURN_COUNT) FAIL("нет хода 1984 года");
+        size_t off = offsetof(Game, nets);
+        unsigned v6 = (unsigned)((off + _Alignof(Game) - 1) / _Alignof(Game) * _Alignof(Game));
+        static unsigned char blob[sizeof(Game)];
+        memcpy(blob, &a, sizeof a);
+        Game *o = (Game *)blob;
+        o->version = 6;
+        o->turn = a.turn - 1;                    /* в старой таблице 1986 год стоял на месте 1984-го */
+        int t0 = -1;
+        for (int t = 0; t < MAX_TECH; t++)
+            if (a.tech[t] && a.techTurn[t] == a.turn) { t0 = t; o->techTurn[t] = a.turn - 1; break; }
+        memset(blob + off, 0xEE, v6 - off);
+        FILE *f = tmpfile();
+        if (f) {
+            fwrite("BYTG", 1, 4, f); fwrite(&v6, sizeof v6, 1, f); fwrite(blob, 1, v6, f);
+            rewind(f);
+            if (!game_load(&b, f)) FAIL("сохранение 1986 года (v6) не загрузилось");
+            else {
+                if (b.turn != a.turn || TURN_YEARS[b.turn] != 1986) FAIL("ход 1986 года v6 не сдвинут");
+                if (t0 >= 0 && b.techTurn[t0] != a.turn) FAIL("ход открытия технологии v6 не сдвинут");
+                game_end_turn(&b);
+                if (b.year != 1991) FAIL("после 1986 года v6 не наступил 1991-й");
+            }
+            fclose(f);
+        }
+        printf("Сохранения: v6 1986 года — ход сдвинут под новый 1984-й\n");
+    }
     printf(errors ? "Найдено ошибок: %d\n" : "Ошибок нет\n", errors);
     return errors ? 1 : 0;
 }

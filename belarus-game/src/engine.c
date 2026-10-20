@@ -1,6 +1,8 @@
 /* Игровой движок: экономика, исследования, стройки, события, счёт. Без зависимостей от ОС. */
 #include "game.h"
 #include "war.h"
+#include "front.h"
+#include "citynet.h"
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
@@ -88,6 +90,8 @@ void data_init(void)
                 Q->type == QT_PROVINCE ? province_index(Q->target) : -1;
     }
     war_data_init();
+    front_init();
+    citynet_init();
 }
 
 /* ---------- утилиты ---------- */
@@ -226,6 +230,11 @@ void game_income(const Game *g, Income *inc)
         if (g->mods[m].until == 0 || g->mods[m].until > g->turn)
             for (int r = 0; r < R_COUNT; r++) inc->mods[r] += g->mods[m].fx.v[r];
     cities_income(g, inc->cities);
+    {   /* городской транспорт (метро, трамваи, троллейбусы) — доход городов */
+        double net[R_COUNT];
+        citynet_income(g, net);
+        for (int r = 0; r < R_COUNT; r++) inc->cities[r] += net[r];
+    }
     provinces_income(g, inc->provs);
     Army army;
     war_army(g, &army);
@@ -629,6 +638,7 @@ void game_new(Game *g, int difficulty, unsigned seed)
     g->lastRand = -1;
     g->warTarget = -1;
     g->battleTurn = -1;
+    front_new_game(g);
     g->rng = seed ? seed : 0x1234567u;
     g->popPeak = g->pop;
     record_history(g);
@@ -1056,6 +1066,16 @@ int game_load(Game *g, FILE *f)
         if (from < 7) {                       /* армии на карте расставит игра при первом ходе */
             for (int a = 0; a < MAX_ARMIES; a++) tmp.armies[a].node = tmp.armies[a].dest = -1;
             tmp.frontReady = 0;
+            /* в версии 7 появился ход 1984 года (метро): индексы ходов от 1986 года сдвигаются на один */
+            int k = 0;
+            while (k < TURN_COUNT && TURN_YEARS[k] != 1984) k++;
+            if (k < TURN_COUNT) {
+                if (tmp.turn >= k) tmp.turn++;
+                if (tmp.battleTurn >= k) tmp.battleTurn++;
+                for (int t = 0; t < MAX_TECH; t++) if (tmp.tech[t] && tmp.techTurn[t] >= k) tmp.techTurn[t]++;
+                for (int m = 0; m < tmp.modN && m < MAX_MODS; m++) if (tmp.mods[m].until >= k) tmp.mods[m].until++;
+                if (tmp.turn >= TURN_COUNT && !tmp.over) return 0;
+            }
         }
     }
     if (tmp.warKind < WAR_NONE || tmp.warKind > WAR_LIBERATION) return 0;

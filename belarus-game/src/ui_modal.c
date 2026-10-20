@@ -1,5 +1,7 @@
 /* Модальные окна: события, эпохи, итоги, справка, меню, новая игра, карточки. */
 #include "ui.h"
+#include "mapview.h"
+#include "citynet.h"
 #include "war.h"
 #include "rulers.h"
 #include <stdio.h>
@@ -478,6 +480,10 @@ static int body_person(int x, int y, int w)
     if (R->disci >= 0) { swprintf(s, 300, L"Удешевляет технологию «%ls» на 35%%.", TECHS[R->disci].name); y += d_wrap(x, y, w, s, F_SMALL, P.ink, 1) + SC(6); }
     swprintf(s, 300, L"Окно приглашения: %d–%d.", R->from, R->to);
     y += d_wrap(x, y, w, s, F_SMALL, P.muted, 1) + SC(16);
+    {   /* блок модуля анимаций: например, «Смотреть взлёт ракеты» у космонавтов */
+        int fh = fx_person_card(i, x, y, w);
+        if (fh > 0) y += fh + SC(12);
+    }
     if (st == HS_AVAILABLE) {
         int c = game_person_cost(&G, i);
         swprintf(s, 300, L"Пригласить за %d казны", c);
@@ -519,6 +525,10 @@ static int body_city(int x, int y, int w)
         d_rrect(x, y, w, h, SC(6), mix(P.surface, P.gold, 30), P.gold);
         d_wrap(x + SC(12), y + SC(12), tw, s2, F_SMALL, P.ink, 1);
         y += h + SC(14);
+    }
+    {   /* городской транспорт: схема метро, трамвая или троллейбуса (ui_city.c) */
+        int nh = citynet_city_card(c, x, y, w);
+        if (nh > 0) y += nh + SC(14);
     }
     int any = 0;
     for (int p = 0; p < PROJECT_COUNT; p++) {
@@ -679,5 +689,7 @@ void modal_draw(void)
     case M_CREDITS: modal_run(SC(640), body_credits, 1); break;
     case M_RULER:   modal_run(SC(720), body_ruler, 1); break;
     case M_MAP:     map_full(); break;
+    case M_CITYNET: citynet_ui_draw(); break;     /* ui_city.c — во весь экран */
+    case M_LAUNCH:  fx_launch_draw(); break;      /* ui_fx.c — во весь экран */
     }
 }
