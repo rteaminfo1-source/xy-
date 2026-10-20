@@ -320,6 +320,9 @@ typedef struct {
     struct { int node, dest; int units[MAX_UNITS]; } armies[MAX_ARMIES];   /* node < 0 — армии нет */
     unsigned long long rails[2];      /* построенные железные дороги (биты рёбер front.h) */
     int    frontReady;                /* армии уже расставлены (после загрузки старого сохранения — 0) */
+    unsigned char armyLow[MAX_ARMIES];   /* ходов подряд без снабжения */
+    signed char   armyPrev[MAX_ARMIES];  /* откуда армия пришла за последний ход (-1 — стояла): для анимации марша */
+    int    armyMoveTurn;              /* ход, в начале которого показывать марш (-1 — нет) */
 } Game;
 
 /* заставки (Game.cutscenes) */

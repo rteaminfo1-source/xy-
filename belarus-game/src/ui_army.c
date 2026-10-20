@@ -1,6 +1,8 @@
-/* Вкладка «Армия»: войско, набеги и оборона, текущая война, походы за земли, освобождение 1941–1944. */
+/* Вкладка «Армия»: войско, набеги и оборона, текущая война, армии на карте, железные дороги,
+ * походы за земли, освобождение 1941–1944. */
 #include "ui.h"
 #include "war.h"
+#include "front.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -19,10 +21,13 @@ void unit_badge(int u, int x, int y, int w, int h, COLORREF border)
     d_icon(u >= 0 && UNIT_TYPES[u].def > UNIT_TYPES[u].atk ? IC_DEF : IC_WAR, x + (w - s) / 2, y + (h - s) / 2, s, P.red);
 }
 
-/* Доход земли сейчас (с учётом эпохи и наследия) — для описания. */
+int front_tab_armies(int x, int y, int w);     /* ui_front.c: армии на карте */
+int front_tab_rails(int x, int y, int w);      /* ui_front.c: железные дороги снабжения */
+
+/* Доход земли сейчас (растёт с эпохой) — для описания. */
 static void province_fx_now(int p, Fx *out)
 {
-    double k = era_scale(G.era) / era_scale(PROVINCES[p].era) * (G.provOwned[p] == 2 ? 0.3 : 1.0);
+    double k = era_scale(G.era) / era_scale(PROVINCES[p].era);
     for (int r = 0; r < R_COUNT; r++) out->v[r] = (int)lround(PROVINCES[p].fx.v[r] * k);
 }
 
@@ -129,7 +134,7 @@ static int prov_rank(int p)
 {
     int st = war_province_state(&G, p);
     if (G.warKind == WAR_CONQUEST && G.warTarget == p) return 0;
-    return st == PV_AVAILABLE ? 1 : st == PV_OWNED ? 2 : st == PV_FUTURE ? 3 : st == PV_LEGACY ? 4 : 5;
+    return st == PV_AVAILABLE ? 1 : st == PV_OWNED ? 2 : st == PV_FUTURE ? 3 : 5;
 }
 
 /* та же земля в другую эпоху уже ваша — отдельной карточки не нужно */
@@ -156,16 +161,15 @@ static int province_card(int p, int x, int y, int w, int draw)
     COLORREF fill = st == PV_OWNED ? mix(tab_card_fill(), P.gold, 36) : target ? mix(tab_card_fill(), P.red, 26) : tab_card_fill();
     d_rrect(x, y, w, h, SC(6), fill, accent);
     int tx = x + SC(12), ty = y + SC(10);
-    const wchar_t *stn = target ? L"идёт война" : st == PV_OWNED ? L"ваша земля" : st == PV_AVAILABLE ? L"можно в поход" :
-                         st == PV_LEGACY ? L"наследие" : L"позже";
+    const wchar_t *stn = target ? L"идёт война" : st == PV_OWNED ? L"ваша земля" : st == PV_AVAILABLE ? L"можно в поход" : L"позже";
     int sw = d_text_w(stn, F_TINY) + SC(14);
-    d_icon(st == PV_OWNED || st == PV_LEGACY ? IC_FLAG : IC_WAR, tx, ty + SC(3), SC(16), accent == P.line ? P.muted : accent);
+    d_icon(st == PV_OWNED ? IC_FLAG : IC_WAR, tx, ty + SC(3), SC(16), accent == P.line ? P.muted : accent);
     d_ellipsis(tx + SC(22), ty, tw - sw - SC(30), P0->name, F_H3, st == PV_FUTURE ? P.muted : P.ink);
     w_pill(x + w - SC(12) - sw, ty + SC(3), stn, target || st == PV_AVAILABLE || st == PV_OWNED ? P.onAccent : P.muted,
            target ? P.red : st == PV_AVAILABLE ? P.blue : st == PV_OWNED ? P.gold : P.surface2);
     ty += d_font_h(F_H3) + SC(4);
     wchar_t buf[320], fx[200], pop[32];
-    swprintf(buf, 320, L"%ls: %ls · окно похода %d–%d", st == PV_OWNED || st == PV_LEGACY ? L"прежний владелец" : L"владелец",
+    swprintf(buf, 320, L"%ls: %ls · окно похода %d–%d", st == PV_OWNED ? L"прежний владелец" : L"владелец",
              P0->owner, P0->from, P0->to);
     d_ellipsis(tx, ty, tw, buf, F_TINY, P.muted);
     ty += SC(18);
@@ -173,7 +177,7 @@ static int province_card(int p, int x, int y, int w, int draw)
     province_fx_now(p, &now);
     fx_describe(&now, fx, 200);
     fmt_pop(P0->popK, pop, 32);
-    if (st == PV_OWNED || st == PV_LEGACY) swprintf(buf, 320, L"Доход за ход: %ls", fx);
+    if (st == PV_OWNED) swprintf(buf, 320, L"Доход за ход: %ls", fx);
     else swprintf(buf, 320, L"Даст: %ls · +%ls жителей", fx, pop);
     d_ellipsis(tx, ty, tw, buf, F_SMALL_B, st == PV_OWNED ? P.gold : P.ink);
     ty += SC(20);
@@ -194,12 +198,10 @@ static int province_card(int p, int x, int y, int w, int draw)
         for (int k = 0; k < PROVINCE_COUNT; k++)
             if (k != p && !strcmp(PROVINCES[k].group, P0->group) && PROVINCES[k].from > G.year && (q < 0 || PROVINCES[k].from < PROVINCES[q].from)) q = k;
         if (q >= 0) {
-            swprintf(buf, 320, L"%ls попытается отнять её в %d году — держите войско и крепости (осада %d).",
+            swprintf(buf, 320, L"%ls попытается отнять её в %d году — поставьте сюда армию и стройте крепости (осада %d).",
                      PROVINCES[q].owner, PROVINCES[q].from, war_province_strength(&G, q));
             d_ellipsis(tx, ty, tw, buf, F_SMALL, P.red);
-        } else d_ellipsis(tx, ty, tw, L"Земля ваша: доход растёт с каждой эпохой.", F_SMALL, P.muted);
-    } else {
-        d_ellipsis(tx, ty, tw, L"После третьего раздела Речи Посполитой (1795) — 30% прежнего дохода через торговые связи.", F_SMALL, P.muted);
+        } else d_ellipsis(tx, ty, tw, L"Земля ваша навсегда: доход растёт с каждой эпохой.", F_SMALL, P.muted);
     }
     ty += SC(20);
     ty += d_wrap(tx, ty, tw, P0->desc, F_TINY, P.muted, 1) + SC(8);
@@ -233,7 +235,7 @@ int tab_army(int x, int y, int w)
         int cx = x + (i % cols) * (cw + gap), cy = y + (i / cols) * (ch + gap);
         switch (i) {
         case 0: swprintf(v, 64, L"%d / %d", a.units, cap); stat_box(cx, cy, cw, ch, IC_POP, L"Войско, соединений", v, P.ink, 20); break;
-        case 1: swprintf(v, 64, L"%ld", lround(a.attack)); stat_box(cx, cy, cw, ch, IC_WAR, L"Сила наступления", v, P.red, 21); break;
+        case 1: swprintf(v, 64, L"%ld", lround(a.attack)); stat_box(cx, cy, cw, ch, IC_WAR, L"Сила всех армий", v, P.red, 21); break;
         case 2: swprintf(v, 64, L"%ld", lround(defp)); stat_box(cx, cy, cw, ch, IC_DEF, L"Оборона с крепостями", v, P.blue, 22); break;
         case 3: {
             double up = a.upkeep / 10.0 * (G.warKind != WAR_NONE ? 1.5 : 1.0);
@@ -255,7 +257,9 @@ int tab_army(int x, int y, int w)
     if (G.occupied) {
         int k = war_occupied_count(&G);
         swprintf(buf, 600, L"Оккупировано областей: %d из %d. Доходы ×%.2f, каждый ход гибнут люди, каратели жгут деревни — удары войны сильнее. "
-                           L"Освобождайте области сами: сила оккупантов слабеет с каждым годом (сейчас %d). Остальное освободит операция «Багратион» в 1944 году.",
+                           L"Освобождайте области сами: ведите армии с Большой земли на запад, к центрам областей. Снабжение идёт с востока "
+                           L"и из освобождённых областей, а через оккупированные города не проходит. Сила оккупантов слабеет с каждым годом "
+                           L"(сейчас %d). Остальное освободит операция «Багратион» в 1944 году.",
                  k, REGION_COUNT, war_occupation_mult(&G), war_region_strength(&G));
         decimal_comma(buf);
         y += notice(x, y, w, P.red, IC_WAR, L"ОККУПАЦИЯ 1941–1944", buf) + SC(10);
@@ -279,8 +283,9 @@ int tab_army(int x, int y, int w)
     }
     if (G.year >= 1921 && G.year < 1941) {
         y += notice(x, y, w, P.red, IC_WAR, L"ВПЕРЕДИ 1941 ГОД",
-                    L"22 июня 1941 года начнётся Великая Отечественная война, и все шесть областей окажутся под оккупацией. "
-                    L"Готовьте армию заранее: стрелковые дивизии и авиация понадобятся, чтобы освобождать области раньше «Багратиона».") + SC(10);
+                    L"22 июня 1941 года начнётся Великая Отечественная война: все шесть областей окажутся под оккупацией, а армии "
+                    L"с боями отступят на восток, к Большой земле. Готовьте армию заранее: стрелковые дивизии и авиация понадобятся, "
+                    L"чтобы освобождать области раньше «Багратиона».") + SC(10);
     }
 
     /* 3. текущая война */
@@ -293,12 +298,27 @@ int tab_army(int x, int y, int w)
         wchar_t etas[80], line[600];
         if (eta >= 99) swprintf(etas, 80, L"победа маловероятна");
         else swprintf(etas, 80, L"до победы ≈ %d %ls", eta, eta == 1 ? L"ход" : eta < 5 ? L"хода" : L"ходов");
-        swprintf(line, 600, L"Продвижение %d%% · ход войны %d из 10 · ваша сила %ld против %ld · %ls · боёв до %d г.: %d",
+        swprintf(line, 600, L"Продвижение %d%% · бой %d из 10 · ваша сила %ld против %ld · %ls · боёв до %d г.: %d",
                  G.warProgress, G.warTurns, lround(A), lround(E), etas,
                  conquest ? PROVINCES[G.warTarget].to : 1944, war_battles_left(&G, G.warKind, G.warTarget));
+        /* где армия: у цели, в пути или ни одна не идёт */
+        wchar_t army[200];
+        int tn = front_target_node(&G), at = -1, going = -1;
+        for (int k = 0; k < MAX_ARMIES; k++) {
+            if (!front_army_alive(&G, k)) continue;
+            if (G.armies[k].node == tn && at < 0) at = k;
+            else if (G.armies[k].dest == tn && going < 0) going = k;
+        }
+        if (at >= 0) swprintf(army, 200, L"Армия %d стоит у цели: бой — в конце хода.", at + 1);
+        else if (going >= 0) {
+            int e = front_eta(&G, G.armies[going].node, tn);
+            swprintf(army, 200, L"Армия %d идёт к цели: ещё %d %ls, бой начнётся, когда она дойдёт.", going + 1, e,
+                     e == 1 ? L"ход" : e < 5 ? L"хода" : L"ходов");
+        } else swprintf(army, 200, L"К цели не идёт ни одна армия — без армии боя не будет. Нажмите «Отправить армию».");
+        int ha = d_wrap(0, 0, tw, army, F_SMALL_B, 0, 0) + SC(6);
         int hl = d_wrap(0, 0, tw, line, F_SMALL_B, 0, 0);
         int hr = G.warReport[0] ? d_wrap(0, 0, tw, G.warReport, F_SMALL, 0, 0) + SC(6) : 0;
-        int h = SC(12) + d_font_h(F_H2) + SC(10) + SC(14) + SC(10) + hl + SC(6) + hr + SC(22) + SC(36) + SC(12);
+        int h = SC(12) + d_font_h(F_H2) + SC(10) + SC(14) + SC(10) + hl + SC(6) + ha + hr + SC(22) + SC(36) + SC(12);
         d_rrect(x, y, w, h, SC(6), mix(P.surface, P.red, 30), P.red);
         int tx = x + SC(12), ty = y + SC(12);
         swprintf(buf, 600, L"%ls: %ls", conquest ? L"Поход" : L"Освобождение", name);
@@ -310,12 +330,19 @@ int tab_army(int x, int y, int w)
         if (pr > 0) d_rrect(tx, ty, tw * pr / 100 > SC(14) ? tw * pr / 100 : SC(14), SC(14), SC(7), P.red, CLR_INVALID);
         ty += SC(14) + SC(10);
         ty += d_wrap(tx, ty, tw, line, F_SMALL_B, G.warProgress < 0 || eta >= 99 ? P.red : P.ink, 1) + SC(6);
+        ty += d_wrap(tx, ty, tw, army, F_SMALL_B, at >= 0 ? P.red : going >= 0 ? P.ink : P.red, 1) + SC(6);
         if (hr) ty += d_wrap(tx, ty, tw, G.warReport, F_SMALL, P.muted, 1) + SC(6);
-        d_ellipsis(tx, ty, tw, conquest ? L"Бой идёт в конце хода. Во время похода содержание ×1,5, стабильность −1,5 за ход."
-                                        : L"Бой идёт в конце хода. Партизанские бригады при освобождении сильнее в полтора раза.",
+        d_ellipsis(tx, ty, tw, conquest ? L"Бой идёт в конце хода, если армия стоит у цели. Во время похода содержание ×1,5, стабильность −1,5 за ход."
+                                        : L"Бой идёт в конце хода, если армия стоит в центре области. Партизанские бригады здесь сильнее в полтора раза.",
                    F_TINY, P.muted);
         ty += SC(22);
-        w_button(tx, ty, SC(190), SC(32), conquest ? L"Заключить мир" : L"Остановить операцию", B_SECONDARY, !G.over, A_PEACE, 0);
+        int bx = tx;
+        if (at < 0 && going < 0) {
+            int a = front_army_for(&G, tn);
+            w_button(bx, ty, SC(190), SC(32), L"Отправить армию", B_DANGER, !G.over && a >= 0, A_ARMY_SPLIT, FRONT_ARG(a >= 0 ? a : 0, FA_TARGET));
+            bx += SC(198);
+        }
+        w_button(bx, ty, SC(190), SC(32), conquest ? L"Заключить мир" : L"Остановить операцию", B_SECONDARY, !G.over, A_PEACE, 0);
         y += h + SC(14);
     } else if (G.warReport[0]) {
         tab_section(x, &y, L"ПОСЛЕДНИЙ БОЙ");
@@ -324,7 +351,10 @@ int tab_army(int x, int y, int w)
         y += d_wrap(x, y, w, buf, F_TINY, P.muted, 1) + SC(14);
     }
 
-    /* 4. освобождение */
+    /* 4. армии на карте (ui_front.c) */
+    y += front_tab_armies(x, y, w);
+
+    /* 5. освобождение */
     if (G.occupied || G.liberated) {
         tab_section(x, &y, L"ОСВОБОЖДЕНИЕ БЕЛАРУСИ");
         int rc = w >= SC(560) ? 2 : 1, rw = (w - gap * (rc - 1)) / rc, rh = SC(88);
@@ -352,7 +382,7 @@ int tab_army(int x, int y, int w)
         y += ((REGION_COUNT + rc - 1) / rc) * (rh + gap) + SC(10);
     }
 
-    /* 5. войска */
+    /* 6. войска */
     tab_section(x, &y, L"ВОЙСКА");
     {
         int ucols = w >= SC(760) ? 2 : 1, uw = (w - gap * (ucols - 1)) / ucols, uh = SC(104), n = 0;
@@ -365,15 +395,19 @@ int tab_army(int x, int y, int w)
         y += ((n + ucols - 1) / ucols) * (uh + gap) + SC(10);
     }
 
-    /* 6. походы */
+    /* 7. железные дороги снабжения (ui_front.c) */
+    y += front_tab_rails(x, y, w);
+
+    /* 8. походы */
     int anyProv = 0, closed = 0;
     for (int p = 0; p < PROVINCE_COUNT; p++) { anyProv |= prov_shown(p); closed += war_province_state(&G, p) == PV_CLOSED && !prov_dup(p); }
     if (anyProv) {
         tab_section(x, &y, L"ЗЕМЛИ ДЛЯ ПОХОДОВ");
-        y += d_wrap(x, y, w, L"Присоединённая земля сразу даёт жителей и каждый ход — доход, который растёт с эпохой. Окна походов — годы, "
-                             L"когда эти земли действительно переходили из рук в руки. В 1795 году, после разделов Речи Посполитой, "
-                             L"земли становятся наследием: остаётся 30% дохода. Это страницы истории XII–XVIII веков: сегодня эти земли "
-                             L"входят в соседние государства — Россию, Украину, Польшу, Литву и Латвию.", F_SMALL, P.muted, 1) + SC(10);
+        y += d_wrap(x, y, w, L"Присоединённая земля сразу даёт жителей и каждый ход — доход, который растёт с эпохой. Взятая земля "
+                             L"остаётся вашей навсегда — и после разделов Речи Посполитой 1795 года. Окна походов — годы, когда эти земли "
+                             L"действительно переходили из рук в руки. Объявите поход и приведите к земле армию: бой идёт, только когда "
+                             L"армия стоит на земле-цели. Это страницы истории XII–XVIII веков: сегодня эти земли входят в соседние "
+                             L"государства — Россию, Украину, Польшу, Литву и Латвию.", F_SMALL, P.muted, 1) + SC(10);
         int order[MAX_PROVINCES], n = 0;
         for (int p = 0; p < PROVINCE_COUNT && n < MAX_PROVINCES; p++) if (prov_shown(p)) order[n++] = p;
         for (int i = 1; i < n; i++) {

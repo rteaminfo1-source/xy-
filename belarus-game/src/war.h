@@ -63,12 +63,15 @@ double war_tech_mult(const Game *g);                  /* ×1.0 … ×2.0 от в
 double war_unit_eff(const Game *g, int u);            /* устаревание: 1.0 для войск своей и прошлой эпохи */
 int  war_army_size(const Game *g);
 int  war_army_cap(const Game *g);                     /* предел численности: растёт с населением */
-double war_attack_power(const Game *g, int kind);     /* сила наступления (партизаны сильнее при освобождении) */
-double war_defense_power(const Game *g);              /* войско + крепости: против набегов и осад */
+double war_attack_power(const Game *g, int kind);     /* сила самой сильной армии (партизаны сильнее при освобождении) */
+double war_defense_power(const Game *g);              /* всё войско вместе + крепости */
+double war_defense_at(const Game *g, int node);       /* оборона узла фронта: армии в нём и рядом + крепости */
+int  war_raid_cities(const Game *g, int *out);        /* города, на которые в эту эпоху идут набеги (до 4) */
+void war_rail_income(const Game *g, double *gold, double *ind);   /* доход одного перегона железной дороги */
 double war_raid_chance(const Game *g);                /* вероятность набега в конце хода */
 double war_raid_strength(const Game *g);              /* типичная сила набега */
 double war_enemy_power(const Game *g, int kind, int target);
-int  war_eta(const Game *g, int kind, int target);    /* ожидаемое число ходов до победы; 99 — не победить */
+int  war_eta(const Game *g, int kind, int target);    /* ходов до победы с маршем армии к цели; 99 — не победить */
 int  war_battles_left(const Game *g, int kind, int target); /* сколько боёв осталось до закрытия окна */
 int  capital_of_era(int era);                         /* C_* или -1 */
 
@@ -79,7 +82,7 @@ int  war_unit_cost_ind(const Game *g, int u);
 int  war_recruit(Game *g, int u);
 int  war_disband(Game *g, int u);
 
-enum { PV_FUTURE, PV_AVAILABLE, PV_OWNED, PV_LEGACY, PV_CLOSED };
+enum { PV_FUTURE, PV_AVAILABLE, PV_OWNED, PV_LEGACY, PV_CLOSED };   /* PV_LEGACY больше не бывает: земли свои навсегда */
 int  war_province_state(const Game *g, int p);
 int  war_group_owner(const Game *g, int p);             /* своя земля той же группы (та же земля в другую эпоху) или -1 */
 int  war_province_strength(const Game *g, int p);     /* с учётом года */
@@ -90,7 +93,8 @@ const wchar_t *war_cannot_declare(const Game *g, int kind, int target);
 int  war_declare(Game *g, int kind, int target);
 void war_peace(Game *g);
 
-/* Ход войны: вызывается из game_end_turn до смены года. */
+/* Ход войны: вызывается из game_end_turn до смены года. Сначала марш армий (front_end_turn), затем бой —
+ * если армия стоит на узле цели, — или набег, если войны нет. */
 void war_end_turn(Game *g);
 /* Начало и конец оккупации — при смене года. */
 void war_year_changed(Game *g, int oldYear);

@@ -1,12 +1,16 @@
 /* Армия и война: набор войск, походы за земли, набеги и осады, оккупация 1941–1944, специализации городов.
+ * Войска стоят армиями на узлах фронта (front.c): бой идёт там, где стоит армия.
  * Как и весь движок, не зависит от ОС. */
 #include "war.h"
+#include "front.h"
 #include <string.h>
 #include <math.h>
 
 #define OCC_FROM 1941
 #define OCC_TO   1944
-#define LEGACY_YEAR 1795      /* разделы Речи Посполитой: присоединённые земли становятся наследием */
+#define PARTITION_YEAR 1795   /* разделы Речи Посполитой: присоединённые земли остаются своими */
+#define RAIL_GOLD 2.0         /* доход перегона железной дороги в эпоху IV (дальше растёт с эпохой) */
+#define RAIL_IND  1.0
 
 /* ---------- случайные числа (тот же генератор, что в движке) ---------- */
 static unsigned wrnd(Game *g)
@@ -93,7 +97,9 @@ int war_recruit(Game *g, int u)
     if (g->gold < cg || g->ind < ci) return 0;
     g->gold -= cg;
     g->ind -= ci;
+    front_sync(g);
     g->units[u]++;
+    front_add_unit(g, u);         /* соединение встаёт в армию у столицы */
     game_check_achievements(g);   /* задание «войско не меньше N» засчитывается сразу */
     return 1;
 }
@@ -101,11 +107,15 @@ int war_recruit(Game *g, int u)
 int war_disband(Game *g, int u)
 {
     if (g->over || u < 0 || u >= UNIT_COUNT || u >= MAX_UNITS || g->units[u] <= 0) return 0;
+    front_sync(g);
     g->units[u]--;
+    front_remove_unit(g, u);
+    front_sync(g);
     return 1;
 }
 
-double war_attack_power(const Game *g, int kind)
+/* сила всего войска разом (армии ещё не расставлены — например, сразу после загрузки старого сохранения) */
+static double pool_attack(const Game *g, int kind)
 {
     Army a;
     war_army(g, &a);
@@ -119,11 +129,30 @@ double war_attack_power(const Game *g, int kind)
     return atk;
 }
 
+/* сила самой сильной армии */
+double war_attack_power(const Game *g, int kind)
+{
+    double best = 0;
+    for (int a = 0; a < MAX_ARMIES; a++) {
+        double v = front_army_attack(g, a, kind, -1);
+        if (v > best) best = v;
+    }
+    if (best <= 0 && war_army_size(g) > 0 && !front_army_count(g)) best = pool_attack(g, kind);
+    return best;
+}
+
 double war_defense_power(const Game *g)
 {
     Army a;
     war_army(g, &a);
     return a.defense * 0.75 + game_def(g);   /* game_def уже учитывает четверть обороны войска */
+}
+
+/* оборона города-узла: армии в нём — полностью, в соседних — наполовину, плюс крепости и оборона страны */
+double war_defense_at(const Game *g, int node)
+{
+    if (!front_army_count(g) && war_army_size(g) > 0) return war_defense_power(g);
+    return front_defense_at(g, node) * 0.75 + game_def(g);
 }
 
 /* ---------- земли ---------- */
@@ -142,8 +171,7 @@ int war_group_owner(const Game *g, int p)
 int war_province_state(const Game *g, int p)
 {
     if (p < 0 || p >= PROVINCE_COUNT || p >= MAX_PROVINCES) return PV_CLOSED;
-    if (g->provOwned[p] == 1) return PV_OWNED;
-    if (g->provOwned[p] == 2) return PV_LEGACY;
+    if (g->provOwned[p]) return PV_OWNED;     /* присоединённая земля остаётся своей во все эпохи */
     if (g->year < PROVINCES[p].from) return PV_FUTURE;
     if (g->year > PROVINCES[p].to) return PV_CLOSED;
     if (group_owner(g, p) >= 0) return PV_CLOSED;
@@ -160,7 +188,7 @@ int war_province_strength(const Game *g, int p)
 int war_province_count(const Game *g)
 {
     int n = 0;
-    for (int p = 0; p < PROVINCE_COUNT && p < MAX_PROVINCES; p++) n += g->provOwned[p] == 1;
+    for (int p = 0; p < PROVINCE_COUNT && p < MAX_PROVINCES; p++) n += g->provOwned[p] != 0;
     return n;
 }
 
@@ -190,22 +218,42 @@ int war_battles_left(const Game *g, int kind, int target)
     return n;
 }
 
-/* Ожидаемое число ходов до победы: прогноз по ходам с учётом силы врага в каждом году,
- * закрытия окна похода (или конца оккупации) и предела в 10 ходов. 99 — не успеть. */
+/* узел фронта цели войны */
+static int target_node(int kind, int target)
+{
+    if (kind == WAR_CONQUEST) return front_node_of_prov(target);
+    if (kind == WAR_LIBERATION) return front_node_of_region(target);
+    return -1;
+}
+
+/* Ожидаемое число ходов до победы: марш армии к цели, затем бои с учётом силы врага в каждом году,
+ * закрытия окна похода (или конца оккупации), снабжения у цели и предела в 10 боёв. 99 — не успеть. */
 int war_eta(const Game *g, int kind, int target)
 {
-    double A = war_attack_power(g, kind);
-    if (A <= 0) return 99;
     if (kind == WAR_CONQUEST && (target < 0 || target >= PROVINCE_COUNT)) return 99;
+    if (kind == WAR_LIBERATION && (target < 0 || target >= REGION_COUNT)) return 99;
+    int node = target_node(kind, target), travel = 0;
+    double A = 0;
+    int a = front_army_for(g, node);
+    if (a >= 0) {
+        travel = front_eta(g, g->armies[a].node, node);
+        if (travel < 0) return 99;
+        for (int b = 0; b < MAX_ARMIES; b++)        /* армии, которые уже стоят у цели, бьются вместе */
+            if (b == a || (front_army_alive(g, b) && g->armies[b].node == node)) A += front_army_attack(g, b, kind, node);
+    } else if (!front_army_count(g)) A = war_attack_power(g, kind);
+    if (A <= 0) return 99;
     int ongoing = g->warKind == kind && g->warTarget == target;
     double prog = ongoing ? g->warProgress : 0;
-    int cap = 10 - (ongoing ? g->warTurns : 0), n = 0;
+    int cap = 10 - (ongoing ? g->warTurns : 0), n = 0, nb = 0;
     int first = kind == WAR_CONQUEST ? PROVINCES[target].from : OCC_FROM;
     int last  = kind == WAR_CONQUEST ? PROVINCES[target].to   : OCC_TO;
-    for (int t = g->turn; t < TURN_COUNT && n < cap; t++) {
+    int start = g->turn + (travel > 0 ? travel - 1 : 0);   /* дошедшая армия бьётся в тот же ход */
+    for (int t = g->turn; t < TURN_COUNT && nb < cap; t++) {
         int y = TURN_YEARS[t];
         if (y > last) break;
         if (y < first) continue;
+        n++;
+        if (t < start) continue;                    /* армия ещё в пути */
         double E;
         if (kind == WAR_CONQUEST) {
             int e = era_of_year(y), pe = PROVINCES[target].era;
@@ -214,7 +262,7 @@ int war_eta(const Game *g, int kind, int target)
             E = lround(PROVINCES[target].strength * era_scale(e) / era_scale(pe) * cost_k(g));
         } else E = lround(280.0 * (1.0 - 0.2 * (y - OCC_FROM)) * cost_k(g));
         prog += 200.0 * A / (A + E) - 60.0;
-        n++;
+        nb++;
         if (prog >= 100) return n;
     }
     return 99;
@@ -230,7 +278,6 @@ const wchar_t *war_cannot_declare(const Game *g, int kind, int target)
         if (g->occupied) return L"Страна оккупирована: сейчас не до походов.";
         switch (war_province_state(g, target)) {
             case PV_OWNED:  return L"Эта земля уже ваша.";
-            case PV_LEGACY: return L"Эта земля уже была вашей.";
             case PV_FUTURE: return L"Поход за эту землю ещё не возможен.";
             case PV_CLOSED: return group_owner(g, target) >= 0 ? L"Эта земля уже ваша." : L"Время для этого похода прошло.";
         }
@@ -239,6 +286,8 @@ const wchar_t *war_cannot_declare(const Game *g, int kind, int target)
         if (!(g->occupied & (1u << target))) return L"Эта область свободна.";
     } else return L"Неизвестная война.";
     if (war_attack_power(g, kind) <= 0) return L"Нет войска: наберите войска на этой вкладке.";
+    if (front_army_count(g) && front_army_for(g, target_node(kind, target)) < 0)
+        return L"Ни одна армия не может дойти туда по своим землям.";
     return 0;
 }
 
@@ -272,19 +321,34 @@ void war_peace(Game *g)
     g->warTarget = -1;
     g->warProgress = 0;
     g->warTurns = 0;
+    front_sync(g);      /* армии с чужой земли отходят домой */
 }
 
-/* Потери: каждое соединение гибнет с вероятностью frac. Возвращает число потерянных. */
-static int lose_units(Game *g, double frac)
+/* Потери: каждое соединение армий из mask гибнет с вероятностью frac. Возвращает число потерянных. */
+static int lose_units(Game *g, unsigned mask, double frac)
 {
     int lost = 0;
-    for (int u = 0; u < UNIT_COUNT && u < MAX_UNITS; u++) {
-        int n = g->units[u];
-        for (int i = 0; i < n; i++)
-            if (wrnd01(g) < frac) { g->units[u]--; lost++; }
+    front_sync(g);
+    for (int a = 0; a < MAX_ARMIES; a++) {
+        if (!((mask >> a) & 1u) || !front_army_alive(g, a)) continue;
+        for (int u = 0; u < UNIT_COUNT && u < MAX_UNITS; u++) {
+            int n = g->armies[a].units[u];
+            for (int i = 0; i < n; i++)
+                if (wrnd01(g) < frac) { g->armies[a].units[u]--; g->units[u]--; lost++; }
+        }
     }
     g->unitsLost += lost;
+    front_sync(g);
     return lost;
+}
+
+/* армии, которые защищают узел: на нём и в соседних */
+static unsigned defenders(const Game *g, int node)
+{
+    unsigned m = 0;
+    for (int a = 0; a < MAX_ARMIES; a++)
+        if (front_army_alive(g, a) && (g->armies[a].node == node || front_edge(g->armies[a].node, node) >= 0)) m |= 1u << a;
+    return m;
 }
 
 /* ---------- доходы городов и земель ---------- */
@@ -316,6 +380,20 @@ void cities_income(const Game *g, double out[R_COUNT])
         city_bonus(g, c, b);
         for (int r = 0; r < R_COUNT; r++) out[r] += b[r];
     }
+    /* железные дороги возят грузы и пассажиров между городами */
+    int rails = front_rail_count(g);
+    if (rails) {
+        double k = era_scale(g->era > 4 ? g->era : 4) / era_scale(4);
+        out[R_GOLD] += rails * RAIL_GOLD * k;
+        out[R_IND]  += rails * RAIL_IND * k;
+    }
+}
+
+void war_rail_income(const Game *g, double *gold, double *ind)
+{
+    double k = era_scale(g->era > 4 ? g->era : 4) / era_scale(4);
+    *gold = RAIL_GOLD * k;
+    *ind = RAIL_IND * k;
 }
 
 void provinces_income(const Game *g, double out[R_COUNT])
@@ -323,7 +401,7 @@ void provinces_income(const Game *g, double out[R_COUNT])
     memset(out, 0, sizeof(double) * R_COUNT);
     for (int p = 0; p < PROVINCE_COUNT && p < MAX_PROVINCES; p++) {
         if (!g->provOwned[p]) continue;
-        double k = era_scale(g->era) / era_scale(PROVINCES[p].era) * (g->provOwned[p] == 2 ? 0.3 : 1.0);
+        double k = era_scale(g->era) / era_scale(PROVINCES[p].era);   /* земля своя во все эпохи — доход растёт */
         for (int r = 0; r < R_COUNT; r++) out[r] += PROVINCES[p].fx.v[r] * k;
     }
 }
@@ -393,29 +471,45 @@ double war_raid_strength(const Game *g)
     return RAID_E[g->era] * (1.0 + DIFFICULTIES[g->difficulty].harmPct / 200.0);
 }
 
+/* городам, на которые идут набеги этой эпохи (для подсказок); вернёт их число (до 4, без повторов) */
+int war_raid_cities(const Game *g, int *out)
+{
+    int n = 0;
+    if (g->era < 1 || g->era > ERA_COUNT || RAID_P[g->era] <= 0) return 0;
+    for (int k = 0; k < 4; k++) {
+        int c = RAID_CITIES[g->era][k], dup = 0;
+        for (int i = 0; i < n; i++) dup |= out[i] == c;
+        if (!dup) out[n++] = c;
+    }
+    return n;
+}
+
 static void raid(Game *g)
 {
     double p = war_raid_chance(g);
     if (p <= 0 || wrnd01(g) >= p) return;
     int k = wrnd_n(g, 4);
     const wchar_t *who = RAIDERS[g->era][k];
-    const wchar_t *city = CITIES[RAID_CITIES[g->era][k]].name;
+    int c = RAID_CITIES[g->era][k], node = front_node_near_city(c);
+    const wchar_t *city = CITIES[c].name;
     int peace = g->era >= 7;   /* после 1945 года боёв на границе нет: нарушителей задерживают пограничники */
+    unsigned def = defenders(g, node);
     double E = war_raid_strength(g) * (0.7 + 0.6 * wrnd01(g));
-    double D = war_defense_power(g) * (0.8 + 0.4 * wrnd01(g));
+    double D = war_defense_at(g, node) * (0.8 + 0.4 * wrnd01(g));
     g->warNews = 1;
-    if (!peace) mark_battle(g, CITIES[RAID_CITIES[g->era][k]].lon, CITIES[RAID_CITIES[g->era][k]].lat, D >= E, WAR_NONE, 1);
+    if (!peace) mark_battle(g, CITIES[c].lon, CITIES[c].lat, D >= E, WAR_NONE, 1);
     if (D >= E) {
         long loot = lround(5 * era_scale(g->era));
         g->gold += loot;
         g->stab = clampw(g->stab + 1, 0, 100);
         if (!peace) g->battlesWon++;
-        int lost = !peace && war_army_size(g) > 0 && E > D * 0.7 ? lose_units(g, 0.05) : 0;
+        int lost = !peace && def && E > D * 0.7 ? lose_units(g, def, 0.05) : 0;
         if (peace) swprintf(g->warReport, 200, L"%ls у города %ls: пограничники пресекли нарушение; штрафы и конфискат — казна +%ld.",
                             who, city, loot);
         else if (lost) swprintf(g->warReport, 200, L"%ls. Бой у города %ls выигран! Трофеи: казна +%ld, потеряно соединений: %d.",
                            who, city, loot, lost);
-        else swprintf(g->warReport, 200, L"%ls. Бой у города %ls выигран! Трофеи: казна +%ld.", who, city, loot);
+        else swprintf(g->warReport, 200, L"%ls. Бой у города %ls выигран%ls! Трофеи: казна +%ld.", who, city,
+                      def ? L" армией" : L" крепостями", loot);
     } else {
         double goldLoss = g->gold * (peace ? 0.05 : 0.15);
         double popLoss = g->pop * RAID_POP[g->era] * (1.0 + DIFFICULTIES[g->difficulty].harmPct / 100.0);
@@ -425,18 +519,19 @@ static void raid(Game *g)
         g->popLostWar += popLoss;
         g->stab = clampw(g->stab - (peace ? 1 : 2), 0, 100);
         if (!peace) g->battlesLost++;
-        int lost = !peace && war_army_size(g) > 0 ? lose_units(g, 0.15) : 0;
+        int lost = !peace && def ? lose_units(g, def, 0.15) : 0;
         wchar_t ps[32];
+        const wchar_t *tip = lost ? L" Армия понесла потери." : def ? L"" : L" Поставьте армию в этот город или рядом.";
         fmt_pop(popLoss, ps, 32);
         if (peace)
             swprintf(g->warReport, 200, L"%ls у города %ls: нарушение не пресечено, ущерб — %ld казны, производство −10%%.",
                      who, city, lround(goldLoss));
         else if (popLoss >= 0.5)
-            swprintf(g->warReport, 200, L"%ls. Враг прорвался к городу %ls: разграблено %ld казны, погибших — %ls%ls", who, city,
-                     lround(goldLoss), ps, lost ? L" Войско понесло потери." : L" Нужно больше войск и крепостей.");
+            swprintf(g->warReport, 200, L"%ls. Враг прорвался к городу %ls: разграблено %ld казны, погибших — %ls.%ls", who, city,
+                     lround(goldLoss), ps, tip);
         else
             swprintf(g->warReport, 200, L"%ls. Граница у города %ls не удержана: ущерб — %ld казны, производство −10%%.%ls", who, city,
-                     lround(goldLoss), lost ? L" Войско понесло потери." : L" Нужно больше войск и крепостей.");
+                     lround(goldLoss), tip);
     }
     game_log(g, LOG_WAR, L"%ls", g->warReport);
 }
@@ -450,16 +545,18 @@ static void end_war(Game *g)
     g->warTurns = 0;
 }
 
-static void battle(Game *g)
+/* бой у цели: бьются армии, стоящие на её узле (mask) */
+static void battle(Game *g, unsigned mask)
 {
-    int kind = g->warKind, t = g->warTarget;
+    int kind = g->warKind, t = g->warTarget, node = front_target_node(g);
     const wchar_t *name = kind == WAR_CONQUEST ? PROVINCES[t].name : REGION_NAMES[t];
-    double A = war_attack_power(g, kind), E = war_enemy_power(g, kind, t);
+    double A = 0, E = war_enemy_power(g, kind, t);
+    for (int a = 0; a < MAX_ARMIES; a++) if ((mask >> a) & 1u) A += front_army_attack(g, a, kind, node);
     g->warNews = 1;
     g->warTurns++;
     int gain = A > 0 ? (int)lround(200.0 * A / (A + E) * (0.8 + 0.4 * wrnd01(g)) - 60.0) : -40;
     g->warProgress += gain;
-    int lost = lose_units(g, 0.10 * E / (A + E + 1e-9));
+    int lost = lose_units(g, mask, 0.10 * E / (A + E + 1e-9));
     if (kind == WAR_CONQUEST) g->stab = clampw(g->stab - 1.5, 0, 100);
     if (kind == WAR_CONQUEST) mark_battle(g, PROVINCES[t].lon, PROVINCES[t].lat, gain > 0, kind, 1);
     else mark_battle(g, CITIES[REGION_CITY[t]].lon, CITIES[REGION_CITY[t]].lat, gain > 0, kind, 1);
@@ -476,14 +573,15 @@ static void battle(Game *g)
             g->stab = clampw(g->stab + 4, 0, 100);
             wchar_t ps[32];
             fmt_pop(P->popK, ps, 32);
-            swprintf(g->warReport, 200, L"Победа! Земля «%ls» присоединена: +%ls жителей, трофеи +%ld казны, новый доход каждый ход.",
+            swprintf(g->warReport, 200, L"Победа! Земля «%ls» присоединена навсегда: +%ls жителей, трофеи +%ld казны, новый доход каждый ход.",
                      name, ps, loot);
         } else {
             g->occupied &= ~(1u << t);
             g->liberated |= 1u << t;
             g->stab = clampw(g->stab + 5, 0, 100);
             g->cult += 4;
-            swprintf(g->warReport, 200, L"%ls освобождена своими силами! Доходы растут, каратели больше не тронут эти деревни.", name);
+            swprintf(g->warReport, 200, L"%ls освобождена своими силами! Доходы растут, каратели больше не тронут эти деревни, "
+                                        L"а армии здесь снова получают снабжение.", name);
         }
         game_log(g, LOG_WAR, L"%ls", g->warReport);
         end_war(g);
@@ -496,10 +594,10 @@ static void battle(Game *g)
         g->gold *= 0.85;
         if (kind == WAR_CONQUEST)
             swprintf(g->warReport, 200, g->warProgress <= -40
-                     ? L"Поражение: земля «%ls» не взята, войско отступило. Казна −15%%, стабильность падает."
-                     : L"Затяжная война: земля «%ls» не взята за 10 ходов, заключено перемирие.", name);
+                     ? L"Поражение: земля «%ls» не взята, армия отступила домой. Казна −15%%, стабильность падает."
+                     : L"Затяжная война: земля «%ls» не взята за 10 боёв, заключено перемирие.", name);
         else
-            swprintf(g->warReport, 200, L"Наступление захлебнулось: %ls остаётся под оккупацией. Пополните войско и попробуйте снова.", name);
+            swprintf(g->warReport, 200, L"Наступление захлебнулось: %ls остаётся под оккупацией. Пополните армию и попробуйте снова.", name);
         game_log(g, LOG_WAR, L"%ls", g->warReport);
         end_war(g);
         return;
@@ -507,14 +605,34 @@ static void battle(Game *g)
     int pr = g->warProgress < 0 ? 0 : g->warProgress;
     swprintf(g->warReport, 200, L"%ls%ls%ls: продвижение %d%% (за ход %ls%d%ls). %ls", kind == WAR_CONQUEST ? L"Поход на землю «" : L"",
              name, kind == WAR_CONQUEST ? L"»" : L"",
-             pr, gain < 0 ? L"\x2212" : L"+", gain < 0 ? -gain : gain, gain < 0 ? L" — войско отступило" : L"",
-             lost ? L"Есть потери — пополните войско." : L"Войско цело.");
+             pr, gain < 0 ? L"\x2212" : L"+", gain < 0 ? -gain : gain, gain < 0 ? L" — армия отступила" : L"",
+             lost ? L"Есть потери — пополните армию." : L"Армия цела.");
+}
+
+/* дописать к сводке хода целыми предложениями, пока они помещаются */
+static void report_add(Game *g, const wchar_t *s)
+{
+    while (*s) {
+        while (*s == L' ') s++;
+        const wchar_t *e = s;
+        while (*e && !((*e == L'.' || *e == L'!') && (e[1] == L' ' || !e[1]))) e++;
+        if (*e) e++;
+        size_t l = wcslen(g->warReport), m = (size_t)(e - s), sep = l ? 1 : 0;
+        if (!m || l + sep + m >= 200) return;
+        if (sep) g->warReport[l++] = L' ';
+        wmemcpy(g->warReport + l, s, m);
+        g->warReport[l + m] = 0;
+        s = e;
+    }
 }
 
 void war_end_turn(Game *g)
 {
     g->warNews = 0;
     if (g->over) return;
+    /* армии на карте: марш, снабжение */
+    wchar_t news[400];
+    front_end_turn(g, news, 400);
     /* оккупация: каратели и голод уносят людей */
     int occ = war_occupied_count(g);
     if (occ > 0) {
@@ -527,22 +645,45 @@ void war_end_turn(Game *g)
         g->gold = 0;
         int n = war_army_size(g);
         if (n > 0) {
-            int lost = lose_units(g, 0.25);
+            int lost = lose_units(g, ~0u, 0.25);
             if (lost == 0) {
                 for (int u = UNIT_COUNT - 1; u >= 0; u--)
                     if (u < MAX_UNITS && g->units[u] > 0) { g->units[u]--; g->unitsLost++; lost = 1; break; }
+                front_sync(g);
             }
             game_log(g, LOG_WAR, L"Казна пуста: жалованья нет, разошлось соединений: %d", lost);
         }
     }
-    if (g->warKind != WAR_NONE) battle(g);
-    else raid(g);
+    if (g->warKind != WAR_NONE) {
+        int node = front_target_node(g);
+        unsigned m = front_armies_at(g, node);
+        if (m) battle(g, m);
+        else {   /* армия ещё не дошла: боя нет */
+            const wchar_t *name = g->warKind == WAR_CONQUEST ? PROVINCES[g->warTarget].name : REGION_NAMES[g->warTarget];
+            int going = 0;
+            for (int a = 0; a < MAX_ARMIES; a++) going |= front_army_alive(g, a) && g->armies[a].dest == node;
+            if (g->warKind == WAR_CONQUEST)
+                swprintf(g->warReport, 200, going ? L"Поход на землю «%ls»: бой начнётся, когда армия дойдёт до цели."
+                                                  : L"Поход на землю «%ls»: к цели не идёт ни одна армия — выберите армию на карте и отправьте её туда.", name);
+            else
+                swprintf(g->warReport, 200, going ? L"Освобождение: %ls — бой начнётся, когда армия дойдёт до центра области."
+                                                  : L"Освобождение: %ls — к центру области не идёт ни одна армия. Отправьте армию туда.", name);
+            g->warNews = 1;
+        }
+    } else raid(g);
+    if (news[0]) {
+        if (!g->warNews) g->warReport[0] = 0;
+        report_add(g, news);
+        g->warNews = 1;
+    }
+    front_sync(g);
 }
 
 /* ---------- смена года ---------- */
 void war_year_changed(Game *g, int oldYear)
 {
     int y = g->year;
+    front_sync(g);
     /* поход, у которого закрылось окно, заканчивается перемирием */
     if (g->warKind == WAR_CONQUEST && y > PROVINCES[g->warTarget].to) {
         swprintf(g->warReport, 200, L"Перемирие: время похода на землю «%ls» прошло — земля не взята.", PROVINCES[g->warTarget].name);
@@ -550,14 +691,16 @@ void war_year_changed(Game *g, int oldYear)
         game_log(g, LOG_WAR, L"%ls", g->warReport);
         end_war(g);
     }
-    /* осады: прежний владелец пытается вернуть землю, когда для неё открывается новая эпоха */
+    /* осады: прежний владелец пытается вернуть землю, когда для неё открывается новая эпоха;
+     * её защищают армии на этой земле (и наполовину — в соседних узлах) и крепости */
     for (int p = 0; p < PROVINCE_COUNT && p < MAX_PROVINCES; p++) {
-        if (g->provOwned[p] != 1) continue;
+        if (!g->provOwned[p]) continue;
         for (int q = 0; q < PROVINCE_COUNT; q++) {
             if (q == p || strcmp(PROVINCES[q].group, PROVINCES[p].group) != 0) continue;
             if (!(PROVINCES[q].from > oldYear && PROVINCES[q].from <= y)) continue;
+            int node = front_node_of_prov(p);
             double E = war_province_strength(g, q) * (0.8 + 0.4 * wrnd01(g));
-            double D = war_defense_power(g) * (0.8 + 0.4 * wrnd01(g));
+            double D = war_defense_at(g, node) * (0.8 + 0.4 * wrnd01(g));
             g->warNews = 1;
             mark_battle(g, PROVINCES[p].lon, PROVINCES[p].lat, D >= E, WAR_NONE, 0);
             if (D >= E) {
@@ -569,7 +712,7 @@ void war_year_changed(Game *g, int oldYear)
                 double back = PROVINCES[p].popK < g->pop * 0.2 ? PROVINCES[p].popK : g->pop * 0.2;
                 g->pop -= back;
                 g->stab = clampw(g->stab - 4, 0, 100);
-                lose_units(g, 0.2);
+                lose_units(g, defenders(g, node), 0.2);
                 swprintf(g->warReport, 200, L"%ls отняло землю «%ls». Её можно отвоевать — вкладка «Армия».",
                          PROVINCES[q].owner, PROVINCES[p].name);
             }
@@ -577,18 +720,19 @@ void war_year_changed(Game *g, int oldYear)
             break;
         }
     }
-    /* разделы Речи Посполитой: свои земли становятся наследием */
-    if (oldYear < LEGACY_YEAR && y >= LEGACY_YEAR) {
-        int n = 0;
-        for (int p = 0; p < PROVINCE_COUNT && p < MAX_PROVINCES; p++)
-            if (g->provOwned[p] == 1) { g->provOwned[p] = 2; n++; }
-        if (n) game_log(g, LOG_WAR, L"Разделы Речи Посполитой: присоединённые земли (%d) вошли в империю, остались торговые связи — 30%% дохода", n);
+    /* разделы Речи Посполитой: в этой игре присоединённые земли остаются своими */
+    if (oldYear < PARTITION_YEAR && y >= PARTITION_YEAR) {
+        int n = war_province_count(g);
+        if (n) game_log(g, LOG_WAR, L"Разделы Речи Посполитой: присоединённые земли (%d) остаются вашими — их доход растёт и дальше", n);
     }
     /* оккупация 1941–1944 */
     if (oldYear < OCC_FROM && y >= OCC_FROM && y <= OCC_TO) {
         g->occupied = (1u << REGION_COUNT) - 1;
         if (g->warKind != WAR_NONE) end_war(g);
-        game_log(g, LOG_WAR, L"Оккупация: все шесть областей под властью захватчиков. Освобождайте их — вкладка «Армия»");
+        int moved = front_retreat_east(g);
+        game_log(g, LOG_WAR, L"Оккупация: все шесть областей под властью захватчиков. %lsСнабжение идёт с Большой земли "
+                             L"и из освобождённых областей. Освобождайте области — вкладка «Армия»",
+                 moved ? L"Армии с боями отступили на восток, к Большой земле. " : L"");
     }
     if (oldYear <= OCC_TO && y > OCC_TO) {
         int left = war_occupied_count(g);
@@ -600,4 +744,5 @@ void war_year_changed(Game *g, int oldYear)
             end_war(g);
         }
     }
+    front_sync(g);      /* армии с чужой земли и с Большой земли после 1944 года — на свои узлы */
 }

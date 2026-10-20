@@ -2,6 +2,7 @@
  * gcc -O2 -I../src sim.c ../src/engine.c ../src/war.c ../src/data_*.c -lm -o sim && ./sim */
 #include "game.h"
 #include "war.h"
+#include "front.h"
 #include <stdio.h>
 #include <string.h>
 #include <locale.h>
@@ -169,7 +170,7 @@ static int prov_index(const char *id)
     return -1;
 }
 
-/* Механика войны: набор, предел, война, победа, доход земли, осада, наследие, оккупация. */
+/* Механика войны: набор, предел, война (армия идёт к цели), победа, доход земли, осада, земли после 1795 года, оккупация. */
 static void test_war_rules(void)
 {
     static Game g;
@@ -195,8 +196,12 @@ static void test_war_rules(void)
     if (war_cannot_declare(&g, WAR_LIBERATION, 0) == 0) FAIL("освобождение без оккупации");
     if (!war_declare(&g, WAR_CONQUEST, sm)) FAIL("поход на Смоленск не начат: %ls", war_cannot_declare(&g, WAR_CONQUEST, sm));
     if (war_declare(&g, WAR_CONQUEST, prov_index("podlasie"))) FAIL("вторая война одновременно");
+    if (front_army_count(&g) != 1 || g.armies[0].node != front_capital(&g)) FAIL("войско не встало армией у столицы");
+    war_end_turn(&g);
+    if (g.warTurns != 0) FAIL("бой без армии у цели");
+    if (!front_send(&g, 0, front_node_of_prov(sm))) FAIL("армия не идёт к Смоленску: %ls", front_cannot_send(&g, 0, front_node_of_prov(sm)));
     int guard = 0;
-    while (g.warKind != WAR_NONE && guard++ < 12) {
+    while (g.warKind != WAR_NONE && guard++ < 14) {
         g.gold = 1000;
         while (war_recruit(&g, dr)) {}
         war_end_turn(&g);
@@ -223,13 +228,14 @@ static void test_war_rules(void)
     war_year_changed(&g, 1510);
     if (g.provOwned[sm] != 0) FAIL("Смоленск не потерян без войска (оборона %.0f)", war_defense_power(&g));
     if (war_province_state(&g, sm2) != PV_AVAILABLE) FAIL("Смоленск нельзя отвоевать после потери");
-    /* наследие после 1795 */
+    /* после разделов 1795 года земля остаётся своей, и доход с неё растёт с эпохой */
     g.provOwned[sm2] = 1;
     g.year = 1795; g.era = 4;
     war_year_changed(&g, 1772);
-    if (g.provOwned[sm2] != 2 || war_province_state(&g, sm2) != PV_LEGACY) FAIL("наследие после разделов");
+    if (g.provOwned[sm2] != 1 || war_province_state(&g, sm2) != PV_OWNED) FAIL("земля не осталась своей после разделов");
     game_income(&g, &inc);
-    if (inc.provs[R_GOLD] <= 0) FAIL("наследие без дохода");
+    if (inc.provs[R_GOLD] < PROVINCES[sm2].fx.v[R_GOLD] * era_scale(4) / era_scale(PROVINCES[sm2].era) - 1e-6)
+        FAIL("доход своей земли после 1795 года %.1f", inc.provs[R_GOLD]);
     /* оккупация 1941–1944 */
     g.year = 1941; g.era = 6;
     war_year_changed(&g, 1937);
@@ -243,6 +249,8 @@ static void test_war_rules(void)
     while (war_recruit(&g, rf)) {}
     if (war_attack_power(&g, WAR_LIBERATION) <= 0) FAIL("нет силы для освобождения");
     if (!war_declare(&g, WAR_LIBERATION, 2)) FAIL("освобождение Минщины: %ls", war_cannot_declare(&g, WAR_LIBERATION, 2));
+    if (front_army_count(&g) != 1 || g.armies[0].node != front_rear_node()) FAIL("в оккупацию войска собираются не на Большой земле");
+    if (!front_send(&g, 0, front_node_of_region(2))) FAIL("армия не идёт к Минску");
     guard = 0;
     while (g.warKind != WAR_NONE && guard++ < 12) war_end_turn(&g);
     if (g.occupied & 4u) FAIL("Минщина не освобождена большой армией");
@@ -250,6 +258,8 @@ static void test_war_rules(void)
     g.year = 1945; g.era = 7;
     war_year_changed(&g, 1944);
     if (g.occupied) FAIL("оккупация не закончилась в 1945 году");
+    for (int a = 0; a < MAX_ARMIES; a++)
+        if (front_army_alive(&g, a) && g.armies[a].node == front_rear_node()) FAIL("армия осталась на Большой земле после 1944 года");
     printf("Война: эта %d ход(а) на Смоленск дружиной, сила области в 1942: %d, набег в эпоху I: %.0f\n",
            war_eta(&g, WAR_CONQUEST, sm), (g.year = 1942, war_region_strength(&g)), (g.era = 1, war_raid_strength(&g)));
 }
@@ -316,6 +326,38 @@ static void test_quest_rules(void)
     printf("Пример задания: %ls — %ls\n", b1, b2);
 }
 
+/* Армии ботов: во время войны все армии идут к цели (новые соединения собираются у столицы и догоняют),
+ * в мирное время армии собираются у столицы в одну. */
+static int marchSent;
+
+static void bot_march(Game *g)
+{
+    int tn = front_target_node(g), home = front_recruit_node(g);
+    for (int a = 0; a < MAX_ARMIES; a++) if (front_army_alive(g, a)) front_merge(g, a);
+    if (tn < 0 && g->occupied) return;          /* в оккупацию без операции армии ждут на месте */
+    for (int a = 0; a < MAX_ARMIES; a++) {
+        if (!front_army_alive(g, a)) continue;
+        int to = tn >= 0 ? tn : home;
+        if (g->armies[a].node == to || g->armies[a].dest == to) continue;
+        if (front_send(g, a, to)) marchSent++;
+    }
+}
+
+/* Железные дороги бота-полководца: за ход — один перегон, сначала исторические магистрали, если казны с запасом. */
+static int railsBuilt;
+
+static void bot_rails(Game *g)
+{
+    int best = -1;
+    for (int e = 0; e < FRONT_EDGE_COUNT; e++) {
+        if (front_cannot_build_rail(g, e)) continue;
+        if (best < 0 || (front_rail_hist(e) && !front_rail_hist(best)) ||
+            (front_rail_hist(e) == front_rail_hist(best) && front_rail_gold(g, e) < front_rail_gold(g, best))) best = e;
+    }
+    if (best >= 0 && g->gold >= 3 * front_rail_gold(g, best) && g->ind >= 2 * front_rail_ind(g, best) && front_build_rail(g, best))
+        railsBuilt++;
+}
+
 /* Бот «по заданиям»: сначала цели открытых заданий (и путь к ним), на них копит знания и казну. */
 static int questBot;
 
@@ -369,10 +411,13 @@ static void quest_focus(Game *g, int *saveSci, int *saveGold)
             int want = Q->type == QT_ARMY ? Q->num : war_army_cap(g);
             while (best >= 0 && war_army_size(g) < want && war_recruit(g, best)) {}
             if (best >= 0 && war_army_size(g) < want) *saveGold = 1;
-            if (Q->type == QT_PROVINCE && g->warKind == WAR_NONE && war_eta(g, WAR_CONQUEST, Q->ti) <= 4) war_declare(g, WAR_CONQUEST, Q->ti);
-            if (Q->type == QT_LIBERATE && g->warKind == WAR_NONE)
+            if (Q->type == QT_PROVINCE && g->warKind == WAR_NONE && war_eta(g, WAR_CONQUEST, Q->ti) <= 5) war_declare(g, WAR_CONQUEST, Q->ti);
+            if (Q->type == QT_LIBERATE && g->warKind == WAR_NONE) {   /* ближайшая по времени область */
+                int best = -1, be = 99;
                 for (int r = 0; r < REGION_COUNT; r++)
-                    if ((g->occupied >> r & 1u) && war_declare(g, WAR_LIBERATION, r)) break;
+                    if ((g->occupied >> r & 1u) && war_eta(g, WAR_LIBERATION, r) < be) { be = war_eta(g, WAR_LIBERATION, r); best = r; }
+                if (best >= 0) war_declare(g, WAR_LIBERATION, best);
+            }
         }
         if (Q->type == QT_PERSON && game_person_state(g, Q->ti) == HS_AVAILABLE) {
             if (g->gold >= game_person_cost(g, Q->ti)) game_hire(g, Q->ti);
@@ -407,16 +452,18 @@ static void army_turn(Game *g)
     for (int u = 0; u < UNIT_COUNT; u++)
         if (g->units[u] > 0 && war_unit_eff(g, u) < 0.7 && best >= 0 && best != u) war_disband(g, u);
     if (g->warKind != WAR_NONE) {
-        if (war_eta(g, g->warKind, g->warTarget) > 6) war_peace(g);
+        if (war_eta(g, g->warKind, g->warTarget) > 7) war_peace(g);
         return;
     }
     if (g->occupied) {
+        int best = -1, be = 4;
         for (int r = 0; r < REGION_COUNT; r++)
-            if ((g->occupied >> r & 1u) && war_eta(g, WAR_LIBERATION, r) <= 3) { war_declare(g, WAR_LIBERATION, r); return; }
+            if ((g->occupied >> r & 1u) && war_eta(g, WAR_LIBERATION, r) < be) { be = war_eta(g, WAR_LIBERATION, r); best = r; }
+        if (best >= 0) war_declare(g, WAR_LIBERATION, best);
         return;
     }
     for (int p = 0; p < PROVINCE_COUNT; p++)
-        if (war_province_state(g, p) == PV_AVAILABLE && war_eta(g, WAR_CONQUEST, p) <= 3) { war_declare(g, WAR_CONQUEST, p); return; }
+        if (war_province_state(g, p) == PV_AVAILABLE && war_eta(g, WAR_CONQUEST, p) <= 5) { war_declare(g, WAR_CONQUEST, p); return; }
 }
 
 /* Жадный бот: сначала самые дешёвые технологии, затем стройки, затем деятели. */
@@ -425,6 +472,8 @@ static void bot_turn(Game *g, int quizSkill)
     int saveSci = 0, saveGold = 0;
     if (armyBot) army_turn(g);
     if (questBot) quest_focus(g, &saveSci, &saveGold);
+    if (armyBot || questBot) bot_march(g);
+    if (armyBot) bot_rails(g);
     for (int guard = 0; guard < 200 && !saveSci; guard++) {
         int best = -1, bc = 1 << 30;
         for (int t = 0; t < TECH_COUNT; t++)
@@ -562,11 +611,12 @@ int main(int argc, char **argv)
         for (int s = 1; s <= runs; s++) {
             static Game g;
             game_new(&g, d, (unsigned)(s * 7919));
-            int maxProv = 0;
+            int maxProv = 0, prov1795 = -1;
             while (!g.over) {
                 resolve_events(&g);
                 if (g.over) break;
                 bot_turn(&g, 70);
+                int wk = g.warKind, wt = g.warTurns;
                 if (verbose && s == 1 && d == 1) {
                     Income inc; game_income(&g, &inc);
                     Army a; war_army(&g, &a);
@@ -576,7 +626,17 @@ int main(int argc, char **argv)
                            g.warNews ? g.warReport : L"");
                 }
                 game_end_turn(&g);
+                /* бой идёт только там, где стоит армия */
+                if (wk != WAR_NONE && g.warKind == wk && g.warTurns > wt && !front_armies_at(&g, front_target_node(&g)))
+                    FAIL("бой без армии у цели в %d году", g.year);
+                if (g.year >= 1795 && prov1795 < 0) prov1795 = war_province_count(&g);
+                if (prov1795 >= 0 && war_province_count(&g) < prov1795) FAIL("земли потеряны после 1795 года (%d году)", g.year);
                 if (war_province_count(&g) > maxProv) maxProv = war_province_count(&g);
+                for (int u = 0; u < UNIT_COUNT; u++) {
+                    int sum = 0;
+                    for (int a = 0; a < MAX_ARMIES; a++) if (g.armies[a].node >= 0) sum += g.armies[a].units[u];
+                    if (sum != g.units[u]) { FAIL("армии на карте (%d) и войско (%d) разошлись в %d году", sum, g.units[u], g.year); break; }
+                }
                 if (g.gold < -1e-6) FAIL("отрицательная казна в %d году", g.year);
                 for (int u = 0; u < UNIT_COUNT; u++) if (g.units[u] < 0) FAIL("отрицательное войско");
             }
@@ -592,6 +652,9 @@ int main(int argc, char **argv)
                DIFFICULTIES[d].name, sumScore / runs, sumT / runs, sumP / runs, sumH / runs, sumW / runs, sumPop / runs, sumPop45 / runs, sumProv / runs, sumWon / runs, sumLost / runs, sumLib / runs, sumUnits / runs);
     }
     armyBot = 0;
+    if (!marchSent) FAIL("боты ни разу не двигали армии");
+    if (!railsBuilt) FAIL("бот-полководец не построил ни одной железной дороги");
+    printf("Армии на карте: приказов марша %d, построено перегонов железных дорог %d\n", marchSent, railsBuilt);
     /* минутный доход: растёт с эпохой, не начисляется после финала */
     {
         static Game m;

@@ -265,79 +265,6 @@ int mapv_city(const MapProj *pj, int c, int *sx, int *sy, double *k)
     return proj_ll(pj, CITIES[c].lon, CITIES[c].lat, 0.3, sx, sy, k);
 }
 
-/* самое сильное войско игрока — его фигурку несёт стрелка похода */
-static int lead_unit(void)
-{
-    int best = -1;
-    double bv = 0;
-    for (int u = 0; u < UNIT_COUNT && u < MAX_UNITS; u++)
-        if (G.units[u] > 0) {
-            double v = G.units[u] * UNIT_TYPES[u].atk * war_unit_eff(&G, u);
-            if (v > bv) { bv = v; best = u; }
-        }
-    return best;
-}
-
-/* стрелка наступления от S к E (км): дуга над землёй, пройденная часть — ярче, на фронте — войско */
-static void war_arrow(const MapProj *pj, double sx0, double sy0, double ex0, double ey0, double progress, int large)
-{
-    enum { N = 28 };
-    POINT pt[N + 1];
-    int ok[N + 1];
-    double kk[N + 1];
-    double len = sqrt((ex0 - sx0) * (ex0 - sx0) + (ey0 - sy0) * (ey0 - sy0));
-    /* на 2D-картах дугу даёт боковой изгиб */
-    double nx = -(ey0 - sy0) / (len > 1e-9 ? len : 1), ny = (ex0 - sx0) / (len > 1e-9 ? len : 1);
-    for (int i = 0; i <= N; i++) {
-        double t = (double)i / N, X = sx0 + (ex0 - sx0) * t, Y = sy0 + (ey0 - sy0) * t;
-        double Z = 7.0, bend = sin(3.14159265 * t);
-        if (pj->v) { double hz = t3d_height(X, Y); Z = (hz > 3.0 ? hz : 3.0) + 2.0 + len * 0.10 * bend; }
-        else { X += nx * len * 0.12 * bend; Y += ny * len * 0.12 * bend; }
-        int x, y;
-        ok[i] = proj_xyz(pj, X, Y, Z, &x, &y, &kk[i]);
-        pt[i].x = x; pt[i].y = y;
-    }
-    int th = large ? SC(7) : SC(5);
-    int done = (int)(N * (progress < 0 ? 0 : progress > 1 ? 1 : progress) + 0.5);
-    COLORREF dark = RGB(60, 16, 12), red = P.red, pale = mix(P.red, P.surface, 130);
-    for (int i = 0; i < N; i++) {
-        if (!ok[i] || !ok[i + 1]) continue;
-        d_line(pt[i].x, pt[i].y, pt[i + 1].x, pt[i + 1].y, dark, th + SC(3));
-    }
-    for (int i = 0; i < N; i++) {
-        if (!ok[i] || !ok[i + 1]) continue;
-        if (i < done) d_line(pt[i].x, pt[i].y, pt[i + 1].x, pt[i + 1].y, red, th);
-        else if (i % 2 == 0) d_line(pt[i].x, pt[i].y, pt[i + 1].x, pt[i + 1].y, pale, th - SC(1) > 1 ? th - SC(1) : 1);
-    }
-    /* наконечник */
-    if (ok[N] && ok[N - 2]) {
-        double dx = pt[N].x - pt[N - 2].x, dy = pt[N].y - pt[N - 2].y, d = sqrt(dx * dx + dy * dy);
-        if (d > 0.5) {
-            dx /= d; dy /= d;
-            double a = th * 2.6;
-            POINT tri[4] = { { pt[N].x + (int)(dx * a * 0.6), pt[N].y + (int)(dy * a * 0.6) },
-                             { pt[N].x - (int)(dx * a) - (int)(dy * a * 0.8), pt[N].y - (int)(dy * a) + (int)(dx * a * 0.8) },
-                             { pt[N].x - (int)(dx * a) + (int)(dy * a * 0.8), pt[N].y - (int)(dy * a) - (int)(dx * a * 0.8) },
-                             { pt[N].x + (int)(dx * a * 0.6), pt[N].y + (int)(dy * a * 0.6) } };
-            d_poly(tri, 4, done >= N ? red : pale, dark, 1);
-        }
-    }
-    /* фигурка войска на линии фронта */
-    int f = done < 1 ? 1 : done > N - 1 ? N - 1 : done;
-    int u = lead_unit();
-    if (u >= 0 && ok[f]) {
-        int idx = art_unit_index(UNIT_TYPES[u].id);
-        int sz = (int)((large ? SC(70) : SC(48)) * (pj->v ? pow(kk[f] / pj->pxPerKm, 0.6) : 1.0));
-        if (sz < SC(30)) sz = SC(30);
-        if (sz > SC(130)) sz = SC(130);
-        if (idx >= 0) art_unit_draw(idx, pt[f].x - sz / 2, pt[f].y - sz * 9 / 10, sz, sz);
-        else {
-            d_circle(pt[f].x, pt[f].y, SC(11), P.surface, red, 2);
-            d_icon(IC_WAR, pt[f].x - SC(8), pt[f].y - SC(8), SC(16), red);
-        }
-    }
-}
-
 /* «вспышка» на месте последнего боя */
 static void battle_mark(const MapProj *pj, int interactive, int large)
 {
@@ -359,7 +286,7 @@ static void battle_mark(const MapProj *pj, int interactive, int large)
     d_icon(IC_WAR, sx - r / 2, sy - r, r, RGB(40, 16, 12));
     const wchar_t *lab = G.battleWon ? L"бой: победа" : L"бой: поражение";
     int f = large ? F_SMALL_B : F_TINY, tw = d_text_w(lab, f), th = d_font_h(f);
-    int lx = sx - tw / 2, ly = sy + r / 2 + SC(4);
+    int lx = sx + r + SC(8), ly = sy - r / 2 - th / 2;      /* справа от звезды: слева встаёт армия */
     d_rrect(lx - SC(5), ly - SC(2), tw + SC(10), th + SC(4), SC(4), P.surface, c);
     d_text(lx, ly, lab, f, G.battleWon ? P.ink : P.red);
     if (interactive) hit(lx - SC(5), ly - SC(2), tw + SC(10), th + SC(4), A_HOVER_BATTLE, 0);
@@ -497,7 +424,12 @@ static void war_overlay(const MapProj *pj, int interactive, int large)
         else swprintf(lab, 96, large ? L"%ls · можно в поход" : L"%ls", PROVINCES[p].name);
         int f = large ? F_SMALL_B : F_TINY;
         int tw = d_text_w(lab, f), th = d_font_h(f);
-        int lx = sx - tw / 2 + SC(10), ly = sy - th / 2;
+        /* подпись — над точкой земли (там её узел фронта и армии); в ход боя — ещё выше, над звездой боя */
+        int lx = sx - tw / 2 + SC(10), ly = sy - SC(14) - th;
+        if (target && G.battleTurn == G.turn && !G.over) {   /* в ход боя — над звездой и правее: слева от неё стоит армия */
+            ly -= large ? SC(30) : SC(21);
+            lx = sx + SC(16);
+        }
         if (lx - SC(22) < pj->x + SC(2)) lx = pj->x + SC(24);
         if (lx + tw + SC(10) > pj->x + pj->w - SC(2)) lx = pj->x + pj->w - tw - SC(12);
         if (ly - SC(3) < pj->y + SC(2)) ly = pj->y + SC(5);
@@ -507,21 +439,6 @@ static void war_overlay(const MapProj *pj, int interactive, int large)
         d_icon(st == PV_OWNED && !target ? IC_FLAG : IC_WAR, lx - SC(18), ly - SC(1), th + SC(2) > SC(16) ? SC(16) : th + SC(2), ac);
         d_text(lx, ly, lab, f, P.ink);
         if (interactive) hit(lx - SC(22), ly - SC(3), tw + SC(30), th + SC(6), A_PROVINCE, p);
-    }
-    /* стрелка идущей войны */
-    if (G.warKind == WAR_CONQUEST && G.warTarget >= 0 && G.warTarget < PROVINCE_COUNT) {
-        double X, Y, bx, by, mx, my;
-        t3d_lonlat(PROVINCES[G.warTarget].lon, PROVINCES[G.warTarget].lat, &X, &Y);
-        t3d_outline_nearest(X, Y, &bx, &by);
-        double dl = sqrt(bx * bx + by * by);           /* от границы чуть вглубь страны */
-        mx = bx - bx / (dl > 1 ? dl : 1) * 45.0;
-        my = by - by / (dl > 1 ? dl : 1) * 45.0;
-        war_arrow(pj, mx, my, X, Y, G.warProgress / 100.0, large);
-    } else if (G.warKind == WAR_LIBERATION && G.warTarget >= 0 && G.warTarget < REGION_COUNT) {
-        double X, Y;
-        const City *c = &CITIES[REGION_CITY[G.warTarget]];
-        t3d_lonlat(c->lon, c->lat, &X, &Y);
-        war_arrow(pj, X + 150.0, Y + 20.0, X, Y, G.warProgress / 100.0, large);   /* фронт идёт с востока */
     }
     front_overlay(pj, interactive, large);       /* армии, железные дороги, поезда (ui_front.c) */
     battle_mark(pj, interactive, large);
