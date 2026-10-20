@@ -231,6 +231,8 @@ enum {
 #define MAX_MODS    24
 #define MAX_UNITS   20
 #define MAX_PROVINCES 24
+#define MAX_NETS    8           /* городской транспорт (citynet.h) */
+#define MAX_ARMIES  4           /* армии на карте (front.h) */
 #define LOG_LEN     200
 #define MOD_NAME    48
 
@@ -309,6 +311,11 @@ typedef struct {
     int    battleTurn;                /* ход, в котором его показывать (-1 — нет) */
     int    battleWon;                 /* 1 — победа, 0 — поражение */
     int    battleKind;                /* WAR_* (0 — набег или осада) */
+    /* --- версия 7: городской транспорт, армии на карте, железные дороги снабжения --- */
+    struct { unsigned nodes; unsigned long long edges; } nets[MAX_NETS];   /* станции и перегоны */
+    struct { int node, dest; int units[MAX_UNITS]; } armies[MAX_ARMIES];   /* node < 0 — армии нет */
+    unsigned long long rails[2];      /* построенные железные дороги (биты рёбер front.h) */
+    int    frontReady;                /* армии уже расставлены (после загрузки старого сохранения — 0) */
 } Game;
 
 /* Флаги исторических решений */
@@ -420,6 +427,6 @@ void quest_describe_reward(int q, wchar_t *buf, int n);             /* «каз�
 int  game_save(const Game *g, FILE *f);
 int  game_load(Game *g, FILE *f);   /* принимает и сохранения версий 3, 4 и 5 */
 
-#define GAME_VERSION 6
+#define GAME_VERSION 7
 
 #endif

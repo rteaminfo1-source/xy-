@@ -663,6 +663,10 @@ void ui_toggle_theme(void)
 }
 
 /* ---------- оконная процедура ---------- */
+/* анимации: кто-то нарисовал движущийся кадр — через 33 мс перерисуем снова */
+static int s_animWanted;
+void ui_anim_request(void) { s_animWanted = 1; }
+
 /* перетаскивание 3D-карты: 1 — вращение (левая кнопка), 2 — сдвиг (правая) */
 static int s_drag, s_dragging, s_dragX0, s_dragY0, s_dragLX, s_dragLY;
 
@@ -690,7 +694,9 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
             hits_reset();
             d_unclip();
             U.mapVOn = 0;
+            s_animWanted = 0;
             ui_paint();
+            if (s_animWanted && !IsIconic(h)) SetTimer(h, 4, 33, NULL);
             GdiFlush();
             BitBlt(wdc, 0, 0, g_w, g_h, s_dc, 0, 0, SRCCOPY);
         }
@@ -789,6 +795,7 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
     case WM_TIMER:
         if (wp == 2) { ui_minute_tick(); return 0; }
         if (wp == 3) { KillTimer(h, 3); U.mapFast = 0; ui_invalidate(); return 0; }
+        if (wp == 4) { KillTimer(h, 4); ui_invalidate(); return 0; }
         if (GetTickCount() > U.toastUntil) { U.toast[0] = 0; KillTimer(h, 1); }
         ui_invalidate();
         return 0;

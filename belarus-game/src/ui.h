@@ -66,7 +66,9 @@ enum {
     A_BUILD, A_PROJ, A_HIRE, A_PERSON, A_PRIORITY, A_QUIZ, A_END_TURN, A_CHOICE, A_NEXT, A_CLOSE,
     A_MENU, A_SAVE, A_LOAD, A_THEME, A_TO_TITLE, A_CITY, A_SELL, A_ERA_START, A_FINAL, A_ZOOM,
     A_PFILTER, A_TIMELINE, A_SCROLLBAR, A_CREDITS, A_MAP_FULL, A_QUEST, A_RULER,
-    A_RECRUIT, A_DISBAND, A_DECLARE, A_LIBERATE, A_PEACE, A_PROVINCE, A_MAP_CAM
+    A_RECRUIT, A_DISBAND, A_DECLARE, A_LIBERATE, A_PEACE, A_PROVINCE, A_MAP_CAM,
+    A_NET_OPEN, A_NET_EDGE, A_NET_NODE, A_NET_CLOSE,         /* городской транспорт (ui_city.c) */
+    A_ARMY_SEL, A_FRONT_NODE, A_RAIL_BUILD, A_ARMY_SPLIT      /* армии на карте */
 };
 /* кнопки камеры 3D-карты (аргумент A_MAP_CAM) */
 enum { MC_ZOOM_OUT, MC_ZOOM_IN, MC_ROT_LEFT, MC_ROT_RIGHT, MC_RESET, MC_TILT_UP, MC_TILT_DOWN };
@@ -87,7 +89,8 @@ void w_scrollbar(int x, int y, int h, int content, int view, int scroll);
 
 /* ---------- состояние интерфейса ---------- */
 enum { SCR_TITLE, SCR_GAME };
-enum { M_NONE, M_EVENT, M_ERA, M_FINAL, M_HELP, M_MENU, M_NEWGAME, M_TECH, M_PROJ, M_PERSON, M_CITY, M_CREDITS, M_MAP, M_RULER };
+enum { M_NONE, M_EVENT, M_ERA, M_FINAL, M_HELP, M_MENU, M_NEWGAME, M_TECH, M_PROJ, M_PERSON, M_CITY, M_CREDITS, M_MAP, M_RULER,
+       M_CITYNET, M_LAUNCH };
 enum { TAB_TECH, TAB_PROJ, TAB_PEOPLE, TAB_ARMY, TAB_QUESTS, TAB_POLICY, TAB_QUIZ, TAB_LOG, TAB_RESULTS, TAB_COUNT };
 
 typedef struct {
@@ -113,7 +116,13 @@ typedef struct {
     int camInit;
     int mapVX, mapVY, mapVW, mapVH, mapVOn;
     int mapFast;                 /* идёт вращение: рисуем без сглаживания */
+    int selArmy;                 /* выбранная армия на карте, -1 */
+    DWORD animStart;             /* начало текущей анимации (взлёт ракеты и т. п.) */
+    int launchPerson;            /* M_LAUNCH: кто летит (индекс PEOPLE) */
 } UiState;
+
+/* анимации: пока функция зовётся при рисовании кадра, окно перерисовывается ~30 раз в секунду */
+void ui_anim_request(void);
 
 extern Game G;
 extern UiState U;

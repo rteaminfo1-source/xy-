@@ -1023,33 +1023,40 @@ int game_load(Game *g, FILE *f)
     Game tmp;
     if (fread(magic, 1, 4, f) != 4 || memcmp(magic, "BYTG", 4) != 0) return 0;
     if (fread(&sz, sizeof sz, 1, f) != 1) return 0;
-    const size_t v3 = offsetof(Game, questState);   /* размер версии 3 — до полей заданий (+ выравнивание) */
-    const size_t v4 = offsetof(Game, units);        /* размер версии 4 — до армии */
-    const size_t v5 = offsetof(Game, battleLon);    /* размер версии 5 — до места боя */
+    /* размер старой версии = начало полей, которые появились в следующей (+ хвостовое выравнивание) */
+    static const struct { int version; size_t size; } OLD[] = {
+        { 6, offsetof(Game, nets) },        /* до транспорта и армий на карте */
+        { 5, offsetof(Game, battleLon) },   /* до места последнего боя */
+        { 4, offsetof(Game, units) },       /* до армии */
+        { 3, offsetof(Game, questState) },  /* до заданий */
+    };
     memset(&tmp, 0, sizeof tmp);
+    int from = 0;
     if (sz == sizeof tmp) {
         if (fread(&tmp, sizeof tmp, 1, f) != 1) return 0;
         if (tmp.version != GAME_VERSION) return 0;
-    } else if (sz >= v5 && sz <= v5 + 8 && sz < sizeof tmp) {
-        if (fread(&tmp, sz, 1, f) != 1) return 0;
-        if (tmp.version != 5) return 0;
-        memset((char *)&tmp + v5, 0, sizeof tmp - v5);   /* места боя ещё нет */
-        tmp.battleTurn = -1;
+        from = GAME_VERSION;
+    } else {
+        for (unsigned k = 0; k < sizeof OLD / sizeof OLD[0] && !from; k++)
+            if (sz >= OLD[k].size && sz <= OLD[k].size + 8 && sz < sizeof tmp) {
+                if (fread(&tmp, sz, 1, f) != 1) return 0;
+                if (tmp.version != OLD[k].version) return 0;
+                memset((char *)&tmp + OLD[k].size, 0, sizeof tmp - OLD[k].size);   /* новые поля — с нуля */
+                from = OLD[k].version;
+            }
+        if (!from) return 0;
+    }
+    if (from < GAME_VERSION) {
         tmp.version = GAME_VERSION;
-    } else if (sz >= v4 && sz <= v4 + 8 && sz < sizeof tmp) {
-        if (fread(&tmp, sz, 1, f) != 1) return 0;
-        if (tmp.version != 4) return 0;
-        memset((char *)&tmp + v4, 0, sizeof tmp - v4);   /* армия: с нуля */
-    } else if (sz >= v3 && sz <= v3 + 8 && sz < sizeof tmp) {
-        if (fread(&tmp, sz, 1, f) != 1) return 0;
-        if (tmp.version != 3) return 0;
-        memset((char *)&tmp + v3, 0, sizeof tmp - v3);   /* задания и армия: всё с нуля */
-    } else return 0;
-    if (tmp.version != GAME_VERSION) {
-        tmp.version = GAME_VERSION;
-        tmp.warTarget = -1;
-        tmp.battleTurn = -1;
-        if (tmp.year >= 1941 && tmp.year <= 1944) tmp.occupied = (1u << REGION_COUNT) - 1;
+        if (from < 5) {                       /* армии ещё не было */
+            tmp.warTarget = -1;
+            if (tmp.year >= 1941 && tmp.year <= 1944) tmp.occupied = (1u << REGION_COUNT) - 1;
+        }
+        if (from < 6) tmp.battleTurn = -1;    /* места боя ещё не было */
+        if (from < 7) {                       /* армии на карте расставит игра при первом ходе */
+            for (int a = 0; a < MAX_ARMIES; a++) tmp.armies[a].node = tmp.armies[a].dest = -1;
+            tmp.frontReady = 0;
+        }
     }
     if (tmp.warKind < WAR_NONE || tmp.warKind > WAR_LIBERATION) return 0;
     if (tmp.warKind == WAR_CONQUEST && (tmp.warTarget < 0 || tmp.warTarget >= PROVINCE_COUNT)) return 0;
