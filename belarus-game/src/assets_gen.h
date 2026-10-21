@@ -259,8 +259,8 @@ static const char *const SPR_NAMES[29] = {
 #define PORTRAIT_CELL_W 160
 #define PORTRAIT_CELL_H 200
 #define PORTRAIT_COLS 10
-#define PORTRAIT_COUNT 71
-static const char *const PORTRAIT_IDS[71] = {
+#define PORTRAIT_COUNT 87
+static const char *const PORTRAIT_IDS[87] = {
     "euphrosyne", "ioann", "bogsha", "kirill", "aleksa", "vitaut",
     "skaryna", "budny", "sapega", "mamonichi", "bernardoni", "sierotka",
     "siemienowicz", "simeon", "madzharski", "mk_oginski", "tizenhaus_p", "gilibert",
@@ -272,7 +272,10 @@ static const char *const PORTRAIT_IDS[71] = {
     "jan_kazimierz", "sobieski", "august2", "poniatowski", "catherine2", "paul1",
     "alexander1", "nicholas1", "alexander2", "alexander3", "nicholas2", "lenin",
     "stalin", "khrushchev", "brezhnev", "andropov", "chernenko", "gorbachev",
-    "ponomarenko", "mazurov", "masherov", "shushkevich", "lukashenko"
+    "ponomarenko", "mazurov", "masherov", "shushkevich", "lukashenko", "radziwill_fu",
+    "orzeszkowa", "ciotka", "stanyuta", "mazanik", "osipova", "troyan",
+    "zenkova", "tusnolobova", "maslovskaya", "khoruzhaya", "portnova", "korbut",
+    "alexievich", "domracheva", "azarenka"
 };
 
 /* ---- атлас фигурок войск: ячейка UNIT_CELL_W x UNIT_CELL_H, UNIT_COLS в ряд, id как в UNIT_TYPES ---- */
