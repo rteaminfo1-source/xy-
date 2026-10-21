@@ -19,7 +19,9 @@ Blender строит каждого персонажа, рендерит бюс�
     python3 tools/blender/build_portraits.py --post --work /tmp/belarus_portraits
 Результат: assets/portraits.png и assets/portraits.json
     {"cell_w":160,"cell_h":200,"cols":10,"ids":[...]}  — порядок: 36 деятелей из PEOPLE
-    (src/data_proj.c), затем 35 правителей из src/rulers.c (кроме vitaut — он уже среди деятелей).
+    (src/data_proj.c), затем 35 правителей из src/rulers.c (кроме vitaut — он уже среди деятелей), затем
+    16 женщин, дописанных в PEOPLE позже (WOMEN_IDS). Чтобы не пересчитывать весь лист, можно отрендерить
+    только новых (--only id1,id2 --no-save) в ту же рабочую папку и затем собрать лист через --post.
 """
 import os, sys, json, math, random, bisect
 
@@ -37,7 +39,10 @@ RULER_IDS = ["vseslav", "boris_p", "rogvolod", "mindaugas", "gediminas", "algird
              "poniatowski", "catherine2", "paul1", "alexander1", "nicholas1", "alexander2", "alexander3",
              "nicholas2", "lenin", "stalin", "khrushchev", "brezhnev", "andropov", "chernenko", "gorbachev",
              "ponomarenko", "mazurov", "masherov", "shushkevich", "lukashenko"]
-IDS = PEOPLE_IDS + RULER_IDS
+# женщины Беларуси из школьного конспекта: дописаны в PEOPLE позже, поэтому в листе — после правителей
+WOMEN_IDS = ["radziwill_fu", "orzeszkowa", "ciotka", "stanyuta", "mazanik", "osipova", "troyan", "zenkova",
+             "tusnolobova", "maslovskaya", "khoruzhaya", "portnova", "korbut", "alexievich", "domracheva", "azarenka"]
+IDS = PEOPLE_IDS + RULER_IDS + WOMEN_IDS
 
 
 def parse_args(argv):
@@ -234,9 +239,54 @@ SPEC = {
     "kisly": dict(age=45, hair="#3a2e26", hs="buzz", beard="stubble", outfit="casual", c1="#2a2a2e",
                   c2="#55575c", prop="tank"),
     "novitsky": dict(age=40, hair="#3a2e26", hs="buzz", outfit="sokol", acc=("patch_round",)),
-    "vasilevskaya": dict(sex="f", age=30, skin="fair", hair="#7a5434", hs="bun", brow="#5a3d28", brows="thin",
+    "vasilevskaya": dict(sex="f", age=30, skin="fair", hair="#7a5434", hs="part_bun", brow="#5a3d28", brows="thin",
                          eyes="#5a6a4a", outfit="flightsuit", c1="#1f4ea0", acc=("flag_by",),
                          face=dict(nose=0.85, lips=1.3)),
+    # ---------------- женщины Беларуси (по школьному конспекту) ----------------
+    "radziwill_fu": dict(sex="f", age=38, skin="pale", hair="#dcd6cc", hs="rococo", brow="#7a6656", brows="thin",
+                         eyes="#4a5a6a", hat="flowers", outfit="gown18", c1="#3e5c9a", c2="#f1e6d2", c3="#d87a92",
+                         acc=("pearls", "earrings"), prop="masks", extra=dict(lip=(0.88, 0.52, 0.54)),
+                         face=dict(fat=0.25, lips=1.2)),
+    "orzeszkowa": dict(sex="f", age=55, skin="light", hair="#7a6c62", hs="part_bun", brow="#4a3a30", eyes="#5a4a3a",
+                       outfit="dress19", c1="#2a2230", acc=("lace_collar", "brooch"), prop="novel",
+                       face=dict(fat=0.35, age=0.5, jaw=0.31)),
+    "ciotka": dict(sex="f", age=30, skin="fair", hair="#3a2a20", hs="pompadour", brow="#3a2a20", eyes="#4a3423",
+                   outfit="blouse1900", c1="#f2eee6", c3="#1e1a1a", acc=("neck_bow",), prop="primer",
+                   face=dict(nose=0.9, lips=1.2)),
+    "stanyuta": dict(sex="f", age=82, skin="old", hair="#c9c4bd", hs="waves_short", brow="#9a928a", eyes="#4a5a6a",
+                     outfit="dress_elegant", c1="#4a1a2e", acc=("pearls", "earrings"), prop="bouquet",
+                     extra=dict(lip=(0.86, 0.55, 0.56)), face=dict(age=1.0, fat=0.4, lips=1.05)),
+    "mazanik": dict(sex="f", age=29, skin="light", hair="#3a2a20", hs="wavy40", brow="#2e2219", eyes="#4a3423",
+                    outfit="dress40", c1="#2a3550", acc=("hero1",), extra=dict(lip=(0.88, 0.56, 0.56)),
+                    face=dict(lips=1.25)),
+    "osipova": dict(sex="f", age=35, skin="light", hair="#4a3a2e", hs="part_bun", brow="#3a2a20", eyes="#4a3a2a",
+                    hat="kerchief", c4="#2c3e72", outfit="coat40", c1="#4a3e34", acc=("hero1",), prop="basket",
+                    face=dict(fat=0.3, jaw=0.31)),
+    "troyan": dict(sex="f", age=22, skin="fair", hair="#2a2018", hs="bob_short", hat="beret_f", c4="#2e2e34",
+                   outfit="tunic_mil", c1="#7a7650", acc=("hero1",), face=dict(lips=1.25, nose=0.85)),
+    "zenkova": dict(sex="f", age=20, skin="ruddy", hair="#6a4a30", hs="part_bun", hat="kerchief", c4="#e6e0d2",
+                    outfit="telogreika", c1="#4e5444", acc=("hero1", "sling"), face=dict(cheek=1.3, lips=1.2)),
+    "tusnolobova": dict(sex="f", age=22, skin="fair", hair="#7a5434", hs="bob_short", hat="pilotka", c4="#76724c",
+                        outfit="tunic_mil", c1="#7a7650", acc=("hero1", "medic_bag"), face=dict(lips=1.2)),
+    "maslovskaya": dict(sex="f", age=23, skin="light", hair="#4a3424", hs="bob_short", hat="kubanka", fur="#3a2c22",
+                        c4="#a82028", outfit="telogreika", c1="#3c4234", acc=("hero1", "sling"),
+                        face=dict(jaw=0.32)),
+    "khoruzhaya": dict(sex="f", age=38, skin="light", hair="#2a2220", hs="bob_short", brow="#2a2220",
+                       outfit="leather", c1="#1c1a1a", acc=("hero1",), face=dict(jaw=0.32, fat=0.2)),
+    "portnova": dict(sex="f", age=17, skin="fair", hair="#2e241e", hs="fringe_bob", outfit="cardigan", c1="#6a6e78",
+                     c2="#f2f0ea", acc=("hero1",), face=dict(lips=1.2, chin=0.7, w=0.93, cheek=1.3)),
+    "korbut": dict(sex="f", age=17, skin="fair", hair="#8a6440", hs="pigtails", brow="#6a4a30", eyes="#5a6a7a",
+                   outfit="leotard", c1="#c41e24", acc=("medal_ol",), extra=dict(ribbon="#f6f4f0"),
+                   face=dict(lips=1.2, chin=0.7, cheek=1.2, nose=0.8)),
+    "alexievich": dict(sex="f", age=67, skin="light", hair="#b07a52", hs="bob_short", brow="#7a5a40", eyes="#5a4a3a",
+                       outfit="blazer", c1="#2a2a30", c2="#3a3a42", c3="#b8483a", acc=("scarf",), prop="nobel",
+                       face=dict(age=0.6, fat=0.35)),
+    "domracheva": dict(sex="f", age=28, skin="fair", hair="#d8b878", hs="ponytail", hat="knit_cap", c4="#c41e2a",
+                       outfit="racesuit", c1="#eef0f2", acc=("bib", "rifle_harness"), prop="rifle_back",
+                       face=dict(lips=1.25, nose=0.85)),
+    "azarenka": dict(sex="f", age=23, skin="warm", hair="#d6ae6e", hs="ponytail", hat="visor", c4="#f4f4f2",
+                     outfit="tennis", c1="#f6f6f4", c3="#2a8ac0", acc=("earrings",), prop="racket",
+                     face=dict(lips=1.3, nose=0.85)),
     # ---------------- правители ----------------
     "vseslav": dict(age=50, hair="#2e2219", hs="bob", beard="long", blen=0.11, hat="princely", c4="#8a1a1a",
                     outfit="tunic12", c1="#b08a3a", c2="#7a1a1a", fur="#8a8478",
@@ -923,7 +973,7 @@ def build_head(cx, s):
     female = s["sex"] == "f"
     # тонировка кожи: губы, румянец, щетина, родимое пятно
     tint = []
-    lip = (0.93, 0.66, 0.64) if female else (0.97, 0.76, 0.72)
+    lip = s["extra"].get("lip") or ((0.93, 0.66, 0.64) if female else (0.97, 0.76, 0.72))
     bm_dirs = [Vector(v).normalized() for v in ((0.10, -0.52, 0.85), (0.18, -0.42, 0.89), (0.02, -0.40, 0.92),
                                                 (0.22, -0.55, 0.80))]
     shaved = (s["sex"] == "m" and s["age"] > 25 and s["beard"] in (None, "goatee", "sideburns", "chops"))
@@ -1022,9 +1072,13 @@ def build_face(cx, s):
         ellipsoid("lowlid", c + Vector((0, 0.0004, -0.0005)), (re * 1.05, re * 1.05, re * 1.05), skin, head=True,
                   segs=16, rings=10, deform=lambda u: (u[0], u[1], min(u[2], -0.62)))
     # уши
+    cx.ear_x = {}
+    hide_ears = female and (s["hat"] == "kerchief" or (s["hs"] != "none" and hair_params(s["hs"])["ears"] == 0.0))
     for sd in (-1, 1):
         r = cx.hbvh.ray_cast(Vector((sd * 0.3, 0.010, -0.012)), Vector((-sd, 0, 0)))
         px = r[0].x if r[0] else sd * 0.072
+        cx.ear_x[sd] = px
+        if hide_ears: continue   # женская причёска или платок закрывают уши
         rot = (Matrix.Rotation(sd * 0.32, 3, "Z") @ Matrix.Rotation(-0.12, 3, "X"))
         ec = Vector((px + sd * 0.0045, 0.012, -0.012))
         k = 1.12 if s["id"] in ("khrushchev", "brezhnev", "chernenko") else 1.0
@@ -1086,12 +1140,31 @@ HAIR = {
     "bun": dict(zf=0.50, th=0.010, top=0.6, sb=-0.02, quiff=0.3, bun=(0.0, 0.080, 0.092, 0.036)),
     "female_up": dict(zf=0.56, th=0.015, top=1.1, quiff=0.6, ears=0.0, side=-0.05, sb=-0.05,
                       bun=(0.0, 0.08, 0.10, 0.038), blobs="sides"),
+    # женские причёски героинь: пробор (part), косички и хвост (tails)
+    "rococo": dict(zf=0.56, temple=0.02, th=0.012, top=0.8, quiff=0.5, ears=0.5, side=0.06, sb=0.0, back=-0.30,
+                   bun=(0.0, 0.050, 0.108, 0.034), blobs="sides"),
+    "part_bun": dict(zf=0.50, temple=-0.08, sb=-0.30, side=-0.30, ears=0.0, back=-0.45, th=0.013, top=0.45,
+                     part=0.0, bun=(0.0, 0.092, -0.030, 0.036)),
+    "pompadour": dict(zf=0.56, temple=-0.02, th=0.024, top=0.7, quiff=0.5, ears=0.0, side=-0.18, sb=-0.20,
+                      back=-0.36, bun=(0.0, 0.030, 0.128, 0.036)),
+    "waves_short": dict(zf=0.50, temple=-0.06, sb=-0.22, side=-0.24, ears=0.0, back=-0.45, th=0.019, top=0.9,
+                        quiff=0.9, wave=1.4),
+    "wavy40": dict(zf=0.46, temple=-0.06, sb=-0.25, side=-0.25, ears=0.0, back=-0.6, th=0.014, top=0.8, quiff=0.6,
+                   wave=0.8, part=0.30, curtain=dict(bot=-0.150, flare=0.016, open=1.24, curl=0.020)),
+    "bob_short": dict(zf=0.46, temple=-0.05, sb=-0.22, side=-0.22, ears=0.0, back=-0.55, th=0.012, top=0.6,
+                      quiff=0.3, part=0.28, curtain=dict(bot=-0.125, flare=0.008, open=1.24, curl=0.012)),
+    "fringe_bob": dict(zf=0.24, temple=-0.10, sb=-0.22, side=-0.22, ears=0.0, back=-0.58, th=0.015, top=0.6,
+                       curtain=dict(bot=-0.13, flare=0.008, open=1.24, curl=0.012)),
+    "pigtails": dict(zf=0.50, temple=-0.04, sb=-0.10, side=-0.05, ears=0.55, back=-0.45, th=0.009, top=0.3,
+                     part=0.0, tails="pigtails"),
+    "ponytail": dict(zf=0.50, temple=-0.02, sb=-0.08, side=-0.04, ears=0.6, back=-0.40, th=0.009, top=0.35,
+                     tails="ponytail"),
 }
 
 
 def hair_params(name):
     p = dict(zf=0.52, temple=0.08, sb=-0.08, side=0.16, back=-0.50, th=0.010, top=0.6, quiff=0.0, ears=1.0,
-             bald=None, wave=0.0, curtain=None, blobs=None, rolls=False, bun=None)
+             bald=None, wave=0.0, curtain=None, blobs=None, rolls=False, bun=None, part=None, tails=None)
     p.update(HAIR[name])
     return p
 
@@ -1114,7 +1187,16 @@ def hair_weight(u, P):
     th *= 0.40 + 0.60 * sstep(zl - 0.02, zl + 0.24, z)
     if P["wave"]:
         th *= 1.0 + 0.22 * P["wave"] * math.sin(at * 7.0 + z * 9.0) * sstep(0.2, 0.6, z)
+    if P["part"] is not None:   # пробор от лба к макушке
+        th *= 1.0 - 0.6 * gauss(x - P["part"], 0.035) * sstep(0.30, 0.55, z) * sstep(0.40, 0.0, y)
     return w, th
+
+
+def poly_at(pts, t):
+    """Точка на ломаной pts при t от 0 до 1."""
+    n = len(pts) - 1
+    f = min(n - 1e-6, max(0.0, t * n)); i = int(f)
+    return pts[i].lerp(pts[i + 1], f - i)
 
 
 def beard_weight(at, z, kind):
@@ -1154,6 +1236,8 @@ def build_hair(cx, s):
     cx.outer_bvh = None
     if s["hs"] == "none": return
     P = hair_params(s["hs"])
+    if s["hat"] == "kerchief":   # под платком видна только прядь надо лбом
+        P.update(bun=None, tails=None, curtain=None, blobs=None)
     mat = mat_hair(s["hair"])
     cx.hair_mat = mat
     ob, pos = shell("hair", cx, lambda u: hair_weight(u, P), mat)
@@ -1169,8 +1253,15 @@ def build_hair(cx, s):
         if cu["curl"]:
             levels.append((cu["bot"] + 0.012, 0.084 + th + cu["flare"], 0.080 + th, 0.032))
         o = cu["open"]
+        kw = cx.F["w"] if s["sex"] == "f" else 1.0   # у женских голов уже лицо: прядь прилегает к щеке
         for z, rx, ry, cy in levels:
-            rings.append(ell_ring(z, rx, ry, 0.0, cy, n=40, a0=o, a1=2 * math.pi - o, closed=False))
+            ring = ell_ring(z, rx * kw, ry, 0.0, cy, n=40, a0=o, a1=2 * math.pi - o, closed=False)
+            if s["sex"] == "f":   # передний край пряди прижат к щеке, а не торчит «ухом шлема»
+                for i, p in enumerate(ring):
+                    e = min(i, 40 - i) / 40.0 * (2 * math.pi - 2 * o)
+                    k = 1.0 - 0.16 * math.exp(-(e / 0.40) ** 2)
+                    ring[i] = Vector((p.x * k, cy + (p.y - cy) * k, p.z))
+            rings.append(ring)
         loft("hair_curtain", rings, mat, closed=False, head=True, solid=0.006, sub=2)
         if P["blobs"] == "curtain":
             items = []
@@ -1212,6 +1303,37 @@ def build_hair(cx, s):
     if P["bun"]:
         b = P["bun"]
         ellipsoid("bun", (b[0], b[1], b[2]), (b[3] * 1.05, b[3], b[3] * 0.95), mat, head=True)
+    if P["tails"] == "pigtails":
+        # две косички за ушами, перехваченные бантами (Ольга Корбут, Мюнхен-1972)
+        rib = mat_basic(s["extra"].get("ribbon", "#f6f4f0"), 0.45, sheen=0.7)
+        for sd in (-1, 1):
+            p0 = head_hit(cx, Vector((sd * 0.80, 0.50, 0.12)).normalized())
+            path = [p0 + Vector((sd * 0.004, 0.004, 0.0)), p0 + Vector((sd * 0.014, 0.010, -0.028)),
+                    p0 + Vector((sd * 0.020, 0.004, -0.062)), p0 + Vector((sd * 0.020, -0.006, -0.094)),
+                    p0 + Vector((sd * 0.016, -0.014, -0.118))]
+            items = []
+            for k in range(18):
+                t = k / 17.0
+                q = poly_at(path, t)
+                r = 0.0125 * (1.0 - 0.45 * t)
+                items.append((q + Vector((0.0, 0.0035 if k % 2 else -0.0035, 0.0)) * (1.0 - 0.5 * t),
+                              (r * 0.95, r * 0.95, r * 1.25)))
+            blobs("braid", items, mat, head=True, segs=12, rings=8)
+            for fy in (-1, 1):
+                ellipsoid("bow", p0 + Vector((sd * 0.012, fy * 0.022, 0.006)), (0.0055, 0.022, 0.016), rib,
+                          head=True, segs=14, rings=10, rot=Matrix.Rotation(fy * 0.35, 3, "X"))
+                ellipsoid("bow_tail", p0 + Vector((sd * 0.013, fy * 0.010, -0.020)), (0.004, 0.006, 0.016), rib,
+                          head=True, segs=10, rings=8, rot=Matrix.Rotation(fy * -0.4, 3, "X"))
+            ellipsoid("bow_knot", p0 + Vector((sd * 0.013, 0.0, 0.0)), (0.007, 0.007, 0.007), rib, head=True,
+                      segs=10, rings=8)
+    elif P["tails"] == "ponytail":
+        # хвост на затылке, чуть сдвинутый к видимой стороне
+        p0 = head_hit(cx, Vector((0.10, 0.80, 0.40)).normalized())
+        path = [p0 - Vector((0.0, 0.004, 0.0)), p0 + Vector((0.008, 0.022, -0.012)), p0 + Vector((0.020, 0.034, -0.050)),
+                p0 + Vector((0.028, 0.030, -0.092)), p0 + Vector((0.030, 0.018, -0.128))]
+        curve_tube("ponytail", path, [0.75, 1.0, 1.0, 0.8, 0.3], 0.016, mat, head=True)
+        ellipsoid("hair_tie", p0 + Vector((0.002, 0.006, -0.002)), (0.011, 0.008, 0.011), mat_basic("#1e1a1c", 0.5),
+                  head=True, segs=12, rings=8)
 
 
 def build_beard(cx, s):
@@ -1612,6 +1734,119 @@ def build_outfit(cx, s):
     elif o == "fur_coat":
         cv.line([(0.02, 0.0), (0.03, -0.42)], 0.004, C("#000000", 0.4))
         geo.append("fur_coat")
+    elif o == "gown18":
+        # платье середины XVIII века: вырез с кружевом, корсаж, лиф-«стомакер» с лесенкой бантов
+        cv.poly([(-0.135, 0.04), (0.135, 0.04), (0.128, -0.040), (0.075, -0.080), (0.0, -0.092), (-0.075, -0.080),
+                 (-0.128, -0.040)], C(cx.skin_hex))
+        cv.poly([(-0.058, -0.086), (0.058, -0.086), (0.034, -0.42), (-0.034, -0.42)], C(c2))
+        for k in range(6):
+            z = -0.105 - 0.032 * k; w = 0.038 - 0.003 * k
+            cv.poly([(-w, z + 0.009), (0.0, z), (-w, z - 0.009)], C(c3))
+            cv.poly([(w, z + 0.009), (0.0, z), (w, z - 0.009)], C(c3))
+            cv.circle(0.0, z, 0.0055, C(c3))
+        cv.line([(-0.130, -0.038), (-0.075, -0.082), (0.0, -0.095), (0.075, -0.082), (0.130, -0.038)], 0.012,
+                C("#f8f4ec"))
+        base_rough, base_sheen = 0.45, 0.8
+        geo.append("gown18")
+    elif o == "dress19":
+        # закрытое тёмное платье второй половины XIX века: складки, пуговицы, высокий воротник
+        def pleat(x, z):
+            if -0.42 < z < -0.04 and 0.012 < abs(x) < 0.12 and ((abs(x) * 70.0) % 1.0) < 0.09:
+                return C("#000000", 0.30)
+            return None
+        cv.rect(-0.2, -0.42, 0.2, 0.0, None, pleat)
+        geo.append("dress19")
+    elif o == "blouse1900":
+        # белая блузка начала XX века: защипы, воротник-стойка; ниже — тёмный пояс юбки
+        def tucks(x, z):
+            if -0.36 < z < -0.035 and 0.014 < abs(x) < 0.080 and ((abs(x) * 110.0) % 1.0) < 0.16:
+                return C("#bdb8ae", 0.85)
+            return None
+        cv.rect(-0.2, -0.42, 0.2, 0.0, None, tucks)
+        cv.rect(-0.22, -0.42, 0.22, -0.36, C(c3))
+        base_rough, base_sheen = 0.6, 0.45
+        geo.append("blouse1900")
+    elif o == "dress_elegant":
+        # бархатное платье с V-вырезом
+        cv.poly([(-0.072, 0.04), (0.072, 0.04), (0.0, -0.105)], C(cx.skin_hex))
+        cv.line([(-0.072, 0.036), (0.0, -0.107), (0.072, 0.036)], 0.007, C("#000000", 0.35))
+        base_rough, base_sheen, bump = 0.7, 1.0, 0.04
+        geo.append("dress_elegant")
+    elif o == "dress40":
+        # платье 1940-х: планка с пуговицами, отложной белый воротничок
+        cv.line([(0.0, -0.03), (0.0, -0.20)], 0.004, C("#000000", 0.3))
+        geo.append("dress40")
+    elif o == "coat40":
+        # шерстяное пальто: широкие лацканы, двубортная застёжка
+        cv.line([(0.016, -0.02), (0.024, -0.42)], 0.004, C("#000000", 0.4))
+        base_rough, base_sheen, bump = 0.85, 0.35, 0.10
+        geo.append("coat40")
+    elif o == "tunic_mil":
+        # гимнастёрка: стойка, планка, нагрудные карманы, полевые погоны
+        cv.line([(0.0, -0.03), (0.0, -0.15)], 0.004, C("#000000", 0.25))
+        geo.append("khaki")
+    elif o == "telogreika":
+        # ватник: горизонтальная стёжка, застёжка по центру
+        def quilt(x, z):
+            if ((z * 36.0) % 1.0) < 0.10: return C("#000000", 0.38)
+            if abs(x - 0.004) < 0.004: return C("#000000", 0.45)
+            return None
+        cv.rect(-0.22, -0.42, 0.22, -0.005, None, quilt)
+        base_rough, base_sheen, bump = 0.9, 0.15, 0.12
+        geo.append("telogreika")
+    elif o == "leather":
+        # кожаная куртка 1930-х поверх тёмной блузки
+        V(-0.15, 0.055, C("#5a5048"))
+        base_rough, base_sheen, bump = 0.30, 0.0, 0.03
+        geo.append("leather")
+    elif o == "cardigan":
+        # вязаная кофта поверх белой блузки
+        def rib(x, z):
+            if ((x * 95.0) % 1.0) < 0.2: return C("#000000", 0.14)
+            return None
+        cv.rect(-0.22, -0.42, 0.22, 0.04, None, rib)
+        V(-0.16, 0.058, C(c2))
+        base_rough, base_sheen, bump = 0.9, 0.4, 0.14
+        geo.append("cardigan")
+    elif o == "leotard":
+        # гимнастический купальник сборной СССР: круглый вырез, белая окантовка, буквы «СССР»
+        white = C("#f6f4f0")
+        neck = [(-0.088, 0.04), (-0.084, 0.026), (-0.052, -0.030), (0.0, -0.046), (0.052, -0.030), (0.084, 0.026),
+                (0.088, 0.04)]
+        cv.poly(neck, C(cx.skin_hex))
+        cv.line(neck[1:-1], 0.008, white)
+        zc = -0.124
+
+        def letter_c(xc, r=0.0115):
+            cv.line([(xc + r * math.cos(math.radians(d)), zc + r * math.sin(math.radians(d))) for d in range(45, 320, 25)],
+                    0.0055, white)
+        for k in range(3): letter_c(-0.052 + 0.031 * k)
+        xp = 0.042
+        cv.line([(xp, zc - 0.0125), (xp, zc + 0.0125)], 0.0055, white)
+        cv.line([(xp, zc + 0.0125)] + [(xp + 0.006 + 0.0075 * math.sin(math.radians(d)),
+                                        zc + 0.005 + 0.0075 * math.cos(math.radians(d))) for d in range(0, 181, 30)] +
+                [(xp, zc - 0.0025)], 0.005, white)
+        base_rough, base_sheen = 0.35, 0.5
+        geo.append("leotard")
+    elif o == "racesuit":
+        # гоночный комбинезон биатлонистки: красная и зелёная полосы, молния
+        cv.poly([(-0.22, -0.01), (-0.22, -0.075), (0.22, -0.20), (0.22, -0.135)], C("#c8202a"))
+        cv.poly([(-0.22, -0.085), (-0.22, -0.11), (0.22, -0.235), (0.22, -0.21)], C("#2a8a3a"))
+        cv.line([(0.0, 0.04), (0.0, -0.42)], 0.0028, C("#8a9098"))
+        base_rough, base_sheen = 0.35, 0.45
+        geo.append("racesuit")
+    elif o == "tennis":
+        # теннисная майка без рукавов: открытые плечи и руки, цветная окантовка
+        sk, tr = C(cx.skin_hex), C(c3)
+        for sd in (-1, 1):
+            arm = [(sd * 0.22, 0.04), (sd * 0.092, 0.04), (sd * 0.100, -0.010), (sd * 0.118, -0.055),
+                   (sd * 0.132, -0.095), (sd * 0.136, -0.42), (sd * 0.22, -0.42)]
+            cv.poly(arm, sk)
+            cv.line(arm[1:6], 0.006, tr)
+        V(-0.070, 0.060, sk)
+        cv.line([(-0.060, 0.04), (0.0, -0.070), (0.060, 0.04)], 0.006, tr)
+        base_rough, base_sheen = 0.55, 0.35
+        geo.append("tennis")
 
     # нашивки
     if "patch_cccp" in acc:
@@ -1621,6 +1856,14 @@ def build_outfit(cx, s):
     if "patch_round" in acc:
         cv.circle(-0.10, -0.085, 0.024, C("#1e3a7a")); cv.circle(-0.10, -0.085, 0.017, C("#e8e8e8"))
         cv.circle(-0.10, -0.085, 0.009, C("#3a64b0"))
+    if "bib" in acc:
+        # нагрудный номер лидера Кубка мира: жёлтый, с номером 1
+        cv.poly([(-0.112, -0.030), (-0.060, 0.018), (0.060, 0.018), (0.112, -0.030), (0.120, -0.42), (-0.120, -0.42)],
+                C("#f2c81e"))
+        cv.poly([(-0.060, 0.018), (0.060, 0.018), (0.040, -0.012), (-0.040, -0.012)], C(c1))
+        cv.rect(-0.034, -0.125, 0.034, -0.050, C("#f8f6ee"))
+        cv.line([(0.004, -0.060), (0.004, -0.115)], 0.009, C("#141414"))
+        cv.line([(0.004, -0.060), (-0.010, -0.072)], 0.008, C("#141414"))
     if "flag_by" in acc:
         cv.rect(-0.135, -0.075, -0.07, -0.053, C("#c8313e")); cv.rect(-0.135, -0.087, -0.07, -0.075, C("#4aa657"))
         cv.rect(-0.135, -0.087, -0.127, -0.053, C("#f4f2ee"))
@@ -1701,7 +1944,8 @@ def build_outfit(cx, s):
                 for sd in (-1, 1):
                     p, n = tnear(cx, (sd * 0.135, 0.0, 0.0))
                     ob = box("pogon", (0, 0, 0), (0.075, 0.032, 0.005),
-                             mat_basic("#c8b070", 0.35, metal=0.6) if g != "eng" else G, bevel=0.003)
+                             (mat_basic(mulc(srgb(c1), 0.86), 0.75) if o == "tunic_mil" else
+                              mat_basic("#c8b070", 0.35, metal=0.6)) if g != "eng" else G, bevel=0.003)
                     ob.matrix_basis = (Matrix.Translation(p + n * 0.004) @
                                        Vector((0, 0, 1)).rotation_difference(n).to_matrix().to_4x4() @
                                        Matrix.Rotation(sd * 0.22, 4, "Z"))
@@ -1808,6 +2052,48 @@ def build_outfit(cx, s):
             loft("jk_collar", rings, jacket_dark, closed=False, solid=0.005, sub=2)
         elif g == "fur_coat":
             pass
+        elif g == "dress19":
+            collar_ring("stand", -0.035, 0.060, 0.053, 0.055, tm, flare=0.003)
+            button_row(cx, [(0.0, z) for z in (-0.045, -0.075, -0.105, -0.135, -0.165)],
+                       mat_basic("#141214", 0.3, coat=0.8), r=0.0042)
+        elif g == "blouse1900":
+            lace = mat_basic("#f6f3ec", rough=0.6, sheen=0.5, bump=((500.0, 500.0, 500.0), 0.12))
+            collar_ring("stand", -0.035, 0.074, 0.052, 0.054, lace, flare=0.002)
+            collar_ring("stand_edge", 0.036, 0.006, 0.054, 0.056, lace, flare=0.0, solid=0.002)
+        elif g in ("dress40", "cardigan"):
+            white = mat_basic("#f6f4ee", 0.6, sheen=0.3)
+            for sd in (-1, 1):
+                strip(cx, "collar_w", [(sd * 0.008, -0.1, -0.006), (sd * 0.030, -0.1, -0.030), (sd * 0.050, -0.1, -0.040)],
+                      [0.030, 0.034, 0.018], white, off=0.004, solid=0.003)
+            collar_ring("collar_b", -0.035, 0.022, 0.056, 0.058, white, gap=0.25, flare=0.006)
+            if g == "dress40":
+                button_row(cx, [(0.0, z) for z in (-0.06, -0.095, -0.13, -0.165)], mat_basic("#e8e2d6", 0.3, coat=0.6),
+                           r=0.0045)
+            else:
+                for sd in (-1, 1):
+                    strip(cx, "knit_edge", [(sd * 0.060, -0.1, 0.020), (sd * 0.030, -0.1, -0.065),
+                                            (sd * 0.006, -0.1, -0.160)], [0.016, 0.016, 0.016], jacket_dark,
+                          off=0.003, solid=0.004)
+        elif g == "coat40":
+            for sd in (-1, 1):
+                strip(cx, "lapel", [(sd * 0.066, -0.1, -0.010), (sd * 0.060, -0.1, -0.06), (sd * 0.036, -0.1, -0.13),
+                                    (sd * 0.016, -0.1, -0.19)], [0.052, 0.050, 0.040, 0.016], jacket_dark, off=0.003,
+                      solid=0.005)
+            collar_ring("coat_collar", -0.035, 0.045, 0.066, 0.068, jacket_dark, gap=0.95, flare=0.016, solid=0.006)
+            button_row(cx, [(sd * 0.042, z) for sd in (-1, 1) for z in (-0.13, -0.17)],
+                       mat_basic("#1e1a18", 0.4, coat=0.5), r=0.0058)
+        elif g == "telogreika":
+            collar_ring("quilt_collar", -0.035, 0.040, 0.060, 0.062, tm, gap=0.14, flare=0.010, solid=0.008)
+            button_row(cx, [(0.004, z) for z in (-0.05, -0.10, -0.15)], mat_basic("#1a1a1a", 0.4), r=0.0052)
+        elif g == "leather":
+            for sd in (-1, 1):
+                strip(cx, "lapel", [(sd * 0.062, -0.1, -0.010), (sd * 0.056, -0.1, -0.06), (sd * 0.034, -0.1, -0.12),
+                                    (sd * 0.010, -0.1, -0.16)], [0.048, 0.046, 0.036, 0.012], tm, off=0.004, solid=0.005)
+            collar_ring("jacket_collar", -0.03, 0.038, 0.065, 0.066, tm, gap=1.0, flare=0.014, solid=0.005)
+        elif g == "racesuit":
+            collar_ring("zip_collar", -0.035, 0.050, 0.054, 0.056, tm, gap=0.0, flare=0.003)
+        elif g in ("gown18", "dress_elegant", "leotard", "tennis"):
+            pass
         elif g == "vestments" or g == "habit":
             collar_ring("collar", -0.035, 0.03, 0.056, 0.058, tm, flare=0.006)
     # плащи, меха, воротники
@@ -1862,6 +2148,70 @@ def build_outfit(cx, s):
             rings = [ell_ring(z, 0.012, 0.034, sd * 0.192, pe.y, n=24) for z in (pe.z + 0.008, pe.z - 0.025)]
             fr = mat_basic("#e0b040", rough=0.35, metal=1.0, bump=((900.0, 900.0, 30.0), 0.8))
             loft("fringe", rings, fr, closed=True, sub=1, cap_bot=True)
+    # украшения и снаряжение героинь
+    if "pearls" in acc:
+        pm = mat_basic("#f4efe4", 0.18, coat=1.0, spec=0.7)
+        items = []
+        for i in range(27):
+            a = -1.75 + 3.5 * i / 26
+            p, nn = tnear(cx, (0.078 * math.sin(a), 0.030 - 0.074 * math.cos(a), -0.022 - 0.040 * math.cos(a) ** 2))
+            items.append((p + nn * 0.004, 0.0046))
+        blobs("pearls", items, pm, segs=12, rings=8)
+    if "brooch" in acc:
+        p, nn = tfront(cx, 0.0, -0.040)
+        ob = ellipsoid("brooch", (0, 0, 0), (0.012, 0.004, 0.015), G, segs=18, rings=10)
+        place(ob, p + nn * 0.004, nn)
+        ob = ellipsoid("cameo", (0, 0, 0), (0.0085, 0.003, 0.011), mat_basic("#efe2d2", 0.3, coat=0.8), segs=16, rings=10)
+        place(ob, p + nn * 0.0065, nn)
+    if "lace_collar" in acc:
+        lm = mat_basic("#f4f1ea", rough=0.6, sheen=0.5, bump=((600.0, 600.0, 600.0), 0.15))
+        for sd in (-1, 1):
+            strip(cx, "lace", [(sd * 0.006, -0.1, -0.012), (sd * 0.030, -0.1, -0.030), (sd * 0.058, -0.1, -0.034)],
+                  [0.026, 0.032, 0.020], lm, off=0.004, solid=0.002)
+    if "neck_bow" in acc:
+        bm_ = mat_basic(c3, 0.45, sheen=0.6)
+        c0 = Vector((0.0, -0.066, -0.004))
+        for sd in (-1, 1):
+            ellipsoid("bow", c0 + Vector((sd * 0.013, -0.002, 0.0)), (0.012, 0.004, 0.008), bm_, segs=14, rings=8,
+                      rot=Matrix.Rotation(sd * 0.25, 3, "Y"))
+            strip(cx, "bow_tail", [(sd * 0.003, -0.1, -0.012), (sd * 0.010, -0.1, -0.045), (sd * 0.014, -0.1, -0.075)],
+                  [0.010, 0.010, 0.012], bm_, off=0.005, solid=0.002)
+        ellipsoid("bow_knot", c0 + Vector((0, -0.004, 0)), (0.005, 0.004, 0.006), bm_, segs=10, rings=8)
+    belt = [(-0.150, 0.0, -0.004), (-0.085, -0.1, -0.050), (0.0, -0.1, -0.112), (0.080, -0.1, -0.180),
+            (0.150, -0.1, -0.24)]   # через грудь от правого плеча: мимо Золотой Звезды на левой стороне
+    if "sling" in acc:   # ремень винтовки
+        sm_ = mat_basic("#5a3e26", 0.6, bump=((200.0, 200.0, 200.0), 0.15))
+        strip(cx, "sling", belt, [0.020] * 5, sm_, off=0.005, solid=0.004, front=False)
+    if "medic_bag" in acc:   # ремень санитарной сумки с красным крестом
+        cm_ = mat_basic("#9a9470", 0.75, bump=((200.0, 200.0, 200.0), 0.12))
+        strip(cx, "bag_strap", belt, [0.026] * 5, cm_, off=0.005, solid=0.004, front=False)
+        p, nn = tfront(cx, -0.062, -0.074)
+        cylinder("rc_disc", p + nn * 0.008, p + nn * 0.011, 0.016, 0.016, mat_basic("#f6f4ee", 0.5), n=24)
+        cr = cross_mesh("red_cross", [(0, 0, 0.004, 0.0115), (0, 0, 0.0115, 0.004)], 0, 0.002, mat_basic("#c41e24", 0.5))
+        place(cr, p + nn * 0.0115, nn)
+    if "medal_ol" in acc:   # олимпийская медаль на ленте
+        rm_ = mat_basic("#2a62b8", 0.45, sheen=0.6)
+        for sd in (-1, 1):
+            strip(cx, "medal_ribbon", [(sd * 0.062, 0.010, 0.002), (sd * 0.046, -0.1, -0.040), (sd * 0.008, -0.1, -0.068)],
+                  [0.013, 0.013, 0.011], rm_, off=0.005, solid=0.002, front=False)
+        p, nn = tfront(cx, 0.0, -0.080)
+        cylinder("medal", p + nn * 0.006, p + nn * 0.010, 0.017, 0.017, G, n=28, bevel=0.001)
+    if "scarf" in acc:   # шарф вокруг шеи, конец спереди
+        scm = mat_basic(s["extra"].get("scarf", c3), 0.8, sheen=0.6, bump=((300.0, 300.0, 300.0), 0.10))
+        collar_ring("scarf", -0.040, 0.050, 0.060, 0.062, scm, flare=0.014, solid=0.010)
+        strip(cx, "scarf_end", [(-0.030, -0.1, -0.030), (-0.044, -0.1, -0.090), (-0.050, -0.1, -0.170)],
+              [0.046, 0.044, 0.042], scm, off=0.010, solid=0.006)
+    if "rifle_harness" in acc:   # плечевые ремни винтовки биатлонистки
+        hm = mat_basic("#1a1a1e", 0.5)
+        for sd in (-1, 1):
+            strip(cx, "harness", [(sd * 0.100, 0.030, 0.004), (sd * 0.092, -0.1, -0.050), (sd * 0.080, -0.1, -0.17)],
+                  [0.020, 0.020, 0.020], hm, off=0.005, solid=0.003, front=False)
+    if "earrings" in acc and hasattr(cx, "ear_x"):
+        em = mat_basic("#f4efe4", 0.18, coat=1.0)
+        for sd in (-1, 1):
+            ex_ = cx.ear_x.get(sd, sd * 0.072)
+            ellipsoid("earring", (ex_ + sd * 0.006, 0.010, -0.047), (0.0042, 0.0042, 0.0050), em, head=True, segs=12,
+                      rings=8)
     # ленты, звёзды, кресты
     if "sash_blue" in acc or "sash_blue_l" in acc or "sash_red" in acc:
         col = "#2a5ec0" if "sash_red" not in acc else "#b8202a"
@@ -1959,9 +2309,9 @@ def build_outfit(cx, s):
 # ----------------------------------------------------------------------------------------------
 #  Головные уборы (в координатах головы)
 # ----------------------------------------------------------------------------------------------
-def band(cx, zc=0.034, tilt=-0.18, n=64, extra=0.0):
-    up = Matrix.Rotation(tilt, 3, "X") @ Vector((0, 0, 1))
-    rot = Matrix.Rotation(tilt, 3, "X")
+def band(cx, zc=0.034, tilt=-0.18, n=64, extra=0.0, roll=0.0):
+    rot = Matrix.Rotation(roll, 3, "Y") @ Matrix.Rotation(tilt, 3, "X")
+    up = rot @ Vector((0, 0, 1))
     c = Vector((0, 0.006, zc))
     pts = []
     bv = cx.outer_bvh or cx.hbvh
@@ -1996,6 +2346,8 @@ def build_hat(cx, s):
     G = cx.gold if hasattr(cx, "gold") else gold()
     if h == "nun":
         build_nun(cx, s); return
+    if h == "kerchief":
+        build_kerchief(cx, s); return
     B = band(cx)
     c, up, pts = B
     jewels = [mat_basic(cc, 0.12, coat=1.0, spec=0.8) for cc in ("#c0182a", "#1e5ac8", "#18a050")]
@@ -2164,6 +2516,109 @@ def build_hat(cx, s):
             a = k * 0.5
             ellipsoid("ic_jewel", cc + Vector((0.035 * math.sin(a), -0.031 * math.cos(a), 0.006)),
                       (0.004, 0.003, 0.004), jewels[(k + 2) % 3], head=True, segs=8, rings=6)
+
+    elif h == "flowers":
+        # цветы в напудренной причёске XVIII века
+        fl = [mat_basic(c_, 0.5, sheen=0.5) for c_ in ("#e89aaa", "#f6f0f2", "#d06a86")]
+        lf = mat_basic("#5a8a4a", 0.5)
+        for k, (dx, dz, dy) in enumerate(((0.0, 0.0, 0.0), (0.026, -0.012, 0.010), (-0.020, -0.006, 0.012),
+                                          (0.012, 0.016, 0.014))):
+            d = Vector((0.40 + dx * 4, 0.05 + dy * 4, 0.90 + dz * 4)).normalized()
+            q = head_hit(cx, d) + d * 0.004
+            m = fl[k % 3]
+            for j in range(5):
+                a = 2 * math.pi * j / 5
+                off = Vector((math.cos(a), math.sin(a), 0.0)) * 0.0075
+                ellipsoid("petal", q + Vector((off.x, off.y, off.y * 0.5)), (0.0065, 0.0065, 0.0035), m, head=True,
+                          segs=10, rings=6)
+            ellipsoid("fcentre", q + d * 0.002, (0.0035, 0.0035, 0.003), mat_basic("#f0d040", 0.4), head=True, segs=8,
+                      rings=6)
+            ellipsoid("leaf", q + Vector((0.012, 0.004, -0.004)), (0.010, 0.004, 0.003), lf, head=True, segs=8, rings=6)
+    elif h == "beret_f":
+        # берет, сдвинутый набок
+        bm = mat_basic(s["c4"], rough=0.72, sheen=0.9, bump=((300.0, 300.0, 300.0), 0.05))
+        B2 = band(cx, zc=0.052, tilt=-0.20, roll=0.22)
+        hat_loft(cx, "beret", B2, [(-0.006, 1.0), (0.010, 1.10), (0.030, 1.22), (0.048, 1.20), (0.062, 1.0),
+                                   (0.070, 0.55), (0.072, 0.0)], bm)
+        c2_, up2, pts2 = B2
+        ellipsoid("beret_tip", c2_ + up2 * 0.060, (0.004, 0.004, 0.006), bm, head=True, segs=8, rings=6)
+    elif h == "pilotka":
+        # пилотка с красной звёздочкой, сдвинутая на правую сторону
+        pm = mat_basic(s["c4"], rough=0.8, sheen=0.4, bump=((300.0, 300.0, 300.0), 0.06))
+        top = head_hit(cx, Vector((-0.12, -0.05, 1.0)).normalized())
+        Rr = Matrix.Rotation(-0.20, 3, "Y")
+        rings = []
+        for k in range(9):
+            t = -1.0 + 2.0 * k / 8
+            y = 0.096 * t
+            hgt = 0.046 * (1.0 - 0.35 * t * t)
+            w = 0.044 * (1.0 - 0.25 * t * t)
+            ring = [Vector((-w, y, 0.0)), Vector((-w * 0.92, y, hgt * 0.55)), Vector((-w * 0.3, y, hgt)),
+                    Vector((w * 0.3, y, hgt)), Vector((w * 0.92, y, hgt * 0.55)), Vector((w, y, 0.0)),
+                    Vector((0.0, y, -0.006))]
+            rings.append([top + Rr @ (p + Vector((0, 0, -0.012))) for p in ring])
+        loft("pilotka", rings, pm, closed=True, cap_top=True, cap_bot=True, head=True, sub=2)
+        star = star_mesh("pil_star", 5, 0.0075, 0.0032, 0.003, mat_basic("#c41e24", 0.35, coat=0.7), head=True)
+        place(star, top + Rr @ Vector((0.0, -0.099, 0.008)), Rr @ Vector((0, -1, 0.15)), head=True)
+    elif h == "kubanka":
+        # кубанка партизанки: мех, красный верх и красная лента наискосок
+        fm = mat_fur(s["fur"]); tpm = mat_basic(s["c4"], 0.7, sheen=0.4)
+        B2 = band(cx, zc=0.046, tilt=-0.14)
+        hat_loft(cx, "kubanka", B2, [(-0.010, 1.0), (-0.004, 1.09), (0.030, 1.12), (0.050, 1.09), (0.056, 1.0)], fm,
+                 cap=False)
+        hat_loft(cx, "kub_top", B2, [(0.050, 1.0), (0.056, 0.75), (0.058, 0.0)], tpm)
+        c2_, up2, pts2 = B2
+        q = c2_ + (pts2[3] - c2_) * 1.14 + up2 * 0.024
+        rb = box("partisan_ribbon", (0, 0, 0), (0.060, 0.004, 0.010), mat_basic("#c41e24", 0.5, sheen=0.5),
+                 bevel=0.001, head=True)
+        nrm_ = (pts2[3] - c2_).normalized()
+        rb.matrix_basis = (HEAD_M @ Matrix.Translation(q) @
+                           Vector((0, -1, 0)).rotation_difference(nrm_).to_matrix().to_4x4() @ Matrix.Rotation(0.5, 4, "Y"))
+    elif h == "knit_cap":
+        # спортивная шапочка с белой полосой
+        cm = mat_basic(s["c4"], rough=0.85, sheen=0.5, bump=((90.0, 420.0, 90.0), 0.25))
+        B2 = band(cx, zc=0.040, tilt=-0.22)
+        hat_loft(cx, "cap", B2, [(-0.008, 1.0), (0.0, 1.06), (0.030, 1.08), (0.055, 0.98), (0.072, 0.72), (0.080, 0.35),
+                                 (0.082, 0.0)], cm)
+        hat_loft(cx, "cap_stripe", B2, [(0.010, 1.072), (0.022, 1.078)], mat_basic("#f4f4f2", 0.8, sheen=0.4),
+                 cap=False, solid=0.002)
+    elif h == "visor":
+        # теннисный козырёк
+        vm = mat_basic(s["c4"], 0.5, sheen=0.3)
+        B2 = band(cx, zc=0.048, tilt=-0.20)
+        c2_, up2, pts2 = B2
+        hat_loft(cx, "visor_band", B2, [(-0.008, 1.03), (0.020, 1.04)], vm, cap=False, solid=0.003)
+        n = len(pts2); idx = [i % n for i in range(-11, 12)]
+        verts, faces = [], []
+        for i in idx:
+            v = pts2[i] - c2_
+            hor = Vector((v.x, v.y, 0.0)).normalized()
+            verts += [c2_ + v * 1.03 - up2 * 0.006, c2_ + v * 1.03 + hor * 0.050 - up2 * 0.016]
+        for k in range(len(idx) - 1):
+            faces.append((2 * k, 2 * k + 1, 2 * k + 3, 2 * k + 2))
+        make_mesh("visor_brim", verts, faces, vm, head=True, solid=0.003, sub=1)
+
+
+def build_kerchief(cx, s):
+    """Платок, завязанный под подбородком: подпольщицы и партизанки 1940-х."""
+    km = mat_basic(s["c4"], rough=0.78, sheen=0.5, bump=((240.0, 240.0, 240.0), 0.06))
+
+    def kw(u):
+        x, y, z = u
+        at = abs(math.atan2(x, -y))
+        zc = -0.14
+        dz = (z - zc) / (0.82 if z > zc else 0.80)
+        f = (at / 0.98) ** 2 + dz * dz
+        return sstep(0.94, 1.04, f), 0.0125 + 0.003 * sstep(0.2, 0.9, z) + 0.004 * sstep(-0.2, -0.7, z)
+    shell("kerchief", cx, kw, km, eps=0.0)
+    # узел под подбородком и два конца
+    d = Vector((0.0, -0.42, -0.91)).normalized()
+    r = cx.hbvh.ray_cast(d * 0.4, -d)
+    q = (r[0] if r[0] else d * 0.09) + d * 0.010
+    ellipsoid("knot", q, (0.013, 0.010, 0.010), km, head=True, segs=14, rings=10)
+    for sd in (-1, 1):
+        ellipsoid("knot_end", q + Vector((sd * 0.012, -0.004, -0.016)), (0.008, 0.004, 0.018), km, head=True,
+                  segs=12, rings=8, rot=Matrix.Rotation(sd * 0.45, 3, "Y"))
 
 
 def build_nun(cx, s):
@@ -2523,6 +2978,111 @@ def build_prop(cx, s):
             cylinder("bolt", pts[i], pts[i + 1], 0.0016, 0.0016, bolt, n=8)
         ellipsoid("glow", b0 + up * 0.085, (0.03, 0.006, 0.014), mat_basic("#c0d8ff", 0.5, emit="#6aa0ff", emit_str=3.0, alpha=0.25))
         fingers(skin, b0 - up * 0.02 + nrm * 0.006, right, up, nrm)
+    elif pr == "masks":
+        # театральные маски комедии и трагедии — Несвижский театр
+        dk = mat_basic("#1a1416", 0.5)
+        for k, (mat_, dx, tilt, smile) in enumerate(((mat_basic("#f4eee2", 0.35, coat=0.6), -0.026, 0.30, -1.0),
+                                                     (G, 0.028, -0.22, 1.0))):
+            c = A + up * (0.050 - 0.010 * k) + right * dx + nrm * (0.006 * k)
+            Rm = R @ Matrix.Rotation(tilt, 3, "Y")
+            mr, mu, mn = Rm @ Vector((1, 0, 0)), Rm @ Vector((0, 0, 1)), Rm @ Vector((0, -1, 0))
+            ellipsoid("mask", c, (0.029, 0.009, 0.036), mat_, rot=Rm, segs=20, rings=14)
+            for sd in (-1, 1):
+                ellipsoid("mask_eye", c + mn * 0.0075 + mr * sd * 0.011 + mu * 0.010, (0.0065, 0.002, 0.004), dk,
+                          rot=Rm @ Matrix.Rotation(sd * smile * 0.3, 3, "Y"), segs=10, rings=6)
+            pts = [c + mn * 0.0085 + mr * x * 0.016 + mu * (-0.016 - smile * 0.006 * (1 - x * x))
+                   for x in (-1.0, -0.5, 0.0, 0.5, 1.0)]
+            curve_tube("mask_mouth", pts, [0.6, 1, 1, 1, 0.6], 0.0022, dk)
+        fingers(skin, A - up * 0.010 + nrm * 0.014, right, up, nrm)
+    elif pr == "novel":   # роман в тканевом переплёте с золотым тиснением
+        cm = mat_basic("#2e4a3a", 0.45, sheen=0.4, bump=((200.0, 200.0, 200.0), 0.1))
+        c = A + up * 0.035
+        box("book", c, (0.105, 0.030, 0.140), cm, rot=R, bevel=0.004)
+        box("pages", c + right * 0.004, (0.098, 0.024, 0.132), mat_basic("#efe6cc", 0.7), rot=R, bevel=0.001)
+        for dz in (0.050, -0.050):
+            box("bk_band", c + nrm * 0.0155 + up * dz, (0.084, 0.002, 0.005), G, rot=R, bevel=0.0005)
+        box("bk_label", c + nrm * 0.0155 + up * 0.014, (0.052, 0.002, 0.024), G, rot=R, bevel=0.0005)
+        fingers(skin, A - up * 0.028 + right * 0.02 + nrm * 0.016, right, up, nrm)
+    elif pr == "primer":
+        # букварь с белорусским орнаментом
+        c = A + up * 0.030
+        box("primer", c, (0.090, 0.012, 0.118), mat_basic("#f2ede2", 0.6), rot=R, bevel=0.002)
+        red = mat_basic("#b8222a", 0.5)
+        for dz in (0.046, -0.046):
+            box("orn_band", c + nrm * 0.0068 + up * dz, (0.084, 0.002, 0.008), red, rot=R, bevel=0.0004)
+        for dx in (-0.022, 0.0, 0.022):
+            box("orn_rhomb", c + nrm * 0.0068 + right * dx, (0.012, 0.002, 0.012), red,
+                rot=R @ Matrix.Rotation(math.pi / 4, 3, "Y"), bevel=0.0004)
+        fingers(skin, A - up * 0.022 + right * 0.02 + nrm * 0.010, right, up, nrm)
+    elif pr == "bouquet":
+        # букет роз — цветы актрисе после спектакля
+        rose = mat_basic("#b01a2c", 0.45, sheen=0.6); rose2 = mat_basic("#8a1222", 0.5, sheen=0.5)
+        leaf = mat_basic("#3e6e2e", 0.5, sheen=0.2); wrap = mat_basic("#efe8d6", 0.6, sheen=0.3)
+        b0 = A - up * 0.055
+        lathe("wrap", [(0.006, 0.0), (0.012, 0.01), (0.034, 0.085), (0.046, 0.115), (0.044, 0.118)], wrap, c=b0, rot=R,
+              n=20)
+        top = b0 + up * 0.108
+        rnd = random.Random(5)
+        for k in range(7):
+            a = 2 * math.pi * k / 6 if k else 0.0
+            rr = 0.0 if k == 0 else 0.022
+            q = top + (right * math.cos(a) + nrm * math.sin(a)) * rr + up * (0.012 if k == 0 else 0.004 * rnd.random())
+            ellipsoid("rose", q, (0.012, 0.012, 0.010), rose, segs=14, rings=10)
+            ellipsoid("rose_in", q + up * 0.006, (0.007, 0.007, 0.006), rose2, segs=10, rings=8)
+        for k in range(5):
+            a = 2 * math.pi * k / 5 + 0.3
+            q = top + (right * math.cos(a) + nrm * math.sin(a)) * 0.034 - up * 0.004
+            ellipsoid("leaf", q, (0.013, 0.004, 0.007), leaf, rot=R @ Matrix.Rotation(a, 3, "Z"), segs=10, rings=6)
+        fingers(skin, b0 + up * 0.030 + nrm * 0.030, right, up, nrm)
+    elif pr == "basket":
+        # корзинка с клюквой: в такой Мария Осипова пронесла мину в Минск
+        wick = mat_basic("#a8804a", 0.85, bump=((160.0, 160.0, 40.0), 0.55))
+        berry = mat_basic("#a8142a", 0.22, coat=0.9)
+        Rb = Matrix.Rotation(0.30, 3, "Z") @ Matrix.Rotation(0.10, 3, "X")
+        bu, br_ = Rb @ Vector((0, 0, 1)), Rb @ Vector((1, 0, 0))
+        c = Vector((-0.085, -0.170, -0.185))
+        lathe("basket", [(0.0, 0.0), (0.042, 0.0), (0.054, 0.048), (0.057, 0.054), (0.050, 0.054), (0.0, 0.044)], wick,
+              c=c, rot=Rb, n=28)
+        rnd = random.Random(9)
+        items = []
+        for k in range(30):
+            a = rnd.uniform(0, 2 * math.pi); rr = 0.046 * math.sqrt(rnd.random())
+            items.append((c + Rb @ Vector((rr * math.cos(a), rr * math.sin(a), 0.050 + 0.004 * rnd.random())), 0.0068))
+        blobs("berries", items, berry, segs=10, rings=7)
+        curve_tube("handle", [c + br_ * 0.050 + bu * 0.050, c + br_ * 0.040 + bu * 0.095, c + bu * 0.118,
+                              c - br_ * 0.040 + bu * 0.095, c - br_ * 0.050 + bu * 0.050], [1, 1, 1, 1, 1], 0.0045, wick)
+        fingers(skin, c + bu * 0.112 + Vector((0, -0.006, 0)), br_, bu, Vector((0, -1, 0)))
+    elif pr == "racket":
+        # теннисная ракетка
+        fr = mat_basic(s["c3"], 0.35, coat=0.6); grip = mat_basic("#2a2a2e", 0.7); stg = mat_basic("#f2f0e6", 0.5)
+        Rr = R @ Matrix.Rotation(-0.55, 3, "Y")
+        ar, au, an = Rr @ Vector((1, 0, 0)), Rr @ Vector((0, 0, 1)), Rr @ Vector((0, -1, 0))
+        h0 = A + Vector((0.035, 0.0, -0.035))
+        th_ = h0 + au * 0.085
+        hc = th_ + au * 0.080
+        cylinder("grip", h0, th_, 0.0085, 0.008, grip, n=12, sub=1)
+        ring = [hc + ar * 0.052 * math.sin(2 * math.pi * i / 28) - au * 0.068 * math.cos(2 * math.pi * i / 28)
+                for i in range(28)]
+        curve_tube("racket_frame", ring, [1] * 28, 0.0042, fr, cyclic=True)
+        for sd in (-1, 1):
+            cylinder("racket_throat", th_, hc - au * 0.060 + ar * sd * 0.026, 0.0035, 0.0035, fr, n=10)
+        for k in range(-4, 5):
+            x = k * 0.0105
+            hz = 0.068 * math.sqrt(max(0.0, 1 - (x / 0.052) ** 2))
+            cylinder("string", hc + ar * x - au * hz, hc + ar * x + au * hz, 0.0007, 0.0007, stg, n=6)
+        for k in range(-6, 7):
+            z = k * 0.0105
+            hx = 0.052 * math.sqrt(max(0.0, 1 - (z / 0.068) ** 2))
+            cylinder("string", hc - ar * hx + au * z, hc + ar * hx + au * z, 0.0007, 0.0007, stg, n=6)
+        fingers(skin, h0 + au * 0.030 + an * 0.010, ar, au, an)
+    elif pr == "rifle_back":
+        # винтовка биатлонистки за спиной: ствол над правым плечом
+        mt = mat_basic("#2a2c30", 0.35, metal=0.8); stock = mat_basic("#1e1e22", 0.5)
+        p0 = Vector((-0.115, 0.075, -0.06)); p1 = Vector((-0.085, 0.085, 0.215))
+        cylinder("barrel", p0, p1, 0.0055, 0.0045, mt, n=12)
+        box("sight", p1 + Vector((0, 0, -0.012)), (0.008, 0.010, 0.016), mt, bevel=0.001)
+        box("stock", Vector((-0.125, 0.085, -0.10)), (0.035, 0.030, 0.12), stock, rot=Matrix.Rotation(0.1, 3, "Y"),
+            bevel=0.004)
     elif pr == "helmet_space":
         wm = mat_basic("#eceeee", 0.3, coat=0.5); vis = mat_basic("#1a2232", 0.05, metal=0.6, coat=1.0)
         bl = mat_basic("#3a64b0", 0.35)
