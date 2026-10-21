@@ -3,14 +3,19 @@
 """3D-фигурки войск: настольные миниатюры на круглых подставках из тёмного дерева.
 
 16 типов войск в порядке UNIT_TYPES (src/data_war.c): от княжеской дружины XII века
-до ПВО. Каждая фигурка собирается в Blender из примитивов (лофты, тела вращения,
+до ПВО. Все фигурки — героини: дружинница, арбалетчица, всадница-гусария, снайпер
+в пилотке, лётчица, партизанка в платке, танкистка в люке, зенитчица и другие. Женский
+облик читается и в 48 px: длинная коса с красным бантом (через плечо на грудь или по
+спине), лицо с ресницами, губами и румянцем, тонкая талия, у многих — юбка. Техника
+(пушки, грузовик, танк, тягач, РЛС) осталась, но рядом с ней всегда стоит героиня.
+Каждая фигурка собирается в Blender из примитивов (лофты, тела вращения,
 трубки-кривые, выдавленные контуры), стоит на лакированной подставке с латунным
 пояском и рендерится в ракурсе 3/4 чуть сверху тем же тёплым светом, что и постройки
 карты (солнце с юго-запада, азимут 225), плюс заполняющий и контровой свет.
 
 Запуск (из корня belarus-game; EEVEE нужен виртуальный дисплей):
     xvfb-run -a -s "-screen 0 1280x1024x24" blender -b -P tools/blender/build_units.py -- \\
-        [--work /tmp/belarus_units] [--only druzhina,tank] [--samples 64] [--no-save]
+        [--work /tmp/belarus_units] [--only druzhina,tank] [--samples 64] [--no-save] [--zoom 4]
 Blender строит все фигурки (каждую в своей коллекции), рендерит выбранные в 320x320
 (вдвое крупнее клетки) с прозрачным фоном и сохраняет blender/belarus_units.blend
 (фигурки расставлены сеткой 4x4, сцена, свет и этот скрипт внутри). В конце сам
@@ -22,7 +27,8 @@ Blender строит все фигурки (каждую в своей колл�
 Камера ортографическая, 50 px клетки на единицу (радиус подставки = 1), подъём 30°;
 центр верха подставки во всех клетках в одной точке — пиксель (80, ANCHOR_Y),
 нижний край подставки в 4 px от низа клетки. Превью на фоне #5a4a3a (160 и 64 px)
-кладутся в рабочую папку: preview_160.png, preview_64.png.
+кладутся в рабочую папку: preview_160.png, preview_64.png. Для проверки лиц есть крупный
+план: --zoom 4.5 [--zh 2.02] — рендер в ту же папку, без листа и без сохранения .blend.
 """
 import os, sys, json, math, random, subprocess, tempfile, time
 
@@ -42,7 +48,7 @@ YAW = -32.0                            # общий разворот фигур�
 
 def parse_args(argv):
     a = {"work": os.path.join(tempfile.gettempdir(), "belarus_units"), "only": None, "samples": 64,
-         "save": True, "post": False}
+         "save": True, "post": False, "zoom": 0.0, "zh": 2.02}
     i = 0
     while i < len(argv):
         k = argv[i]
@@ -52,6 +58,8 @@ def parse_args(argv):
         elif k == "--samples": a["samples"] = int(argv[i + 1]); i += 1
         elif k == "--no-save": a["save"] = False
         elif k == "--post": a["post"] = True
+        elif k == "--zoom": a["zoom"] = float(argv[i + 1]); i += 1
+        elif k == "--zh": a["zh"] = float(argv[i + 1]); i += 1
         i += 1
     return a
 
@@ -143,10 +151,17 @@ PAL = {
     # люди
     "skin": M("#e6b592", 0.5, sss=0.08),
     "eye": M("#20140e", 0.3),
-    "beard": M("#6a4024", 0.75, var=(60, 0.75, 1.2)),
-    "beard_fair": M("#b07a3e", 0.75, var=(60, 0.75, 1.2)),
-    "hair": M("#4a2e1c", 0.7, var=(60, 0.75, 1.2)),
-    "moustache": M("#3a2416", 0.7),
+    "glint": M("#ffffff", 0.2, emit=1.5),
+    "lips": M("#c23848", 0.4, sheen=0.2),
+    "blush": M("#f09a8a", 0.55, sss=0.05),
+    # волосы: тёмно-русые, русые, светлые, рыжие, тёмные
+    "hair": M("#5a361e", 0.6, sheen=0.4, var=(60, 0.75, 1.2)),
+    "hair_fair": M("#b5803e", 0.55, sheen=0.45, var=(60, 0.78, 1.18)),
+    "hair_blond": M("#e0b860", 0.5, sheen=0.45, var=(60, 0.8, 1.15)),
+    "hair_red": M("#a8481e", 0.55, sheen=0.45, var=(60, 0.78, 1.18)),
+    "hair_dark": M("#2c1a10", 0.55, sheen=0.4, var=(60, 0.75, 1.25)),
+    "ribbon": M("#e02838", 0.45, sheen=0.5),
+    "ribbon_grey": M("#8a9098", 0.5, sheen=0.3),
     # металл
     "steel": M("#c4ccd4", 0.28, 0.9),
     "steel_dark": M("#6e757e", 0.38, 0.85),
@@ -171,7 +186,17 @@ PAL = {
     "green_coat": M("#244a32", 0.7, sheen=0.3, var=(40, 0.88, 1.1)),
     "khaki": M("#8a8452", 0.75, sheen=0.25, var=(40, 0.88, 1.1)),
     "khaki_dark": M("#6c6840", 0.75, sheen=0.2),
-    "greatcoat": M("#7a705e", 0.85, sheen=0.3, var=(50, 0.85, 1.12)),
+    "skirt_khaki": M("#5e5a36", 0.75, sheen=0.25, var=(40, 0.88, 1.1)),
+    "skirt_dark": M("#2e2c30", 0.8, sheen=0.3, var=(40, 0.85, 1.12)),
+    "stockings": M("#a8926c", 0.6, sheen=0.3),
+    "stockings_dark": M("#4a4038", 0.7, sheen=0.3),
+    "olive_uniform": M("#5c6038", 0.7, sheen=0.25, var=(40, 0.9, 1.08)),
+    "teal_coat": M("#21606a", 0.7, sheen=0.3, var=(40, 0.88, 1.1)),
+    "kerchief": M("#b8343a", 0.75, kind="dots", col2="#f2ead8", scale=26.0, sheen=0.4),
+    "flight_leather": M("#6e4224", 0.45, sheen=0.2, var=(30, 0.82, 1.15), coat=0.15),
+    "tank_helmet": M("#26221e", 0.55, sheen=0.2),
+    "tank_overall": M("#3c3a34", 0.8, sheen=0.25, var=(40, 0.88, 1.1)),
+    "camo_green": M("#6a7250", 0.7, kind="camo", col2="#4c5636", col3="#857f5e", cs=2.4, sheen=0.2),
     "telogreika": M("#3e4436", 0.8, kind="stripe", col2="#2a2e24", axis="Z", period=0.06, frac=0.16, sheen=0.3),
     "fur": M("#6e5038", 0.85, sheen=0.5, var=(90, 0.7, 1.3), bump=(160, 0.5)),
     "fur_dark": M("#3e2c20", 0.85, sheen=0.5, var=(90, 0.7, 1.3), bump=(160, 0.5)),
@@ -324,14 +349,19 @@ def mat(key):
         L.new(mapped(13.0), vo.inputs["Vector"])
         col_out = ramp(vo.outputs["Distance"], hexc(s["col2"]), c, 0.22, 0.27).outputs["Color"]
     elif kind == "camo":
-        f1 = noise(2.6, 2.0)
+        cs = s.get("cs", 1.0)
+        f1 = noise(2.6 * cs, 2.0)
         r1 = ramp(f1, hexc(s["col2"]), c, 0.47, 0.48)
-        f2 = noise((3.4, 3.4, 3.4), 2.0)
+        f2 = noise((3.4 * cs,) * 3, 2.0)
         mx = N.new("ShaderNodeMixRGB")
         lt = N.new("ShaderNodeMath"); lt.operation = "GREATER_THAN"; lt.inputs[1].default_value = 0.6
         L.new(f2, lt.inputs[0]); L.new(lt.outputs[0], mx.inputs["Fac"])
         L.new(r1.outputs["Color"], mx.inputs["Color1"]); mx.inputs["Color2"].default_value = hexc(s["col3"])
         col_out = mx.outputs["Color"]
+    elif kind == "dots":
+        vo = N.new("ShaderNodeTexVoronoi"); vo.inputs["Scale"].default_value = 1.0
+        L.new(mapped(s.get("scale", 24.0)), vo.inputs["Vector"])
+        col_out = ramp(vo.outputs["Distance"], hexc(s["col2"]), c, 0.16, 0.19).outputs["Color"]
     elif kind == "birch":
         f = noise((5.0, 5.0, 38.0), 1.0)
         col_out = ramp(f, c, hexc(s["col2"]), 0.63, 0.64).outputs["Color"]
@@ -622,12 +652,49 @@ def base_disc():
 
 
 # ----------------------------------------------------------------------------------------------
-#  Человечек. Рост ~1.9 (голова 0.34): крупноголовая «миниатюра», читается в 60 px.
+#  Героиня. Рост ~1.9 (голова 0.33): крупноголовая «миниатюра», читается в 60 px.
+#  Все фигурки — женщины: плечи уже бёдер, тонкая талия, губы, ресницы и румянец, а главная
+#  примета, заметная и в 48 px, — длинная коса с бантом: через плечо на грудь или по спине.
 # ----------------------------------------------------------------------------------------------
 HC = Vector((0.0, -0.005, 1.685))       # центр головы
-HR = (0.148, 0.156, 0.17)               # радиусы головы
-HS = 1.1                                # голова и убор чуть крупнее (масштаб вокруг HC)
-SH_Z = 1.37
+HR = (0.142, 0.15, 0.165)               # радиусы головы
+HS = 1.12                               # голова и убор чуть крупнее (масштаб вокруг HC)
+SH_X, SH_Z = 0.19, 1.36                 # плечевой сустав
+HAT_DZ = 0.045                          # уборы сидят чуть выше середины головы — глаза не прячутся
+
+# сечения туловища: высота, полуоси (вбок, вперёд) и сдвиг вперёд (грудь)
+TORSO = [(0.80, 0.160, 0.116, 0.012), (0.90, 0.168, 0.122, 0.012), (1.02, 0.134, 0.100, 0.0),
+         (1.13, 0.148, 0.114, -0.012), (1.22, 0.164, 0.128, -0.02), (1.31, 0.172, 0.114, -0.004),
+         (1.39, 0.146, 0.096, 0.0), (1.47, 0.062, 0.056, 0.0)]
+
+
+def tr(z, k=1.06, kd=1.04):
+    """Сечение туловища на высоте z: (полуось вбок, полуось вперёд, сдвиг вперёд)."""
+    T = TORSO
+    if z <= T[0][0] or z >= T[-1][0]:
+        a = b = T[0] if z <= T[0][0] else T[-1]
+        t = 0.0
+    else:
+        i = next(i for i in range(1, len(T)) if T[i][0] >= z)
+        a, b = T[i - 1], T[i]
+        t = (z - a[0]) / (b[0] - a[0])
+    return ((a[1] + (b[1] - a[1]) * t) * k, (a[2] + (b[2] - a[2]) * t) * kd, a[3] + (b[3] - a[3]) * t)
+
+
+def front_y(z, x, k=1.06):
+    """Y передней поверхности туловища в точке (x, z)."""
+    rx, ry, cy = tr(z, k)
+    return cy - ry * sqrt(max(0.0, 1.0 - (x / rx) ** 2))
+
+
+def back_y(z, x, k=1.06):
+    rx, ry, cy = tr(z, k)
+    return cy + ry * sqrt(max(0.0, 1.0 - (x / rx) ** 2))
+
+
+def hp(dx, dy, dz):
+    """Точка у головы в координатах фигурки (с учётом увеличения головы HS)."""
+    return HC + Vector((dx, dy, dz)) * HS
 
 
 def ik_elbow(S, H, a, b, pole):
@@ -646,93 +713,166 @@ def ik_elbow(S, H, a, b, pole):
     return S + dv * x + p * h
 
 
-def arm(side, H, coat, hand="skin", pole=None, r=(0.078, 0.066, 0.054), cuff=None):
-    S = Vector((side * 0.215, 0.0, SH_Z))
+def arm(side, H, coat, hand="skin", pole=None, r=(0.068, 0.058, 0.047), cuff=None):
+    S = Vector((side * SH_X, 0.0, SH_Z))
     H = Vector(H)
     pole = Vector(pole) if pole else Vector((side * 0.8, 0.5, -1.0))
-    E = ik_elbow(S, H, 0.30, 0.29, pole)
-    W = H + (E - H).normalized() * 0.045
+    E = ik_elbow(S, H, 0.29, 0.28, pole)
+    W = H + (E - H).normalized() * 0.04
     tube([S, E, W], [r[0], r[1], r[2]], coat)
     if cuff:
-        cyl2(W + (E - W).normalized() * 0.02, W - (E - W).normalized() * 0.01, r[2] + 0.012, r[2] + 0.012, cuff)
-    ell(H, (0.055, 0.055, 0.06), hand, segs=12, rings=8)
+        cyl2(W + (E - W).normalized() * 0.02, W - (E - W).normalized() * 0.01, r[2] + 0.011, r[2] + 0.011, cuff)
+    ell(H, (0.047, 0.048, 0.053), hand, segs=12, rings=8)
     return E
 
 
 def leg(side, pants, boots, hip=None, knee=None, ankle=None, boot_top=0.3, foot_dir=(0, -1, 0)):
-    hip = Vector(hip or (side * 0.1, 0.0, 0.86))
-    ankle = Vector(ankle or (side * 0.13, 0.0, 0.09))
+    hip = Vector(hip or (side * 0.098, 0.0, 0.86))
+    ankle = Vector(ankle or (side * 0.12, 0.0, 0.09))
     knee = Vector(knee) if knee else (hip + ankle) / 2 + Vector((0, -0.035, 0))
-    tube([hip, knee, ankle], [0.1, 0.08, 0.064], pants)
+    tube([hip, knee, ankle], [0.094, 0.07, 0.056], pants)
     if boots:
         t = max(0.0, min(1.0, (boot_top - ankle.z) / max(knee.z - ankle.z, 1e-3)))
         top = ankle + (knee - ankle) * t if boot_top < knee.z else knee + (hip - knee) * 0.1
-        cyl2(top, ankle + Vector((0, 0, -0.02)), 0.078, 0.07, boots, segs=14)
+        cyl2(top, ankle + Vector((0, 0, -0.02)), 0.07, 0.062, boots, segs=14)
         fd = Vector(foot_dir).normalized()
-        ell(ankle + fd * 0.06 + Vector((0, 0, -0.03)), (0.07, 0.13, 0.062), boots,
+        ell(ankle + fd * 0.055 + Vector((0, 0, -0.03)), (0.062, 0.118, 0.056), boots,
             rot=(0, 0, math.degrees(math.atan2(fd.x, -fd.y))), segs=14, rings=8)
 
 
-TORSO = [(0.80, 0.150, 0.112), (0.90, 0.162, 0.118), (1.02, 0.158, 0.112), (1.15, 0.180, 0.122),
-         (1.28, 0.198, 0.128), (1.37, 0.190, 0.120), (1.44, 0.140, 0.098), (1.49, 0.066, 0.062)]
-
-
 def torso(coat, k=1.06, kd=1.04):
-    rings = [ell_ring(z, rx * k, ry * kd, n=28) for (z, rx, ry) in TORSO]
-    loft(rings, coat, cap0=True, cap1=True)
+    loft([ell_ring(z, rx * k, ry * kd, cy=cy, n=28) for (z, rx, ry, cy) in TORSO], coat, cap0=True, cap1=True)
     for s in (-1, 1):
-        ell((s * 0.2 * k, 0.0, SH_Z - 0.005), (0.088, 0.09, 0.08), coat, segs=14, rings=10)
+        ell((s * (SH_X - 0.005), 0.0, SH_Z - 0.005), (0.08, 0.082, 0.072), coat, segs=14, rings=10)
 
 
 def skirt(m, zb, rx, ry, z0=1.02, cy=0.0, a0=None, a1=None):
+    """Юбка или полы одежды от талии z0 до подола zb (полуоси rx, ry); a0..a1 — только полы сзади."""
+    w0, w1, c0 = tr(z0)
+    sec = [(z0, w0 + 0.006, w1 + 0.006, c0)]
+    if zb < 0.83:
+        h0, h1, hc = tr(0.88)
+        f = (z0 - 0.88) / (z0 - zb)
+        sec.append((0.88, max(h0 + 0.016, w0 + (rx - w0) * f), max(h1 + 0.014, w1 + (ry - w1) * f),
+                    hc + (cy - hc) * f))
+    sec.append((zb, rx, ry, cy))
     if a0 is None:
-        rings = [ell_ring(z0, 0.165, 0.118), ell_ring((z0 + zb) / 2, (0.165 + rx) / 2, (0.118 + ry) / 2, cy=cy / 2),
-                 ell_ring(zb, rx, ry, cy=cy)]
-        loft(rings, m, solid=0.014)
+        loft([ell_ring(z, a, b, cy=c) for (z, a, b, c) in sec], m, solid=0.014)
     else:
-        rings = [ell_ring(z0, 0.168, 0.122, a0=a0, a1=a1, closed=False),
-                 ell_ring(zb, rx, ry, cy=cy, a0=a0, a1=a1, closed=False)]
-        loft(rings, m, closed=False, solid=0.014)
+        loft([ell_ring(z, a, b, cy=c, a0=a0, a1=a1, closed=False) for (z, a, b, c) in sec], m, closed=False,
+             solid=0.014)
 
 
-def head(skin="skin", beard=None, mous=None, hair=None, eyes=True):
-    cyl2((0, 0, 1.43), (0, 0, 1.6), 0.058, 0.058, skin, segs=12)
+def head(skin="skin", hair="hair", cap=True, locks=True):
+    """Голова: лицо с ресницами, бровями, губами и румянцем; волосы — шапочка и пряди у висков."""
+    cyl2((0, 0, 1.43), (0, 0, 1.6), 0.05, 0.048, skin, segs=12)
     ell(HC, HR, skin, segs=24, rings=16)
-    ell(HC + Vector((0, -0.152, -0.02)), (0.024, 0.03, 0.036), skin, segs=10, rings=8)
+    ell(H(0, -0.146, -0.035), (0.017, 0.022, 0.026), skin, segs=10, rings=8)
     for s in (-1, 1):
-        ell(HC + Vector((s * 0.147, 0.01, -0.01)), (0.022, 0.035, 0.045), skin, segs=10, rings=8)
-        if eyes:
-            ell(HC + Vector((s * 0.052, -0.139, 0.018)), (0.016, 0.01, 0.019), "eye", segs=10, rings=6)
-    if beard:
-        ell(HC + Vector((0, -0.09, -0.11)), (0.115, 0.085, 0.1), beard, segs=16, rings=10)
-        ell(HC + Vector((0, -0.11, -0.17)), (0.07, 0.06, 0.06), beard, segs=12, rings=8)
-    if mous:
-        tube([HC + Vector((-0.07, -0.13, -0.075)), HC + Vector((0, -0.158, -0.05)),
-              HC + Vector((0.07, -0.13, -0.075))], [0.012, 0.02, 0.012], mous)
-    if hair:
-        ell(HC + Vector((0, 0.02, 0.03)), (0.156, 0.16, 0.16), hair, segs=20, rings=12)
+        ell(H(s * 0.05, -0.133, 0.002), (0.021, 0.012, 0.029), "eye", segs=10, rings=6)
+        ell(H(s * 0.042, -0.143, 0.013), (0.0075, 0.004, 0.008), "glint", segs=6, rings=4)
+        tube([H(s * 0.026, -0.142, 0.027), H(s * 0.052, -0.146, 0.037), H(s * 0.078, -0.131, 0.033),
+              H(s * 0.092, -0.12, 0.048)], [0.004, 0.006, 0.005, 0.003], "eye")
+        tube([H(s * 0.024, -0.143, 0.074), H(s * 0.055, -0.14, 0.085), H(s * 0.086, -0.121, 0.076)],
+             [0.005, 0.0065, 0.004], hair)
+        ell(H(s * 0.078, -0.113, -0.042), (0.03, 0.016, 0.024), "blush", segs=10, rings=6)
+    ell(H(0, -0.13, -0.078), (0.024, 0.008, 0.009), "lips", segs=12, rings=6)
+    if cap:
+        ell(H(0, 0.025, 0.035), (0.152, 0.158, 0.158), hair, segs=20, rings=12)
+    if locks:
+        for s in (-1, 1):
+            tube([H(s * 0.012, -0.115, 0.13), H(s * 0.08, -0.13, 0.09), H(s * 0.133, -0.092, 0.02),
+                  H(s * 0.15, -0.045, -0.07)], [0.02, 0.025, 0.026, 0.022], hair)
+
+
+def plait(pts, hair, r0=0.05, r1=0.032, bow="ribbon", fwd=(0, -1, 0)):
+    """Коса из чередующихся наклонных прядей вдоль ломаной pts; на конце — бант и кисточка."""
+    P = catmull(pts, 8)
+    acc = [0.0]
+    for i in range(1, len(P)):
+        acc.append(acc[-1] + (P[i] - P[i - 1]).length)
+    tot = acc[-1]
+
+    def at(s):
+        for i in range(1, len(P)):
+            if acc[i] >= s:
+                t = (s - acc[i - 1]) / max(acc[i] - acc[i - 1], 1e-6)
+                return P[i - 1].lerp(P[i], t), (P[i] - P[i - 1]).normalized()
+        return P[-1], (P[-1] - P[-2]).normalized()
+    n = max(6, int(tot / 0.04 + 0.5))
+    seg = tot / n
+    F = Vector(fwd)
+    core = P[::4] + [P[-1]]
+    tube(core, [(r0 + (r1 - r0) * i / (len(core) - 1)) * 0.62 for i in range(len(core))], hair, res=4)
+    for k in range(n):
+        p, d = at((k + 0.5) * seg)
+        r = r0 + (r1 - r0) * k / (n - 1)
+        nr = (F - d * F.dot(d)).normalized()
+        a = d * cos(0.6) + d.cross(nr) * sin(0.6) * (1 if k % 2 else -1)
+        with grp(matrix=look(p + d.cross(nr) * r * 0.18 * (1 if k % 2 else -1), a, nr)):
+            ell((0, 0, 0), (r * 0.78, r * 0.62, seg * 1.35), hair, segs=12, rings=8)
+    p, d = at(tot)
+    nr = (F - d * F.dot(d)).normalized()
+    with grp(matrix=look(p, d, nr)):
+        lathe([(r1 * 0.95, -0.01), (r1 * 1.1, 0.03), (r1 * 0.8, 0.07), (0.0, 0.105)], (0, 0, 0), hair, segs=12)
+        if bow:
+            ell((0, 0, 0.0), (0.026, 0.022, 0.022), bow, segs=10, rings=6)
+            for s in (-1, 1):
+                ell((s * 0.05, 0.006, -0.012), (0.046, 0.016, 0.031), bow, rot=(0, s * 25, 0), segs=12, rings=6)
+                cyl2((s * 0.008, 0.008, 0.0), (s * 0.034, 0.012, 0.09), 0.013, 0.009, bow, segs=6)
+
+
+def braid_front(s, hair, end=1.04, x=0.135, out=0.0, bow="ribbon", r0=0.05, top=1.47):
+    """Коса через плечо на грудь: s = +1 — левое плечо героини (обращено к зрителю), -1 — правое."""
+    def y(z, xx):
+        return front_y(z, xx) - r0 * 0.8 - out
+    pts = [hp(s * 0.1, 0.07, -0.1), Vector((s * 0.155, -0.01, top)), Vector((s * x, y(1.37, x), 1.37)),
+           Vector((s * (x - 0.008), y(1.22, x - 0.008), 1.22))]
+    pts.append(Vector((s * (x - 0.018), min(pts[-1].y + 0.012, y(end, x - 0.018)), end)))
+    plait(pts, hair, r0=r0, bow=bow)
+
+
+def braid_back(hair, end=1.0, s=1, bow="ribbon", r0=0.05):
+    """Коса по спине — видна у фигурок, повёрнутых к зрителю боком."""
+    def y(z, xx):
+        return back_y(z, xx) + r0 * 0.8
+    pts = [hp(s * 0.02, 0.13, -0.02), hp(s * 0.03, 0.155, -0.13), Vector((s * 0.045, y(1.4, 0.045), 1.4)),
+           Vector((s * 0.055, y(1.22, 0.055), 1.22)), Vector((s * 0.06, y(end, 0.06), end))]
+    plait(pts, hair, r0=r0, bow=bow, fwd=(0, 1, 0))
 
 
 def human(coat, pants="trousers_dark", boots="boots", hands=None, poles=(None, None), feet=None,
           sleeve=None, hand_m=("skin", "skin"), boot_top=0.3, k=1.06, legs=None, belt=None, skin="skin",
-          beard=None, mous=None, hair=None, eyes=True, cuff=None, hat=None):
-    """Стоящий (или сидящий — legs=[(hip,knee,ankle)]*2) человечек; руки тянутся к точкам hands."""
+          hair="hair", cap=True, locks=True, braid=None, braid_end=1.04, bow="ribbon", cuff=None, hat=None,
+          hat_dz=HAT_DZ, bust_only=False):
+    """Стоящая (или сидящая — legs=[(hip,knee,ankle)]*2) героиня; руки тянутся к точкам hands.
+    braid: "+" / "-" — коса через левое (к зрителю) / правое плечо, "+-" — две косы, "back" — по спине;
+    bust_only — только верх (танкистка в люке)."""
     sleeve = sleeve or coat
     for i, s in enumerate((-1, 1)):
+        if bust_only:
+            break
         if legs:
-            hp, kn, an = legs[i]
-            leg(s, pants, boots, hp, kn, an, boot_top, foot_dir=(0, -1, -0.2))
+            hip, kn, an = legs[i]
+            leg(s, pants, boots, hip, kn, an, boot_top, foot_dir=(0, -1, -0.2))
         else:
-            fx, fy = feet[i] if feet else (s * 0.13, 0.0)
+            fx, fy = feet[i] if feet else (s * 0.12, 0.0)
             leg(s, pants, boots, ankle=(fx, fy, 0.09), boot_top=boot_top)
     torso(coat, k)
     if belt:
-        ring((0, 0, 1.0), 0.163 * k, 0.122, 0.024, belt)
+        rx, ry, cy = tr(1.01, k)
+        ring((0, cy, 1.01), rx + 0.01, ry + 0.01, 0.022, belt)
     with grp(HC * (1 - HS), scl=HS):
-        head(skin, beard, mous, hair, eyes)
+        head(skin, hair, cap, locks)
         if hat:
-            hat()
-    hands = hands or [(-0.26, -0.05, 0.85), (0.26, -0.05, 0.85)]
+            with grp((0, 0, hat_dz)):
+                hat()
+    if braid == "back":
+        braid_back(hair, bow=bow)
+    elif braid:
+        for c in braid:
+            braid_front(1 if c == "+" else -1, hair, end=braid_end, bow=bow)
+    hands = hands or [(-0.25, -0.05, 0.86), (0.25, -0.05, 0.86)]
     for i, s in enumerate((-1, 1)):
         if hands[i] is not None:
             arm(s, hands[i], sleeve, hand_m[i], poles[i], cuff=cuff)
@@ -748,8 +888,8 @@ def spear(p0, p1, wood="wood", head_m="steel", blade=0.26, r=0.02):
         ell((0, 0, 0.05 + blade / 2), (0.045, 0.014, blade / 2), head_m, segs=8, rings=8)
 
 
-def rifle(p0, p1, up=(0, 0, 1), bayonet=0.0, wood="wood", metal="gunmetal", L=None):
-    """Ружьё/винтовка от приклада p0 к дулу p1."""
+def rifle(p0, p1, up=(0, 0, 1), bayonet=0.0, wood="wood", metal="gunmetal", scope=False):
+    """Ружьё/винтовка от приклада p0 к дулу p1 (scope — оптический прицел снайпера)."""
     p0, p1 = Vector(p0), Vector(p1)
     L = (p1 - p0).length
     with grp(matrix=look(p0, p1 - p0, up)):
@@ -759,6 +899,12 @@ def rifle(p0, p1, up=(0, 0, 1), bayonet=0.0, wood="wood", metal="gunmetal", L=No
         cyl2((0, 0.018, 0.25), (0, 0.018, L), 0.014, 0.013, metal, segs=8)
         if bayonet:
             cyl2((0.02, 0.005, L - 0.05), (0.02, 0.005, L + bayonet), 0.008, 0.002, "steel", segs=6)
+        if scope:
+            cyl2((0, 0.068, 0.27), (0, 0.068, 0.56), 0.02, 0.02, metal, segs=10)
+            cyl2((0, 0.068, 0.5), (0, 0.068, 0.6), 0.026, 0.026, metal, segs=10)
+            for z in (0.34, 0.5):
+                box((0.016, 0.04, 0.025), (0, 0.045, z), metal)
+            ell((0, 0.068, 0.601), (0.02, 0.02, 0.004), "glass", segs=10, rings=4)
 
 
 def pole_banner(p0, top, w=0.62, h=0.78, m="banner", cross="white_cloth"):
@@ -770,6 +916,7 @@ def pole_banner(p0, top, w=0.62, h=0.78, m="banner", cross="white_cloth"):
         cyl2((-0.02, 0, 0), (w + 0.04, 0, 0), 0.014, 0.014, "wood_dark", segs=8)
         for x in (-0.02, w + 0.04):
             ell((x, 0, 0), 0.024, "gold", segs=8, rings=6)
+
         def bend(u, v):
             return 0.05 * sin(u * 7.0 + v * 2.0) + 0.03 * v
         tails = 3
@@ -784,6 +931,16 @@ def pole_banner(p0, top, w=0.62, h=0.78, m="banner", cross="white_cloth"):
         slab([(cx - cw / 2, -0.08), (cx + cw / 2, -0.08), (cx + cw / 2, -h + 0.18), (cx - cw / 2, -h + 0.18)],
              0.026, cross, "xz", bend)
         slab([(0.1, -0.28), (w - 0.1, -0.28), (w - 0.1, -0.28 - cw), (0.1, -0.28 - cw)], 0.026, cross, "xz", bend)
+
+
+def flag(hand, top, m, w=0.3, h=0.22):
+    """Сигнальный флажок регулировщицы: палочка от кисти к top и полотнище у верха."""
+    hand, top = Vector(hand), Vector(top)
+    d = (top - hand).normalized()
+    cyl2(hand - d * 0.06, top, 0.011, 0.01, "wood_dark", segs=6)
+    with grp(matrix=look(top, d, (0, -1, 0))):
+        slab([(0.0, -0.01), (w, -0.03), (w, -h), (0.0, -h + 0.03)], 0.012, m, "xz",
+             bend=lambda u, v: 0.04 * sin(u * 9.0), rot=(0, -90, 0))
 
 
 def wheel(c, r, w, rim="wood", spokes=10, hub="iron", tire="iron", axis="x", spoke_m=None):
@@ -817,35 +974,63 @@ def H(dx, dy, dz):
     return HC + Vector((dx, dy, dz))
 
 
+def hood(c, r, z0, m, face=1.05, brow=0.06, solid=0.022, segs=28, rings=14):
+    """Оболочка вокруг головы (шлемофон, лётный шлем, платок): срезана снизу на z0, спереди — овал лица
+    (|угол| < face и ниже brow)."""
+    rx, ry, rz = r
+    th1 = math.acos(max(-1.0, min(1.0, z0 / rz)))
+    v = [(0.0, 0.0, rz)]
+    for i in range(1, rings + 1):
+        th = th1 * i / rings
+        for j in range(segs):
+            ph = 2 * pi * j / segs
+            v.append((rx * sin(th) * sin(ph), -ry * sin(th) * cos(ph), rz * cos(th)))
+
+    def vid(i, j):
+        return 0 if i == 0 else 1 + (i - 1) * segs + j % segs
+
+    def opened(i, j):
+        th = th1 * (i + 0.5) / rings
+        a = (2 * pi * (j + 0.5) / segs + pi) % (2 * pi) - pi
+        return abs(a) < face and rz * cos(th) < brow
+    f = [(0, vid(1, j), vid(1, j + 1)) for j in range(segs) if not opened(0, j)]
+    for i in range(1, rings):
+        f += [(vid(i, j), vid(i + 1, j), vid(i + 1, j + 1), vid(i, j + 1)) for j in range(segs) if not opened(i, j)]
+    return mk("hood", v, f, m, c, smooth=True, solid=solid)
+
+
 def hat_shishak():
     lathe([(0.166, 0.0), (0.168, 0.06), (0.152, 0.13), (0.118, 0.2), (0.075, 0.26), (0.035, 0.32),
            (0.014, 0.37), (0.0, 0.41)], HC, "steel", segs=28, cap0=False)
     ring(H(0, 0, 0.02), 0.169, 0.169, 0.016, "gold", n=32)
-    box((0.022, 0.012, 0.12), H(0, -0.172, -0.03), "steel", rot=(-8, 0, 0))
     rings = [ell_ring(HC.z + 0.03, 0.17, 0.168, cy=HC.y, a0=1.0, a1=2 * pi - 1.0, closed=False),
-             ell_ring(HC.z - 0.08, 0.175, 0.172, cy=HC.y + 0.01, a0=1.0, a1=2 * pi - 1.0, closed=False),
-             ell_ring(HC.z - 0.2, 0.215, 0.18, cy=HC.y + 0.02, a0=0.9, a1=2 * pi - 0.9, closed=False)]
+             ell_ring(HC.z - 0.1, 0.175, 0.172, cy=HC.y + 0.01, a0=1.0, a1=2 * pi - 1.0, closed=False),
+             ell_ring(HC.z - 0.24, 0.215, 0.18, cy=HC.y + 0.02, a0=0.9, a1=2 * pi - 0.9, closed=False)]
     loft(rings, "mail", closed=False, solid=0.012)
 
 
 def hat_kettle():
-    lathe([(0.17, 0.0), (0.168, 0.08), (0.145, 0.165), (0.09, 0.215), (0.0, 0.232)], HC, "steel", segs=28,
-          cap0=False)
-    lathe([(0.16, 0.03), (0.23, 0.0), (0.31, -0.05)], HC, "steel", segs=36, cap0=False, cap1=False, solid=0.016)
-    ring(H(0, 0, 0.215), 0.012, 0.012, 0.0, "steel")
+    with grp(H(0, 0.02, 0.03), (-16, 0, 0)):
+        lathe([(0.17, 0.0), (0.168, 0.08), (0.145, 0.165), (0.09, 0.215), (0.0, 0.232)], (0, 0, 0), "steel",
+              segs=28, cap0=False)
+        lathe([(0.16, 0.03), (0.22, 0.01), (0.27, -0.02)], (0, 0, 0), "steel", segs=36, cap0=False, cap1=False,
+              solid=0.016)
+        ring((0, 0, 0.03), 0.165, 0.165, 0.012, "leather_dark", n=28)
 
 
-def hat_greathelm():
-    lathe([(0.0, -0.21), (0.17, -0.205), (0.182, -0.12), (0.186, 0.05), (0.18, 0.15), (0.15, 0.2),
-           (0.08, 0.225), (0.0, 0.232)], HC, "steel", segs=32)
-    box((0.3, 0.03, 0.022), H(0, -0.18, 0.04), "black")
-    box((0.035, 0.03, 0.22), H(0, -0.185, -0.03), "gold")
-    box((0.2, 0.03, 0.035), H(0, -0.186, 0.075), "gold")
-    for i in range(3):
-        for s in (-1, 1):
-            ell(H(s * 0.06, -0.176, -0.07 - i * 0.04), 0.008, "black", segs=6, rings=4)
-    ring(H(0, 0, 0.15), 0.18, 0.18, 0.01, "gold", n=32)
-    ell(H(0, 0.02, 0.29), (0.05, 0.12, 0.08), "feather_red", rot=(20, 0, 0))
+def hat_bascinet():
+    """Бацинет с открытым лицом, кольчужная бармица и красный плюмаж."""
+    lathe([(0.168, 0.03), (0.168, 0.08), (0.155, 0.15), (0.125, 0.22), (0.08, 0.28), (0.035, 0.33),
+           (0.0, 0.36)], HC, "steel", segs=28, cap0=False)
+    lathe([(0.17, -0.1), (0.169, 0.035)], HC, "steel", segs=20, a0=1.05, a1=2 * pi - 1.05, cap0=False,
+          cap1=False, solid=0.01)
+    ring(H(0, 0, 0.035), 0.171, 0.171, 0.012, "gold", n=32)
+    rings = [ell_ring(HC.z - 0.09, 0.173, 0.171, cy=HC.y, a0=1.1, a1=2 * pi - 1.1, closed=False),
+             ell_ring(HC.z - 0.2, 0.2, 0.19, cy=HC.y + 0.01, a0=0.95, a1=2 * pi - 0.95, closed=False),
+             ell_ring(HC.z - 0.29, 0.235, 0.2, cy=HC.y + 0.02, a0=0.8, a1=2 * pi - 0.8, closed=False)]
+    loft(rings, "mail", closed=False, solid=0.012)
+    tube([H(0, 0.02, 0.32), H(0, 0.11, 0.33), H(0, 0.2, 0.27), H(0, 0.26, 0.14)], [0.03, 0.048, 0.042, 0.02],
+         "feather_red")
 
 
 def hat_shako():
@@ -859,28 +1044,6 @@ def hat_shako():
     ell(H(0, -0.13, 0.36), 0.04, "white_cloth", segs=12, rings=8)
     ell(H(0, -0.12, 0.47), (0.035, 0.035, 0.1), "white_cloth", segs=12, rings=8)
     tube([H(-0.15, -0.06, 0.2), H(0, -0.18, 0.12), H(0.15, -0.06, 0.2)], 0.008, "white_cloth")
-    tube([H(-0.15, 0.0, 0.04), H(0, -0.13, -0.15), H(0.15, 0.0, 0.04)], 0.007, "black_hat")
-
-
-def hat_ssh40(star_on=True):
-    lathe([(0.207, -0.035), (0.198, -0.012), (0.19, 0.04), (0.177, 0.11), (0.145, 0.175), (0.085, 0.215),
-           (0.0, 0.23)], HC + Vector((0, 0.01, 0)), "olive", segs=32, cap0=False)
-    if star_on:
-        star(H(0, -0.178, 0.095), 0.045, "red_star", rot=(-25, 0, 0))
-    tube([H(-0.17, 0.0, -0.01), H(0, -0.1, -0.2), H(0.17, 0.0, -0.01)], 0.008, "leather_dark")
-
-
-def hat_ushanka():
-    lathe([(0.166, 0.05), (0.172, 0.13), (0.15, 0.21), (0.085, 0.26), (0.0, 0.27)], HC, "fur_dark",
-          segs=28, cap0=False)
-    rings = [ell_ring(HC.z + 0.055, 0.185, 0.19, cy=HC.y - 0.005, a0=-1.4, a1=1.4, closed=False),
-             ell_ring(HC.z + 0.16, 0.195, 0.2, cy=HC.y - 0.012, a0=-1.4, a1=1.4, closed=False)]
-    loft(rings, "fur", closed=False, solid=0.04)
-    for s in (-1, 1):
-        ell(H(s * 0.165, 0.025, -0.02), (0.045, 0.085, 0.12), "fur", segs=14, rings=10)
-    ell(H(0, 0.12, 0.0), (0.14, 0.06, 0.1), "fur", segs=14, rings=10)
-    slab([(-0.13, 0.0), (0.13, 0.045), (0.13, 0.085), (-0.13, 0.04)], 0.02, "red_bright",
-         loc=H(0, -0.215, 0.085), rot=(-12, 0, 0), bend=lambda u, v: 0.62 * u * u)
 
 
 def hat_wide(feather="feather_red"):
@@ -903,15 +1066,103 @@ def hat_szyszak():
     for s in (-1, 1):
         slab([(0, 0), (0.07, 0), (0.06, -0.15), (0.0, -0.12)], 0.01, "steel", loc=H(s * 0.17, -0.06, 0.0),
              rot=(0, 0, 90 + s * 8), scl=(s, 1, 1))
-    box((0.02, 0.012, 0.16), H(0, -0.175, -0.02), "gold", rot=(-6, 0, 0))
+    box((0.016, 0.012, 0.12), H(0, -0.175, -0.0), "gold", rot=(-6, 0, 0))
     slab([(-0.12, 0), (0.12, 0), (0.08, -0.06), (-0.08, -0.06)], 0.01, "steel", "xy", loc=H(0, -0.15, 0.03),
          rot=(-20, 0, 0))
 
 
-def hat_fur_cap():
+def hat_fur_cap(top="red", feather=None):
     lathe([(0.165, 0.0), (0.172, 0.1), (0.168, 0.2), (0.0, 0.215)], HC, "fur_dark", segs=28, cap0=False)
-    ell(H(0.04, 0.05, 0.22), (0.12, 0.13, 0.07), "red", rot=(0, 20, 0))
+    ell(H(0.04, 0.05, 0.22), (0.12, 0.13, 0.07), top, rot=(0, 20, 0))
     ell(H(0.16, 0.07, 0.17), (0.04, 0.04, 0.05), "gold", segs=10, rings=6)
+    if feather:
+        ell(H(-0.1, -0.12, 0.17), (0.03, 0.02, 0.03), "gold", segs=10, rings=6)
+        tube([H(-0.1, -0.12, 0.18), H(-0.14, -0.08, 0.33), H(-0.13, 0.02, 0.46)], [0.022, 0.032, 0.01], feather)
+
+
+def hat_pilotka(m="khaki", star_on=True):
+    """Пилотка набекрень со звёздочкой."""
+    rings = []
+    for y in (-0.165, -0.12, -0.05, 0.03, 0.1, 0.155):
+        t = abs(y) / 0.165
+        w, hh, zb = 0.104 * (1 - 0.2 * t * t), 0.12 * (1 - 0.45 * t ** 3), -0.05 - 0.015 * t
+        rings.append([(-w, y, zb), (w, y, zb), (w * 0.8, y, zb + hh * 0.55), (0.0, y, zb + hh),
+                      (-w * 0.8, y, zb + hh * 0.55)])
+    with grp(H(-0.03, 0.0, 0.15), (0, -14, 0)):
+        loft(rings, m, cap0=True, cap1=True, sub=1)
+        for s in (-1, 1):
+            tube([(s * 0.098, -0.1, -0.026), (s * 0.101, 0.0, -0.022), (s * 0.098, 0.1, -0.026)], 0.01, m)
+        if star_on:
+            star((0.0, -0.176, 0.006), 0.03, "red_star", t=0.016)
+
+
+def hat_kerchief(m="kerchief", hair="hair"):
+    """Платок в горошек, повязанный под подбородком, — из-под него видна чёлка."""
+    hood(H(0, 0.012, 0.01), (0.163, 0.17, 0.182), -0.14, m, face=1.15, brow=0.095, solid=0.018)
+    tube([H(-0.13, -0.085, -0.15), H(-0.152, -0.09, -0.02), H(-0.12, -0.13, 0.085), H(0.0, -0.172, 0.11),
+          H(0.12, -0.13, 0.085), H(0.152, -0.09, -0.02), H(0.13, -0.085, -0.15)], 0.017, m)
+    tube([H(-0.1, -0.128, 0.06), H(-0.04, -0.148, 0.085), H(0.04, -0.148, 0.085), H(0.1, -0.128, 0.06)],
+         [0.016, 0.022, 0.022, 0.016], hair)
+    ell(H(0.0, -0.1, -0.195), (0.04, 0.03, 0.028), m, segs=12, rings=8)
+    for s in (-1, 1):
+        ell(H(s * 0.04, -0.13, -0.235), (0.022, 0.012, 0.052), m, rot=(-20, s * 25, 0), segs=10, rings=6)
+    slab([(-0.13, 0.0), (0.13, 0.0), (0.0, -0.24)], 0.012, m, "xz", loc=H(0, 0.165, -0.04), rot=(12, 0, 0))
+
+
+def hat_tank():
+    """Танковый шлемофон: чёрный, с тремя валиками сверху и наушниками."""
+    hood(H(0, 0.006, 0.0), (0.164, 0.172, 0.18), -0.12, "tank_helmet", face=1.0, brow=0.07, solid=0.02)
+    for x in (-0.065, 0.0, 0.065):
+        tube([H(x, -0.14, 0.11), H(x, -0.07, 0.178), H(x, 0.03, 0.193), H(x, 0.12, 0.155), H(x, 0.165, 0.05)],
+             0.022, "tank_helmet")
+    for s in (-1, 1):
+        cyl2(H(s * 0.155, 0.0, -0.035), H(s * 0.19, 0.0, -0.035), 0.06, 0.055, "tank_helmet", segs=16)
+        tube([H(s * 0.16, -0.03, -0.08), H(s * 0.12, -0.08, -0.15), H(0.0, -0.1, -0.19)], 0.009, "leather_dark")
+
+
+def hat_flight():
+    """Кожаный лётный шлем с очками на лбу."""
+    hood(H(0, 0.006, 0.0), (0.163, 0.171, 0.18), -0.13, "flight_leather", face=1.02, brow=0.07, solid=0.02)
+    n = Vector((0, -0.8, 0.6)).normalized()
+    ring(H(0, 0.0, 0.11), 0.175, 0.178, 0.012, "leather_dark", tilt=(14, 0, 0))
+    for s in (-1, 1):
+        p = H(s * 0.058, -0.148, 0.12)
+        cyl2(p - n * 0.01, p + n * 0.03, 0.046, 0.044, "brass", segs=16)
+        cyl2(p + n * 0.025, p + n * 0.033, 0.036, 0.036, "canopy", segs=16)
+        ell(H(s * 0.16, 0.0, -0.04), (0.03, 0.05, 0.06), "flight_leather", segs=10, rings=6)
+
+
+def hat_forage():
+    """Фуражная шапка-бескозырка XIX века с красным околышем."""
+    with grp(HC, (0, -8, 0)):
+        lathe([(0.152, 0.0), (0.156, 0.05), (0.168, 0.1), (0.172, 0.118), (0.0, 0.125)], (0, 0, 0), "green_coat",
+              segs=28, cap0=False)
+        lathe([(0.158, -0.002), (0.159, 0.05)], (0, 0, 0), "red", segs=28, cap0=False, cap1=False, solid=0.008)
+        ell((0, -0.17, 0.08), 0.016, "brass", segs=8, rings=6)
+
+
+def hat_peaked(top="olive_uniform", band="red"):
+    """Офицерская фуражка: околыш, широкая тулья, лакированный козырёк, кокарда."""
+    lathe([(0.152, 0.0), (0.154, 0.06)], HC, band, segs=28, cap0=False, cap1=False, solid=0.01)
+    with grp(HC, scl=(1.0, 1.08, 1.0)):
+        lathe([(0.152, 0.055), (0.16, 0.085), (0.205, 0.125), (0.206, 0.14), (0.0, 0.15)], (0, 0, 0), top,
+              segs=32, cap0=False)
+    slab([(-0.13, 0.0), (0.13, 0.0), (0.09, -0.07), (0.0, -0.085), (-0.09, -0.07)], 0.012, "black", "xy",
+         loc=H(0, -0.13, 0.01), rot=(-22, 0, 0), bend=lambda u, v: 1.2 * u * u)
+    star(H(0, -0.162, 0.06), 0.022, "red_star", t=0.01)
+    ell(H(0, -0.16, 0.06), (0.032, 0.008, 0.026), "gold", segs=10, rings=6)
+
+
+def hat_helmet(m="camo_green"):
+    """Современный кевларовый шлем в чехле и гарнитура связи."""
+    c = HC + Vector((0, 0.012, 0))
+    lathe([(0.178, 0.035), (0.176, 0.08), (0.158, 0.15), (0.115, 0.205), (0.058, 0.232), (0.0, 0.238)], c, m,
+          segs=32, cap0=False)
+    lathe([(0.18, -0.09), (0.178, 0.04)], c, m, segs=20, a0=0.95, a1=2 * pi - 0.95, cap0=False, cap1=False,
+          solid=0.014)
+    tube([H(-0.17, 0.0, -0.06), H(0, -0.08, -0.2), H(0.17, 0.0, -0.06)], 0.008, "black")
+    for s in (-1, 1):
+        cyl2(H(s * 0.168, 0.0, -0.03), H(s * 0.2, 0.0, -0.03), 0.048, 0.046, "black", segs=14)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -944,19 +1195,9 @@ def catmull(pts, n):
     return out
 
 
-def ppsh(p0, p1, up=(0, 0, 1)):
-    p0, p1 = Vector(p0), Vector(p1)
-    L = (p1 - p0).length
-    with grp(matrix=look(p0, p1 - p0, up)):
-        hexa([(-0.03, -0.09, 0), (0.03, -0.09, 0), (0.03, 0.025, 0), (-0.03, 0.025, 0),
-              (-0.026, -0.035, 0.34), (0.026, -0.035, 0.34), (0.026, 0.025, 0.34), (-0.026, 0.025, 0.34)],
-             "wood", bevel=0.006)
-        box((0.05, 0.06, 0.24), (0, 0.0, 0.44), "gunmetal", bevel=0.006)
-        cyl2((0, 0.005, 0.5), (0, 0.005, L), 0.032, 0.03, "gunmetal", segs=12)
-        for k in range(4):
-            ell((0.031, 0.005, 0.58 + k * 0.07), (0.006, 0.012, 0.014), "black", segs=6, rings=4)
-        cyl2((0, 0.005, L), (0, 0.005, L + 0.04), 0.012, 0.012, "gunmetal", segs=8)
-        cyl2((-0.03, -0.1, 0.43), (0.03, -0.1, 0.43), 0.082, 0.082, "gunmetal", segs=20)
+def on_chest(x, z, d=0.0):
+    """Точка на передней поверхности туловища (для пуговиц, медалей, нашивок)."""
+    return Vector((x, front_y(z, x) - d, z))
 
 
 def horse(coat, mane, hoof="black", walk=True):
@@ -1004,19 +1245,18 @@ def wing(s, pts, n_feather=13, frame="wood_red", feather="feather"):
 
 
 def u_druzhina():
-    """Княжеская дружина: шишак с бармицей, кольчуга, красный плащ, копьё, каплевидный щит."""
+    """Дружинница: шишак с бармицей, кольчуга, красный плащ, копьё и каплевидный щит; коса через плечо."""
     with grp((0.03, 0.08, 0)):
-        rings = [ell_ring(1.42, 0.22, 0.155, cy=0.02, a0=pi / 2 - 0.25, a1=3 * pi / 2 + 0.25, closed=False),
-                 ell_ring(1.0, 0.28, 0.21, cy=0.06, a0=pi / 2 - 0.35, a1=3 * pi / 2 + 0.35, closed=False),
-                 ell_ring(0.3, 0.37, 0.28, cy=0.16, a0=pi / 2 - 0.45, a1=3 * pi / 2 + 0.45, closed=False)]
+        rings = [ell_ring(1.42, 0.2, 0.145, cy=0.02, a0=pi / 2 - 0.25, a1=3 * pi / 2 + 0.25, closed=False),
+                 ell_ring(1.0, 0.27, 0.2, cy=0.06, a0=pi / 2 - 0.35, a1=3 * pi / 2 + 0.35, closed=False),
+                 ell_ring(0.3, 0.36, 0.27, cy=0.16, a0=pi / 2 - 0.45, a1=3 * pi / 2 + 0.45, closed=False)]
         loft(rings, "red", closed=False, solid=0.02)
-        skirt("mail", 0.58, 0.245, 0.19)
-        human("mail", pants="trousers_blue", boots="boots", feet=[(-0.14, -0.04), (0.13, 0.06)],
-              hands=[(-0.36, -0.12, 1.06), (0.2, -0.26, 1.08)], poles=[(-1, 0.3, -0.6), (1, 0.4, -0.4)],
-              beard="beard", mous="moustache", belt="leather", hat=hat_shishak)
-        tube([(-0.2, -0.09, 1.41), (0, -0.15, 1.47), (0.2, -0.09, 1.41)], 0.02, "gold")
-        spear((-0.36, -0.12, 0.0), (-0.36, -0.12, 1.95))
-        with grp((0.17, -0.37, 0.98), (0, 0, 14)):
+        skirt("mail", 0.56, 0.235, 0.19)
+        human("mail", pants="trousers_blue", boots="boots", feet=[(-0.13, -0.04), (0.12, 0.06)],
+              hands=[(-0.34, -0.12, 1.06), (0.2, -0.26, 1.06)], poles=[(-1, 0.3, -0.6), (1, 0.4, -0.4)],
+              belt="leather", hair="hair_fair", cap=False, locks=False, hat=hat_shishak, braid="-", braid_end=1.0)
+        spear((-0.34, -0.12, 0.0), (-0.34, -0.12, 1.95))
+        with grp((0.17, -0.37, 0.96), (0, 0, 14)):
             w, h1, h2 = 0.44, 0.27, 0.64
             out = [(w / 2 * cos(a), h1 - w / 2 + w / 2 * sin(a)) for a in [pi * i / 12 for i in range(13)]]
             out += [(-w / 2 + 0.03, h1 - w / 2 - 0.15), (0.0, -h2 + 0.04), (w / 2 - 0.03, h1 - w / 2 - 0.15)]
@@ -1028,7 +1268,7 @@ def u_druzhina():
 
 
 def u_crossbow():
-    """Арбалетчик: стёганый гамбезон, шапель, арбалет наизготовку; позади расписная павеза."""
+    """Арбалетчица: стёганый гамбезон, шапель, арбалет наизготовку; позади расписная павеза."""
     with grp((0.25, 0.55, 0.0), (-12, 0, 0)):
         w, h = 0.62, 1.3
         out = [(-w / 2, 0), (w / 2, 0), (w / 2, h - 0.08), (w / 2 - 0.08, h), (-w / 2 + 0.08, h), (-w / 2, h - 0.08)]
@@ -1043,11 +1283,11 @@ def u_crossbow():
         tube(rim, 0.014, "wood_dark", res=2)
         cyl2((0, 0.05, 0.9), (0, 0.55, 0.0), 0.016, 0.016, "wood_dark", segs=6)
     with grp((-0.12, 0.0, 0)):
-        skirt("gambeson", 0.55, 0.24, 0.19)
-        human("gambeson", pants="trousers_dark", boots="boots", feet=[(-0.14, 0.08), (0.12, -0.1)],
+        skirt("gambeson", 0.52, 0.235, 0.19)
+        human("gambeson", pants="trousers_dark", boots="boots", feet=[(-0.13, 0.08), (0.11, -0.1)],
               hands=[(-0.12, -0.2, 1.08), (0.0, -0.5, 1.2)], poles=[(-1, 0.2, -0.8), (1, 0.2, -0.8)],
-              beard="beard_fair", belt="leather", hat=hat_kettle)
-        ell((0.2, 0.0, 0.88), (0.06, 0.1, 0.13), "leather", segs=12, rings=8)
+              belt="leather", hair="hair_fair", hat=hat_kettle, braid="-", braid_end=1.15)
+        ell((0.19, 0.0, 0.88), (0.06, 0.1, 0.13), "leather", segs=12, rings=8)
         p0 = Vector((-0.12, 0.05, 1.0)); p1 = Vector((0.0, -0.75, 1.28))
         with grp(matrix=look(p0, p1 - p0, (0, 0, 1))):
             box((0.065, 0.085, 0.9), (0, 0, 0.45), "wood_dark", bevel=0.012)
@@ -1058,27 +1298,28 @@ def u_crossbow():
 
 
 def u_khorugv():
-    """Рыцарь хоругви: латы, топхельм, красный сюрко, хоругвь на древке."""
+    """Рыцарь хоругви: латы, бацинет с открытым лицом, красный сюрко с крестом, хоругвь на древке."""
     with grp((0.1, 0.1, 0)):
-        skirt("crimson", 0.55, 0.24, 0.19)
-        human("steel", pants="steel", boots="steel_dark", feet=[(-0.14, -0.02), (0.14, 0.04)],
-              hands=[(-0.36, -0.1, 1.12), (0.27, -0.12, 0.98)], poles=[(-1, 0.3, -0.6), (1, 0.3, -0.6)],
-              sleeve="steel", hand_m=("steel_dark", "steel_dark"), boot_top=0.5, belt="leather_dark", eyes=False,
-              hat=hat_greathelm)
-        rings = [ell_ring(z, rx * 1.06 + 0.012, ry * 1.04 + 0.012, n=28) for (z, rx, ry) in TORSO[1:6]]
+        skirt("crimson", 0.55, 0.235, 0.19)
+        human("steel", pants="steel", boots="steel_dark", feet=[(-0.13, -0.02), (0.13, 0.04)],
+              hands=[(-0.34, -0.1, 1.12), (0.26, -0.12, 0.98)], poles=[(-1, 0.3, -0.6), (1, 0.3, -0.6)],
+              sleeve="steel", hand_m=("steel_dark", "steel_dark"), boot_top=0.5, belt="leather_dark",
+              hair="hair_blond", cap=False, hat=hat_bascinet, braid="+", braid_end=1.0)
+        rings = [ell_ring(z, rx * 1.06 + 0.012, ry * 1.04 + 0.012, cy=cy, n=28) for (z, rx, ry, cy) in TORSO[1:6]]
         loft(rings, "crimson", sub=1)
-        slab([(-0.028, -0.13), (0.028, -0.13), (0.028, 0.13), (-0.028, 0.13)], 0.01, "white_cloth",
-             loc=(0, -0.142, 1.2))
-        slab([(-0.1, -0.025), (0.1, -0.025), (0.1, 0.03), (-0.1, 0.03)], 0.01, "white_cloth", loc=(0, -0.145, 1.26))
+        fy = lambda u, v: front_y(v, u) - 0.026
+        slab([(-0.028, 1.03), (0.028, 1.03), (0.028, 1.29), (-0.028, 1.29)], 0.01, "white_cloth", bend=fy)
+        slab([(-0.1, 1.17), (0.1, 1.17), (0.1, 1.225), (-0.1, 1.225)], 0.01, "white_cloth", bend=fy)
         for s in (-1, 1):
-            ell((s * 0.22, 0.0, SH_Z + 0.03), (0.11, 0.11, 0.075), "steel", segs=14, rings=10)
+            ell((s * (SH_X + 0.01), 0.0, SH_Z + 0.03), (0.105, 0.105, 0.072), "steel", segs=14, rings=10)
         cyl2((0.2, -0.02, 0.98), (0.3, 0.12, 0.3), 0.022, 0.02, "leather_dark", segs=8)
         box((0.17, 0.025, 0.028), (0.19, -0.04, 1.03), "gold", rot=(0, 0, 30))
-        pole_banner((-0.36, -0.1, 0.0), (-0.36, -0.1, 2.04), w=0.72, h=0.86)
+        with grp((-0.34, -0.1, 0.0), (0, 0, 190)):
+            pole_banner((0, 0, 0.0), (0, 0, 1.96), w=0.64, h=0.8)
 
 
 def u_gunners():
-    """Пушкари: бронзовая пушка на красном лафете и пушкарь с дымящимся пальником."""
+    """Пушкарка: бронзовая пушка на красном лафете и героиня с дымящимся пальником."""
     with grp((0.12, -0.12, 0), (0, 0, -68)):
         cheek = [(-0.3, 0.3), (-0.3, 0.46), (-0.04, 0.53), (0.12, 0.5), (0.7, 0.08), (0.7, 0.0), (0.52, 0.0),
                  (0.02, 0.28)]
@@ -1098,10 +1339,10 @@ def u_gunners():
         puff((-0.06, -1.14, 0.7), 0.1)
         puff((0.05, -1.22, 0.62), 0.08)
     with grp((0.18, 0.42, 0), (0, 0, -32)):
-        skirt("red", 0.5, 0.25, 0.19)
-        human("red", pants="trousers_blue", boots="boots", feet=[(-0.13, 0.0), (0.13, 0.02)],
-              hands=[(-0.27, -0.06, 0.92), (0.3, -0.22, 1.12)], poles=[(-1, 0.6, -1), (1, 0.3, -0.6)],
-              beard="beard", mous="moustache", belt="leather", hat=hat_fur_cap)
+        skirt("red", 0.48, 0.25, 0.19)
+        human("red", pants="trousers_blue", boots="boots", feet=[(-0.12, 0.0), (0.12, 0.02)],
+              hands=[(-0.26, -0.06, 0.92), (0.3, -0.22, 1.12)], poles=[(-1, 0.6, -1), (1, 0.3, -0.6)],
+              belt="leather", hair="hair", hat=hat_fur_cap, braid="+", braid_end=1.02)
         p0 = Vector((0.28, -0.18, 0.0)); p1 = Vector((0.33, -0.25, 1.86))
         cyl2(p0, p1, 0.018, 0.016, "wood_dark", segs=6)
         for s in (-1, 1):
@@ -1112,20 +1353,20 @@ def u_gunners():
 
 
 def u_musketeers():
-    """Мушкетёр: широкополая шляпа, синий кафтан, бандольер, мушкет на сошке."""
+    """Мушкетёрка: широкополая шляпа, синий кафтан, бандольер, мушкет на сошке."""
     with grp((0.3, 0.2, 0), (0, 0, 18)):
-        skirt("blue_coat", 0.5, 0.26, 0.2)
+        skirt("blue_coat", 0.5, 0.255, 0.2)
         az = 1.32
-        human("blue_coat", pants="trousers_dark", boots="boots", feet=[(-0.17, 0.06), (0.15, -0.16)],
+        human("blue_coat", pants="trousers_dark", boots="boots", feet=[(-0.16, 0.06), (0.14, -0.16)],
               hands=[(-0.15, -0.2, az - 0.04), (-0.11, -0.62, az - 0.02)],
-              poles=[(-1, 0.5, -1), (1, -0.2, -1)], mous="moustache", belt="leather", cuff="red",
-              hat=hat_wide)
+              poles=[(-1, 0.5, -1), (1, -0.2, -1)], belt="leather", cuff="red", hair="hair_red",
+              hat=hat_wide, braid="back")
         tl = radians(-40)
-        ring((0, -0.005, 1.2), 0.24, 0.155, 0.026, "leather", tilt=(0, -40, 0))
+        ring((0, -0.01, 1.2), 0.235, 0.16, 0.026, "leather", tilt=(0, -40, 0))
         for k in range(6):
             t = 3 * pi / 2 + (k - 2.2) * 0.33
-            x0, y0 = 0.25 * cos(t), 0.17 * sin(t)
-            p = Vector((x0 * cos(tl), y0, 1.2 - x0 * sin(tl)))
+            x0, y0 = 0.245 * cos(t), 0.175 * sin(t)
+            p = Vector((x0 * cos(tl), y0 - 0.01, 1.2 - x0 * sin(tl)))
             cyl2(p + Vector((0, -0.02, -0.02)), p + Vector((0, -0.02, -0.13)), 0.024, 0.022, "wood_light", segs=8)
             cyl2(p + Vector((0, -0.02, -0.0)), p + Vector((0, -0.02, -0.025)), 0.026, 0.026, "red", segs=8)
         p0 = Vector((-0.15, 0.0, az)); p1 = Vector((-0.11, -1.42, az + 0.07))
@@ -1137,7 +1378,7 @@ def u_musketeers():
 
 
 def u_hussars():
-    """Крылатый гусар на серой лошади: крылья, леопардовая шкура, копьё с прапорцом."""
+    """Крылатая гусария: всадница на серой лошади, крылья, леопардовая шкура, копьё с прапорцом."""
     with grp((0.05, 0.05, 0), (0, 0, 0)):
         horse("horse", "horse_mane")
         ell((0, 0.03, 1.2), (0.27, 0.38, 0.075), "crimson", segs=20, rings=10)
@@ -1146,12 +1387,12 @@ def u_hussars():
             legs = [((s * 0.1, 0.0, 0.86), (s * 0.29, -0.2, 0.66), (s * 0.27, -0.06, 0.3)) for s in (-1, 1)]
             human("crimson", pants="crimson", boots="boots_yellow", legs=legs, boot_top=0.6,
                   hands=[(-0.27, -0.18, 1.12), (0.12, -0.42, 1.06)], poles=[(-1, 0.4, -0.6), (1, 0.3, -1)],
-                  mous="moustache", belt="gold", hat=hat_szyszak)
-            rings = [ell_ring(z, rx * 1.06 + 0.012, ry * 1.04 + 0.014, n=28, a0=-1.1, a1=1.1, closed=False)
-                     for (z, rx, ry) in TORSO[2:6]]
+                  belt="gold", hair="hair_blond", hat=hat_szyszak, braid="+", braid_end=1.04)
+            rings = [ell_ring(z, rx * 1.06 + 0.012, ry * 1.04 + 0.014, cy=cy, n=28, a0=-1.1, a1=1.1, closed=False)
+                     for (z, rx, ry, cy) in TORSO[2:6]]
             loft(rings, "steel", closed=False, sub=1, solid=0.01)
-            rings = [ell_ring(1.45, 0.215, 0.16, cy=0.01, a0=pi / 2 - 0.9, a1=3 * pi / 2 - 0.2, closed=False),
-                     ell_ring(1.12, 0.28, 0.21, cy=0.04, a0=pi / 2 - 0.7, a1=3 * pi / 2 - 0.1, closed=False),
+            rings = [ell_ring(1.45, 0.2, 0.15, cy=0.01, a0=pi / 2 - 0.9, a1=3 * pi / 2 - 0.2, closed=False),
+                     ell_ring(1.12, 0.27, 0.2, cy=0.04, a0=pi / 2 - 0.7, a1=3 * pi / 2 - 0.1, closed=False),
                      ell_ring(0.78, 0.33, 0.27, cy=0.1, a0=pi / 2 - 0.4, a1=3 * pi / 2, closed=False)]
             loft(rings, "leopard", closed=False, solid=0.02)
             for s in (-1, 1):
@@ -1181,13 +1422,13 @@ def rocket(q, dd, r=0.065, body=0.46, stick=0.9):
 
 
 def u_rockets():
-    """Ракетная батарея Семеновича: деревянный станок, ракеты на шестах, взлетающая ракета в дыму."""
+    """Ракетная батарея Семеновича: станок с ракетами, взлетающая ракета в дыму и ракетчица с пальником."""
     ang = radians(40)
     d = Vector((0, -cos(ang), sin(ang)))
     n = Vector((0, sin(ang), cos(ang)))
     P0 = Vector((0.0, 0.52, 0.06))
     L = 1.2
-    with grp((0.08, 0.0, 0)):
+    with grp((-0.16, 0.0, 0), scl=0.9):
         for s in (-1, 1):
             beam(P0 + Vector((s * 0.2, 0, 0)), P0 + d * L + Vector((s * 0.2, 0, 0)), 0.075, "wood", bevel=0.01)
             f = P0 + d * (L * 0.8) + Vector((s * 0.2, 0, 0))
@@ -1209,31 +1450,41 @@ def u_rockets():
             puff(q - d2 * (0.28 + k * 0.2) + Vector((0.025 * k, 0.03 * k, -0.025 * k * k)), r)
         for (x, y, z, r) in ((0.0, 0.66, 0.12, 0.15), (0.2, 0.72, 0.16, 0.12), (-0.18, 0.7, 0.14, 0.12)):
             puff((x, y, z), r)
-        box((0.3, 0.2, 0.16), (0.45, 0.05, 0.08), "wood_dark", rot=(0, 0, 25), bevel=0.01)
+        box((0.3, 0.2, 0.16), (-0.5, 0.25, 0.08), "wood_dark", rot=(0, 0, -20), bevel=0.01)
         for k in range(3):
-            rocket(Vector((0.4 + 0.06 * k, -0.02 + 0.03 * k, 0.2)), Vector((-0.42, -0.9, 0.05)), r=0.04,
+            rocket(Vector((-0.55 + 0.06 * k, 0.22 + 0.03 * k, 0.2)), Vector((0.42, -0.9, 0.05)), r=0.04,
                    body=0.22, stick=0.2)
+    with grp((0.46, 0.18, 0), (0, 0, 14), scl=0.86):
+        skirt("teal_coat", 0.5, 0.25, 0.19)
+        human("teal_coat", pants="trousers_dark", boots="boots_yellow", boot_top=0.36,
+              feet=[(-0.13, -0.02), (0.12, 0.04)], hands=[(-0.3, -0.22, 1.1), (0.25, -0.04, 0.86)],
+              poles=[(-1, 0.3, -0.7), (1, 0.3, -1)], belt="gold", cuff="gold_cloth", hair="hair_fair",
+              hat=lambda: hat_fur_cap("crimson", "feather"), braid="+", braid_end=1.02)
+        p0 = Vector((-0.2, -0.12, 0.62)); p1 = Vector((-0.56, -0.4, 1.32))
+        cyl2(p0, p1, 0.017, 0.015, "wood_dark", segs=6)
+        ell(p1 + (p1 - p0).normalized() * 0.03, 0.026, "ember", segs=8, rings=6)
+        puff(p1 + Vector((-0.02, 0.0, 0.12)), 0.045, "smoke")
 
 
 def u_line():
     """Линейная пехота XIX века: тёмно-зелёный мундир, белые перевязи, кивер, ружьё со штыком."""
     with grp((0.04, 0.05, 0)):
         skirt("green_coat", 0.6, 0.22, 0.19, a0=pi / 2 + 0.3, a1=3 * pi / 2 - 0.3)
-        human("green_coat", pants="white_cloth", boots="boots_black", boot_top=0.36, feet=[(-0.13, 0.0), (0.13, 0.0)],
-              hands=[(-0.33, -0.08, 1.12), (0.27, 0.0, 0.84)], poles=[(-1, 0.4, -0.6), (1, 0.2, -1)],
-              belt="white_cloth", cuff="red", hat=hat_shako)
+        human("green_coat", pants="white_cloth", boots="boots_black", boot_top=0.36, feet=[(-0.12, 0.0), (0.12, 0.0)],
+              hands=[(-0.32, -0.08, 1.12), (0.26, 0.0, 0.84)], poles=[(-1, 0.4, -0.6), (1, 0.2, -1)],
+              belt="white_cloth", cuff="red", hair="hair", hat=hat_shako, braid="+", braid_end=1.04)
         for t in (38, -38):
-            ring((0, -0.005, 1.17), 0.238, 0.152, 0.02, "white_cloth", tilt=(0, t, 0))
-        ell((0, -0.145, 1.465), (0.12, 0.05, 0.04), "red", segs=14, rings=8)
+            ring((0, -0.012, 1.17), 0.228, 0.158, 0.02, "white_cloth", tilt=(0, t, 0))
+        ell((0, -0.07, 1.445), (0.09, 0.05, 0.035), "red", segs=14, rings=8)
         for z in (1.08, 1.17, 1.26, 1.35):
-            ell((0, -0.142, z), 0.013, "brass", segs=8, rings=6)
-        ell((0.21, 0.05, 0.92), (0.07, 0.1, 0.09), "black", segs=12, rings=8)
-        rifle((-0.33, -0.08, 0.0), (-0.33, -0.08, 1.42), up=(0, -1, 0), bayonet=0.38)
+            ell(on_chest(0, z, 0.004), 0.013, "brass", segs=8, rings=6)
+        ell((0.2, 0.05, 0.92), (0.07, 0.1, 0.09), "black", segs=12, rings=8)
+        rifle((-0.32, -0.08, 0.0), (-0.32, -0.08, 1.42), up=(0, -1, 0), bayonet=0.38)
 
 
 def u_artillery():
-    """Полевая пушка XIX века: большие колёса со спицами, зелёный лафет, ядра."""
-    with grp((-0.1, -0.02, 0), (0, 0, -60)):
+    """Полевая пушка XIX века на зелёном лафете и канонирка с банником; рядом ядра."""
+    with grp((-0.26, 0.06, 0), (0, 0, -60), scl=0.84):
         for s in (-1, 1):
             wheel((s * 0.38, 0.0, 0.5), 0.5, 0.075, rim="gun_green", spokes=12, hub="iron", tire="iron")
         cyl2((-0.44, 0, 0.5), (0.44, 0, 0.5), 0.04, 0.04, "iron", segs=10)
@@ -1249,29 +1500,41 @@ def u_artillery():
                    (0.05, 0.98)], (0, 0, 0), "gunmetal", segs=24, cap0=False, cap1=False)
             cyl2((-0.15, 0, 0.0), (0.15, 0, 0.0), 0.03, 0.03, "gunmetal", segs=10)
         box((0.24, 0.2, 0.16), (0.0, 0.5, 0.36), "gun_green", rot=(-24, 0, 0), bevel=0.01)
-    for (x, y, z) in ((0.36, -0.44, 0.075), (0.52, -0.4, 0.075), (0.44, -0.3, 0.075), (0.44, -0.38, 0.19)):
-        ell((x, y, z), 0.078, "iron", segs=14, rings=10)
+    with grp((0.4, 0.16, 0), (0, 0, -18), scl=0.92):
+        skirt("green_coat", 0.62, 0.22, 0.19, a0=pi / 2 + 0.3, a1=3 * pi / 2 - 0.3)
+        human("green_coat", pants="trousers_dark", boots="boots_black", boot_top=0.36,
+              feet=[(-0.12, 0.0), (0.12, 0.02)], hands=[(-0.3, -0.1, 1.22), (0.26, -0.02, 0.85)],
+              poles=[(-1, 0.4, -0.7), (1, 0.2, -1)], belt="white_cloth", cuff="black", hair="hair_fair",
+              hat=hat_forage, braid="+", braid_end=1.04)
+        ell((0, -0.07, 1.445), (0.09, 0.05, 0.035), "black", segs=14, rings=8)
+        for z in (1.08, 1.17, 1.26, 1.35):
+            ell(on_chest(0, z, 0.004), 0.013, "brass", segs=8, rings=6)
+        cyl2((-0.31, -0.12, 0.0), (-0.31, -0.12, 1.86), 0.017, 0.017, "wood_light", segs=8)
+        cyl2((-0.31, -0.12, 1.84), (-0.31, -0.12, 2.04), 0.045, 0.045, "fur_dark", segs=12)
+    for (x, y, z) in ((0.12, -0.5, 0.075), (0.27, -0.46, 0.075), (0.19, -0.36, 0.075), (0.19, -0.44, 0.19)):
+        ell((x, y, z), 0.075, "iron", segs=14, rings=10)
 
 
 def u_rifle():
-    """Стрелковая дивизия: гимнастёрка цвета хаки, каска СШ-40, скатка шинели, винтовка со штыком."""
-    with grp((0.0, 0.08, 0)):
-        skirt("khaki", 0.78, 0.2, 0.155)
-        human("khaki", pants="khaki", boots="boots_black", boot_top=0.42, feet=[(-0.15, 0.1), (0.13, -0.14)],
-              hands=[(-0.17, -0.06, 1.0), (0.04, -0.46, 1.2)], poles=[(-1, 0.4, -0.6), (1, 0.2, -1)],
-              belt="leather_dark", hat=hat_ssh40)
-        ring((0.0, 0.0, 1.17), 0.25, 0.165, 0.06, "greatcoat", tilt=(0, -42, 0))
-        for x in (-0.09, 0.09):
-            box((0.08, 0.04, 0.07), (x, -0.135, 0.98), "leather_dark", bevel=0.01)
-        cyl2((0.2, 0.06, 0.98), (0.2, 0.06, 0.82), 0.06, 0.06, "olive_dark", segs=12)
-        rifle((-0.2, 0.12, 0.88), (0.08, -1.1, 1.5), up=(0, 0, 1), bayonet=0.3)
+    """Снайпер: гимнастёрка, юбка, сапоги, пилотка со звёздочкой, две косы, винтовка с прицелом."""
+    with grp((0.0, 0.06, 0)):
+        skirt("skirt_khaki", 0.5, 0.2, 0.165)
+        human("khaki", pants="stockings", boots="boots_black", boot_top=0.44, feet=[(-0.11, 0.04), (0.12, -0.06)],
+              hands=[(-0.27, -0.12, 1.2), (0.25, -0.04, 0.92)], poles=[(-1, 0.4, -0.6), (1, 0.4, -1)],
+              belt="leather_dark", hair="hair_fair", hat=hat_pilotka, braid="+-", braid_end=1.08)
+        for x in (-0.07, 0.07):
+            box((0.07, 0.035, 0.065), (x, front_y(0.98, x) - 0.012, 0.96), "leather_dark", bevel=0.01)
+        p = on_chest(0.075, 1.29, 0.01)
+        cyl2(p + Vector((0, 0, 0.05)), p + Vector((0, 0, 0.012)), 0.014, 0.014, "ribbon_grey", segs=6)
+        cyl2(p + Vector((0, 0.006, -0.012)), p + Vector((0, -0.006, -0.012)), 0.022, 0.022, "steel", segs=14)
+        rifle((-0.3, -0.12, 0.03), (-0.3, -0.16, 1.62), up=(0, 1, 0), scope=True)
 
 
 def u_air():
-    """Авиаполк: поршневой истребитель на подставке-стойке."""
-    cyl2((0.05, 0.25, 0.0), (0.05, 0.25, 0.04), 0.16, 0.15, "black", segs=24)
-    cyl2((0.05, 0.25, 0.04), (0.0, 0.05, 1.05), 0.022, 0.018, "brass", segs=10)
-    with grp((0.0, 0.05, 1.12), (10, -18, -56)):
+    """Лётчица в кожаном шлеме с очками и реглане; за ней — истребитель на стойке."""
+    cyl2((0.3, 0.4, 0.0), (0.3, 0.4, 0.04), 0.14, 0.13, "black", segs=24)
+    cyl2((0.3, 0.4, 0.04), (0.28, 0.38, 1.62), 0.02, 0.016, "brass", segs=10)
+    with grp((0.28, 0.38, 1.7), (10, -18, -56), scl=0.62):
         st = [(-0.98, 0.07, 0.07), (-0.9, 0.125, 0.125), (-0.6, 0.15, 0.155), (-0.25, 0.14, 0.15),
               (0.15, 0.1, 0.12), (0.55, 0.06, 0.08), (0.92, 0.025, 0.045)]
         rings = []
@@ -1295,10 +1558,21 @@ def u_air():
         for x in (-0.72, 0.72):
             star((x, -0.26, 0.04 + 0.09 * abs(x) - 0.05 + 0.024), 0.1, "red_star", rot=(90, 0, 0), t=0.006)
         star((0.0, 0.88, 0.2), 0.07, "red_star", rot=(0, 0, 90), t=0.04)
+    with grp((-0.16, -0.12, 0), (0, 0, 6)):
+        skirt("flight_leather", 0.5, 0.235, 0.19)
+        human("flight_leather", pants="trousers_dark", boots="boots_black", boot_top=0.42,
+              feet=[(-0.12, 0.0), (0.12, -0.04)], hands=[(-0.25, -0.1, 0.92), (0.24, -0.16, 1.02)],
+              poles=[(-1, 0.3, -1), (1, 0.6, -1)], belt="leather_dark", hair="hair", cap=False,
+              hat=hat_flight, braid="+", braid_end=1.06)
+        ring((0, -0.004, 1.43), 0.115, 0.1, 0.038, "fur")
+        with grp((0.2, -0.17, 0.93), (0, 0, 18)):
+            box((0.2, 0.035, 0.24), (0, 0, 0), "leather", bevel=0.01)
+            box((0.17, 0.01, 0.15), (0, -0.02, 0.02), "canopy")
+        tube([(0.27, -0.12, 1.0), (0.12, -0.13, 1.33), (-0.12, -0.02, 1.42)], 0.012, "leather_dark")
 
 
 def u_partisans():
-    """Партизан: ватник-телогрейка, ушанка с красной лентой, ППШ; за спиной берёзка."""
+    """Партизанка: ватник-телогрейка, тёмная юбка, валенки, платок, винтовка за плечом; за спиной берёзка."""
     with grp((0.42, 0.4, 0)):
         tube([(0, 0, 0), (0.02, 0.0, 0.6), (-0.02, 0.02, 1.2), (0.03, 0.0, 1.75)], [0.055, 0.045, 0.032, 0.012],
              "birch")
@@ -1316,17 +1590,23 @@ def u_partisans():
             a = 2 * pi * k / 7
             cyl2((0.12 * cos(a), 0.12 * sin(a), 0.0), (0.16 * cos(a), 0.16 * sin(a), 0.12), 0.03, 0.0, "grass", segs=5)
     with grp((-0.08, -0.02, 0)):
-        skirt("telogreika", 0.72, 0.235, 0.18)
-        human("telogreika", pants="trousers_dark", boots="felt", boot_top=0.46, feet=[(-0.15, 0.06), (0.13, -0.08)],
-              hands=[(-0.16, -0.08, 0.98), (0.05, -0.4, 1.03)], poles=[(-1, 0.4, -0.6), (1, 0.2, -1)],
-              belt="leather_dark", beard="beard", hat=hat_ushanka)
-        ring((0, -0.005, 1.17), 0.235, 0.152, 0.016, "leather_dark", tilt=(0, 40, 0))
-        ppsh((-0.18, 0.1, 0.95), (0.04, -0.82, 1.08))
+        rifle((-0.13, 0.19, 0.8), (-0.27, 0.13, 1.98), up=(0, 1, 0))
+        skirt("skirt_dark", 0.46, 0.215, 0.175)
+        skirt("telogreika", 0.74, 0.232, 0.185, z0=1.04)
+        human("telogreika", pants="stockings_dark", boots="felt", boot_top=0.44, feet=[(-0.12, 0.06), (0.12, -0.08)],
+              hands=[(-0.07, -0.17, 1.3), (0.25, -0.04, 0.9)], poles=[(-1, 0.2, -1), (1, 0.3, -1)],
+              belt="leather_dark", hair="hair_fair", cap=False, locks=False,
+              hat=lambda: hat_kerchief(hair="hair_fair"), braid="+",
+              braid_end=1.06)
+        tube([(-0.25, 0.12, 1.75), (-0.2, -0.04, 1.47), (-0.09, -0.16, 1.3)], 0.013, "leather_dark")
+        tube([(-0.06, -0.17, 1.27), (-0.2, -0.1, 1.05), (-0.16, 0.18, 0.95)], 0.013, "leather_dark")
+        for z in (1.12, 1.22, 1.32):
+            ell(on_chest(0.0, z, 0.006), 0.014, "black", segs=8, rings=6)
 
 
 def u_motor():
-    """Мотострелки: армейский грузовик МАЗ с тентом."""
-    with grp((0.0, 0.05, 0.0), (0, 0, 0)):
+    """Мотострелки: армейский грузовик МАЗ с тентом и регулировщица с флажками."""
+    with grp((-0.18, 0.16, 0.0), scl=0.86):
         for y in (-0.66, 0.45, 0.82):
             for s in (-1, 1):
                 tyre((s * 0.38, y, 0.24), 0.24, 0.16, hub="truck")
@@ -1356,18 +1636,22 @@ def u_motor():
         for y in (-0.05, 0.33, 0.71):
             tube([(1.02 * x, y, 0.94 + (z - 0.94) * 1.06) for (x, _, z) in arch], 0.016, "khaki_dark", res=2)
         cyl2((0.4, -0.2, 0.46), (0.4, 0.15, 0.46), 0.1, 0.1, "olive_dark", segs=14)
+    with grp((0.56, -0.3, 0), (0, 0, 40), scl=1.04):
+        skirt("skirt_khaki", 0.5, 0.2, 0.165)
+        hl, hr = Vector((0.36, -0.14, 1.66)), Vector((-0.27, -0.12, 0.92))
+        human("khaki", pants="stockings", boots="boots_black", boot_top=0.44, feet=[(-0.12, 0.02), (0.12, -0.03)],
+              hands=[hr, hl], poles=[(-1, 0.3, -1), (1, 0.2, -0.3)], belt="leather_dark", hair="hair",
+              hat=hat_pilotka, braid="+", braid_end=1.06)
+        flag(hl, hl + Vector((0.08, -0.04, 0.32)), "red_bright")
+        flag(hr, hr + Vector((-0.04, -0.2, -0.26)), "yellow")
 
 
 def u_tank():
-    """Танковая дивизия: средний танк — гусеницы, башня с длинной пушкой."""
+    """Танковая дивизия: средний танк — гусеницы, башня с длинной пушкой; в люке — танкистка."""
     with grp((0.05, 0.05, 0), (0, 0, 0)):
-        tr = [(-0.98, 0.26), (-0.88, 0.04), (0.86, 0.04), (0.98, 0.2), (0.96, 0.32), (-0.95, 0.34)]
-        trk = []
-        for i in range(len(tr)):
-            a, b = Vector(tr[i - 1] + (0,)), Vector(tr[i] + (0,))
-            trk.append(tuple(b[:2]))
+        tr_ = [(-0.98, 0.26), (-0.88, 0.04), (0.86, 0.04), (0.98, 0.2), (0.96, 0.32), (-0.95, 0.34)]
         for s in (-1, 1):
-            slab(tr, 0.22, "track", "yz", loc=(s * 0.48, 0, 0), bevel=0.03)
+            slab(tr_, 0.22, "track", "yz", loc=(s * 0.48, 0, 0), bevel=0.03)
             for k in range(6):
                 y = -0.68 + k * 0.28
                 wheel_disc((s * 0.6, y, 0.17), 0.13, 0.04, "olive_dark", segs=18)
@@ -1384,19 +1668,27 @@ def u_tank():
         ell((0, -0.32, 0.64), (0.15, 0.1, 0.11), "tank", segs=14, rings=8)
         cyl2((0, -0.36, 0.66), (0, -1.78, 0.69), 0.045, 0.04, "tank", segs=12)
         ell((0, -1.05, 0.675), (0.065, 0.14, 0.065), "tank", segs=12, rings=8)
-        cyl2((0.17, 0.3, 0.72), (0.17, 0.3, 0.82), 0.1, 0.095, "tank", segs=16)
-        ell((0.17, 0.3, 0.82), (0.09, 0.09, 0.04), "olive_dark", segs=14, rings=6)
-        cyl2((0.17, 0.2, 0.86), (0.17, -0.12, 0.88), 0.012, 0.012, "gunmetal", segs=6)
-        cyl2((-0.18, 0.32, 0.74), (-0.18, 0.32, 0.79), 0.07, 0.07, "olive_dark", segs=14)
-        box((0.1, 0.08, 0.1), (-0.22, -0.2, 0.75), "olive_dark", bevel=0.01)
+        # командирский люк: кольцо, откинутая крышка и героиня по пояс
+        hx, hy = 0.12, 0.28
+        cyl2((hx, hy, 0.7), (hx, hy, 0.8), 0.19, 0.185, "tank", segs=24)
+        lathe([(0.185, 0.8), (0.15, 0.8)], (hx, hy, 0), "olive_dark", segs=24, cap0=False, cap1=False)
+        with grp((hx, hy + 0.2, 0.8), (-70, 0, 0)):
+            cyl2((0, 0.18, 0.0), (0, 0.18, 0.04), 0.18, 0.18, "tank", segs=24)
+        cyl2((-0.24, 0.32, 0.74), (-0.24, 0.32, 0.79), 0.07, 0.07, "olive_dark", segs=14)
+        box((0.1, 0.08, 0.1), (-0.26, -0.18, 0.75), "olive_dark", bevel=0.01)
         for x in (-0.22, 0.22):
             cyl2((x - 0.16, 1.06, 0.48), (x + 0.16, 1.06, 0.48), 0.1, 0.1, "olive_dark", segs=14)
         star((0.43, 0.12, 0.6), 0.06, "red_star", rot=(0, 0, 90), t=0.04)
+        S = 0.92
+        with grp((hx, hy, 0.8 - 1.0 * S), (0, 0, 28), scl=S):
+            human("tank_overall", hands=[(-0.27, -0.16, 1.03), (0.38, -0.16, 1.82)],
+                  poles=[(-1, 0.2, -0.5), (1, 0.2, -0.5)], hair="hair_fair", cap=False, hat=hat_tank,
+                  braid="+", braid_end=1.06, bust_only=True)
 
 
 def u_missile():
-    """Ракетная бригада: восьмиколёсный тягач МЗКТ с приподнятой ракетой."""
-    with grp((0.02, 0.0, 0.0), (0, 0, 0)):
+    """Ракетная бригада: восьмиколёсный тягач МЗКТ с приподнятой ракетой и офицер-ракетчица."""
+    with grp((-0.12, 0.08, 0.0), scl=0.9):
         for y in (-0.95, -0.5, 0.5, 0.95):
             for s in (-1, 1):
                 tyre((s * 0.38, y, 0.23), 0.23, 0.17, hub="missile_green")
@@ -1429,11 +1721,20 @@ def u_missile():
                     slab([(0.1, 0.0), (0.2, 0.0), (0.2, 0.08), (0.1, 0.22)], 0.015, "missile_green", "xz")
         piv = t0 + d * 1.25
         cyl2((0, 0.55, 0.66), (0, piv.y, piv.z - 0.12), 0.04, 0.04, "steel_dark", segs=10)
+    with grp((0.64, -0.52, 0), (0, 0, 50), scl=1.18):
+        skirt("olive_uniform", 0.5, 0.2, 0.165)
+        human("olive_uniform", pants="stockings", boots="boots_black", boot_top=0.42,
+              feet=[(-0.12, 0.02), (0.12, -0.02)], hands=[(-0.25, -0.12, 0.98), (0.24, -0.18, 1.08)],
+              poles=[(-1, 0.3, -1), (1, 0.5, -1)], belt="leather_dark", hair="hair_dark", cap=False,
+              hat=hat_peaked, braid="+", braid_end=1.08)
+        with grp((0.22, -0.24, 1.08), (0, 0, 20)):
+            box((0.17, 0.035, 0.22), (0, 0, 0), "black", bevel=0.008)
+            box((0.14, 0.01, 0.17), (0, -0.02, 0.01), "canopy")
 
 
 def u_airdef():
-    """ПВО: колёсная боевая машина с радаром-тарелкой, РЛС-панелью и ракетами."""
-    with grp((0.0, 0.05, 0.0), (0, 0, 0)):
+    """ПВО: зенитчица в цифровом камуфляже с переносным зенитным комплексом; позади — машина с радаром."""
+    with grp((-0.26, 0.3, 0.0), scl=0.74):
         for y in (-0.62, 0.0, 0.62):
             for s in (-1, 1):
                 tyre((s * 0.39, y, 0.25), 0.25, 0.17, hub="camo")
@@ -1460,16 +1761,27 @@ def u_airdef():
                      "steel_dark")
                 cyl2(base - dd * 0.25, base + dd * 0.45, 0.045, 0.045, "missile_white", segs=12)
                 cyl2(base + dd * 0.45, base + dd * 0.6, 0.045, 0.0, "red_bright", segs=12)
-                for q in range(4):
-                    with grp(base - dd * 0.2, (90 - 28 + 90, 0, 0)):
-                        pass
             beam((s * 0.3, 0.3, 0.92), (s * 0.42, 0.3, 0.92), 0.06, "steel_dark")
+    with grp((0.5, -0.28, 0), (0, 0, 34), scl=1.16):
+        human("camo_green", pants="camo_green", boots="boots_black", boot_top=0.36,
+              feet=[(-0.13, 0.06), (0.12, -0.08)], hands=[(-0.2, -0.24, 1.36), (-0.14, -0.5, 1.5)],
+              poles=[(-1, 0.2, -1), (1, 0.0, -1)], belt="black", hair="hair", hat=hat_helmet,
+              braid="+", braid_end=1.06)
+        p0, p1 = Vector((-0.24, 0.42, 1.33)), Vector((-0.2, -0.86, 1.76))
+        d = (p1 - p0).normalized()
+        cyl2(p0, p1, 0.04, 0.04, "missile_green", segs=14)
+        cyl2(p1 - d * 0.04, p1 + d * 0.02, 0.05, 0.05, "olive_dark", segs=14)
+        cyl2(p0 - d * 0.02, p0 + d * 0.05, 0.05, 0.05, "olive_dark", segs=14)
+        q = p0 + d * 0.62
+        box((0.05, 0.06, 0.16), q + Vector((0.0, 0.0, -0.1)), "black", rot=(18, 0, 0), bevel=0.008)
+        ell(q + d * 0.2 + Vector((0.0, 0.0, -0.08)), (0.04, 0.05, 0.04), "olive_dark", segs=12, rings=8)
+        box((0.03, 0.12, 0.08), q + d * 0.12 + Vector((0.06, 0.0, 0.03)), "black", rot=(18, 0, 0))
 
 
 MODELS = [  # (функция, разворот, масштаб)
     (u_druzhina, -32, 1.22), (u_crossbow, -48, 1.22), (u_khorugv, -32, 1.22), (u_gunners, 0, 1.12),
-    (u_musketeers, -62, 1.22), (u_hussars, -50, 1.0), (u_rockets, -52, 1.2), (u_line, -32, 1.22),
-    (u_artillery, 0, 1.06), (u_rifle, -46, 1.22), (u_air, 0, 1.2), (u_partisans, -40, 1.22),
+    (u_musketeers, -62, 1.22), (u_hussars, -50, 1.0), (u_rockets, -52, 1.16), (u_line, -32, 1.22),
+    (u_artillery, 0, 1.1), (u_rifle, -40, 1.22), (u_air, -10, 1.14), (u_partisans, -40, 1.22),
     (u_motor, -56, 0.98), (u_tank, -56, 0.94), (u_missile, -58, 0.8), (u_airdef, -56, 0.98),
 ]
 assert len(MODELS) == len(IDS)
@@ -1543,6 +1855,9 @@ def setup_scene(args):
     fwd = Vector((0, _ce, -_se)); up = Vector((0, _se, _ce))
     target = up * ((ANCHOR[1] - CELL / 2.0) / PPU)
     cam.location = target - fwd * 60
+    if args["zoom"] > 1.0:                 # крупный план лиц для проверки (в лист не идёт)
+        cd.ortho_scale /= args["zoom"]
+        cam.location = Vector((0, 0, args["zh"])) - fwd * 60
     return sc
 
 
@@ -1601,7 +1916,7 @@ def main():
     print("render total %.1fs" % (time.time() - t_all), flush=True)
     for c in colls:
         c.hide_render = False
-    if args["save"]:
+    if args["save"] and args["zoom"] <= 1.0:
         # в .blend фигурки стоят сеткой 4 x 4 (камера смотрит на первую, в начале координат)
         for i, r in enumerate(roots):
             r.location = ((i % COLS) * 3.0, (i // COLS) * 3.0, 0)
@@ -1612,7 +1927,8 @@ def main():
         os.makedirs(os.path.dirname(out), exist_ok=True)
         bpy.ops.wm.save_as_mainfile(filepath=out, compress=True)
         print("saved", out)
-    subprocess.run(["python3", os.path.abspath(__file__), "--post", "--work", args["work"]], check=False)
+    if args["zoom"] <= 1.0:
+        subprocess.run(["python3", os.path.abspath(__file__), "--post", "--work", args["work"]], check=False)
 
 
 main()
