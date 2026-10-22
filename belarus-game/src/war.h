@@ -96,6 +96,7 @@ void war_peace(Game *g);
 /* Ход войны: вызывается из game_end_turn до смены года. Сначала марш армий (front_end_turn), затем бой —
  * если армия стоит на узле цели, — или набег, если войны нет. */
 void war_end_turn(Game *g);
+int  war_front_battle(Game *g);         /* бой в реальном времени (раз в 10 с, пока армия у цели); 1 — был */
 /* Начало и конец оккупации — при смене года. */
 void war_year_changed(Game *g, int oldYear);
 

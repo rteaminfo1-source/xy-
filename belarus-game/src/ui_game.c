@@ -809,6 +809,7 @@ void ui_minute_tick(void)
     U.minuteLast = now;
     if (dt > 5000) dt = 1000;   /* после сна компьютера не начисляем «пропущенные» минуты */
     if (U.screen != SCR_GAME || G.over || IsIconic(g_hwnd)) return;
+    front_ui_tick((int)dt);        /* армии идут и бьются сами, в реальном времени */
     U.minuteMs += (int)dt;
     if (U.minuteMs >= 60000) {
         U.minuteMs -= 60000;

@@ -99,7 +99,13 @@ double front_army_defense(const Game *g, int a);
 unsigned front_armies_at(const Game *g, int node);   /* битовая маска армий на узле */
 double front_defense_at(const Game *g, int node);    /* армии на узле, соседние ×0,75, дальние ×0,5 */
 int  front_army_for(const Game *g, int node);
-int  front_auto_target(Game *g);                /* война идёт сама: свободная армия выступает к цели, -1 — некому */   /* армия на узле или идущая к нему, иначе самая сильная; -1 */
+int  front_auto_target(Game *g);
+/* реальное время: армия с приказом проходит одну клетку (дорогу) за FRONT_STEP_MS, по своей железной
+ * дороге — втрое быстрее. front_step сдвигает её на следующий узел пути (1 — сдвинулась). */
+#define FRONT_STEP_MS 10000
+int  front_next_node(const Game *g, int a);     /* следующий узел пути армии или -1 */
+int  front_step_ms(const Game *g, int a);       /* сколько миллисекунд идти до него */
+int  front_step(Game *g, int a);                /* война идёт сама: свободная армия выступает к цели, -1 — некому */   /* армия на узле или идущая к нему, иначе самая сильная; -1 */
 int  front_strongest(const Game *g);
 
 const wchar_t *front_cannot_send(const Game *g, int a, int node);   /* NULL — приказ можно отдать */

@@ -49,6 +49,15 @@ int  front_ui_click(int act, int arg);        /* 1 — обработано (A_A
 int  front_ui_rclick(int act, int arg);       /* правая кнопка без перетаскивания по области act/arg */
 void front_ui_hover(int act, int arg, wchar_t *buf, int n);          /* buf[0] = 0 — не моя область */
 void front_dev_scene(int n);                  /* --scene=40…49 */
+/* каждую секунду игры (ui_minute_tick): армии идут сами — клетка за 10 секунд, у цели раз в 10 секунд бой */
+void front_ui_tick(int dtMs);
+
+/* ---------- ui_troops.c: отряды на карте ---------- */
+enum { TM_STAND, TM_MARCH, TM_FIRE };
+/* (x, y) — середина отряда на земле, size — ширина строя в пикселях, unit — вид войск UNIT_TYPES (-1 — пехота),
+ * count — соединений (рисуется до 9 фигур), dir: +1 — лицом вправо, -1 — влево, mode — TM_*, enemy — враг
+ * (форма его эпохи по году year), t — секунды для анимации. Вызывающий сам просит ui_anim_request(). */
+void troops_draw(int x, int y, int size, int unit, int count, int dir, int mode, int enemy, int year, double t);
 
 /* ---------- ui_city.c: городской транспорт (остальное — в citynet.h) ---------- */
 void citynet_map_overlay(const MapProj *pj, int interactive, int large);   /* значки линий у городов */

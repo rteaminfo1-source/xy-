@@ -749,6 +749,36 @@ int front_auto_target(Game *g)
     return best;
 }
 
+/* ---------- реальное время: армия идёт сама, клетка за клеткой ---------- */
+int front_next_node(const Game *g, int a)
+{
+    if (!front_army_alive(g, a) || g->armies[a].dest < 0) return -1;
+    int path[FRONT_MAX_NODES];
+    int len = front_path(g, g->armies[a].node, g->armies[a].dest, path, FRONT_MAX_NODES);
+    return len >= 2 ? path[1] : -1;
+}
+
+int front_step_ms(const Game *g, int a)
+{
+    int nx = front_next_node(g, a);
+    if (nx < 0) return FRONT_STEP_MS;
+    int e = front_edge(g->armies[a].node, nx);
+    return e >= 0 && front_rail_usable(g, e) ? FRONT_STEP_MS / 3 : FRONT_STEP_MS;   /* по своей железной дороге — втрое быстрее */
+}
+
+int front_step(Game *g, int a)
+{
+    int nx = front_next_node(g, a);
+    if (nx < 0) {
+        if (front_army_alive(g, a)) g->armies[a].dest = -1;   /* дорога к цели закрылась */
+        return 0;
+    }
+    g->armyPrev[a] = (signed char)g->armies[a].node;
+    g->armies[a].node = nx;
+    if (nx == g->armies[a].dest) g->armies[a].dest = -1;
+    return 1;
+}
+
 int front_halt(Game *g, int a)
 {
     if (!front_army_alive(g, a) || g->armies[a].dest < 0) return 0;

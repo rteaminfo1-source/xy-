@@ -610,6 +610,19 @@ static void battle(Game *g, unsigned mask)
              lost ? L"Есть потери — пополните армию." : L"Армия цела.");
 }
 
+/* Бой в реальном времени: раз в 10 секунд, пока армия стоит у цели (тот же бой, что и в конце хода).
+ * 1 — бой был; итог в g->warReport. */
+int war_front_battle(Game *g)
+{
+    if (g->over || g->warKind == WAR_NONE) return 0;
+    unsigned m = front_armies_at(g, front_target_node(g));
+    if (!m) return 0;
+    battle(g, m);
+    if (g->battleTurn == g->turn + 1) g->battleTurn = g->turn;   /* звезда боя — на карте сейчас, а не со следующего хода */
+    front_sync(g);
+    return 1;
+}
+
 /* дописать к сводке хода целыми предложениями, пока они помещаются */
 static void report_add(Game *g, const wchar_t *s)
 {

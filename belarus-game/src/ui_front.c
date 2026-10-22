@@ -624,6 +624,62 @@ static void draw_march(const MapProj *pj, int from, int to, COLORREF c, int stro
     }
 }
 
+/* ---------- реальное время: армии идут сами, клетка за 10 секунд; у цели раз в 10 секунд бой ---------- */
+static int   s_stepMs[MAX_ARMIES];      /* пройдено к следующей клетке, мс */
+static int   s_battleMs;                /* накоплено к следующему бою, мс */
+static DWORD s_tickAt;                  /* когда был последний тик — для плавного хода между тиками */
+
+static int front_live(void)             /* фронт идёт: партия, нет окон, кроме большой карты */
+{
+    return U.screen == SCR_GAME && !G.over && (U.modal == M_NONE || U.modal == M_MAP);
+}
+
+void front_ui_tick(int dt)
+{
+    s_tickAt = GetTickCount();
+    if (!front_live() || g_dev) return;     /* сцены разработчика: фронт замер на полпути (для снимков) */
+    if (dt > 1500) dt = 1000;
+    int changed = 0;
+    for (int a = 0; a < MAX_ARMIES; a++) {
+        if (!front_army_alive(&G, a) || G.armies[a].dest < 0) { s_stepMs[a] = 0; continue; }
+        s_stepMs[a] += dt;
+        if (s_stepMs[a] < front_step_ms(&G, a)) continue;
+        s_stepMs[a] = 0;
+        int dest = G.armies[a].dest;
+        if (front_step(&G, a)) {
+            changed = 1;
+            if (G.armies[a].node == dest) ui_toast(L"Армия %d пришла: %ls", a + 1, FRONT_NODES[dest].name);
+        }
+    }
+    int tn = front_target_node(&G);
+    if (G.warKind != WAR_NONE && tn >= 0 && front_armies_at(&G, tn)) {
+        s_battleMs += dt;
+        if (s_battleMs >= FRONT_STEP_MS) {
+            s_battleMs = 0;
+            if (war_front_battle(&G)) { changed = 1; if (G.warReport[0]) ui_toast(L"%ls", G.warReport); }
+        }
+    } else s_battleMs = 0;
+    if (changed) { map_invalidate(); ui_invalidate(); }
+}
+
+/* доля пройденной клетки 0..1 — плавно между секундными тиками */
+static double step_frac(int a)
+{
+    if (!front_live() || G.armies[a].dest < 0) return 0;
+    if (g_dev) return 0.5;
+    double ms = s_stepMs[a] + (double)(GetTickCount() - s_tickAt);
+    double f = ms / front_step_ms(&G, a);
+    return f < 0 ? 0 : f > 1 ? 1 : f;
+}
+
+/* сколько секунд до следующего боя у цели */
+static int battle_in(void)
+{
+    double ms = FRONT_STEP_MS - s_battleMs - (double)(GetTickCount() - s_tickAt);
+    int s = (int)ceil(ms / 1000.0);
+    return s < 1 ? 1 : s > FRONT_STEP_MS / 1000 ? FRONT_STEP_MS / 1000 : s;
+}
+
 /* ---------- армия на карте ---------- */
 static void army_badge(int a, int x, int y, int selected, int interactive, int *outH)
 {
@@ -652,7 +708,7 @@ static void army_badge(int a, int x, int y, int selected, int interactive, int *
     *outH = h;
 }
 
-static void army_token(int a, int x, int y, int sz, int selected, int interactive, double t)
+static void army_token(int a, int x, int y, int sz, int selected, int interactive, double t, int dir, int mode)
 {
     COLORREF c = army_col(a);
     /* тень и кольцо выбора на земле */
@@ -662,12 +718,8 @@ static void army_token(int a, int x, int y, int sz, int selected, int interactiv
         ellipse_ring(x, y, sz * 42 / 100 + pulse, sz * 17 / 100 + pulse / 2, P.surface, SC(5));
         ellipse_ring(x, y, sz * 42 / 100 + pulse, sz * 17 / 100 + pulse / 2, c, SC(3));
     }
-    int u = front_lead_unit(&G, a), idx = u >= 0 ? art_unit_index(UNIT_TYPES[u].id) : -1;
-    if (idx >= 0) art_unit_draw(idx, x - sz / 2, y - sz * 9 / 10, sz, sz);
-    else {
-        d_circle(x, y - sz / 3, sz / 4, P.surface, c, 2);
-        d_icon(IC_WAR, x - sz / 6, y - sz / 3 - sz / 6, sz / 3, c);
-    }
+    /* отряд: идут, стоят или стреляют — фигуры по составу армии (до 9) */
+    troops_draw(x, y - SC(2), sz * 9 / 10, front_lead_unit(&G, a), front_army_size(&G, a), dir, mode, 0, G.year, t);
     int bh;
     army_badge(a, x, y + SC(3), selected, interactive, &bh);
     if (interactive) hit(x - sz / 3, y - sz * 8 / 10, sz * 2 / 3, sz * 8 / 10 + SC(3), A_ARMY_SEL, a);
@@ -710,11 +762,12 @@ static void sel_box(const MapProj *pj, int a, int large)
     int sz = front_army_size(&G, a), d = G.armies[a].dest;
     swprintf(l1, 160, L"Армия %d · %d %ls · %ls", a + 1, sz, w_units(sz), FRONT_NODES[G.armies[a].node].name);
     if (d >= 0) {
-        int eta = front_eta(&G, G.armies[a].node, d);
-        swprintf(l2, 200, L"Идёт к цели «%ls»: %d %ls%ls", FRONT_NODES[d].name, eta, w_turns(eta),
+        int path[FRONT_MAX_NODES], cells = front_path(&G, G.armies[a].node, d, path, FRONT_MAX_NODES) - 1;
+        int sec = (int)ceil((front_step_ms(&G, a) * (1 - step_frac(a))) / 1000.0);
+        swprintf(l2, 200, L"Идёт к цели «%ls»: клеток %d, следующая через %d с%ls", FRONT_NODES[d].name, cells > 0 ? cells : 1, sec,
                  front_army_supplied(&G, a) ? L"" : L" · нет снабжения (×0,6)");
     } else if (G.armies[a].node == front_target_node(&G))
-        swprintf(l2, 200, L"У цели: бой в конце хода%ls", front_army_supplied(&G, a) ? L" · снабжение есть" : L" · нет снабжения: сила ×0,6");
+        swprintf(l2, 200, L"У цели: бой через %d с (каждые 10 секунд)%ls", battle_in(), front_army_supplied(&G, a) ? L" · снабжение есть" : L" · нет снабжения: сила ×0,6");
     else swprintf(l2, 200, L"%ls", front_army_supplied(&G, a) ? L"Стоит на месте · снабжение есть" : L"Стоит на месте · нет снабжения: сила ×0,6");
     int f1 = large ? F_SMALL_B : F_TINY, f2 = F_TINY;
     int w1 = d_text_w(l1, f1), w2 = d_text_w(l2, f2), w3 = d_text_w(hint, F_TINY);
@@ -831,6 +884,35 @@ void front_overlay(const MapProj *pj, int interactive, int large)
         target_mark(nx[tn], ny[tn], sc, t);
         anim = 1;
     }
+    /* враг: у цели войны — его дивизии лицом к нашим, в 1941–1944 — гарнизоны в оккупированных областях */
+    {
+        int year = G.year;
+        for (int n = 0; n < FRONT_NODE_COUNT; n++) {
+            if (!nv[n]) continue;
+            int isTarget = n == tn && G.warKind != WAR_NONE;
+            int r = node_region(n), garrison = !isTarget && r >= 0 && ((G.occupied >> r) & 1u) && FRONT_NODES[n].city >= 0;
+            if (!isTarget && !garrison) continue;
+            double sc = mapv_view(pj) ? pow(nk[n] / (mapv_px_per_km(pj) > 0 ? mapv_px_per_km(pj) : 1), 0.6) : 1.0;
+            int sz = (int)((large ? SC(120) : SC(84)) * sc * (garrison ? 0.7 : 1.0));
+            if (sz < SC(44)) sz = SC(44);
+            if (sz > SC(190)) sz = SC(190);
+            int ex = nx[n] + sz * 60 / 100, ey = ny[n] + sz / 5;
+            double E = isTarget ? war_enemy_power(&G, G.warKind, G.warTarget) : war_region_strength(&G);
+            int cnt = (int)(E / 40) + 2;
+            if (cnt > 9) cnt = 9;
+            if (garrison && cnt > 4) cnt = 4;
+            int fighting = isTarget && front_armies_at(&G, n);
+            troops_draw(ex, ey, sz * 9 / 10, -1, cnt, -1, fighting ? TM_FIRE : TM_STAND, 1, year, t);
+            if (isTarget || large) {   /* подпись: чей враг и его сила */
+                wchar_t s[96];
+                const wchar_t *who = year >= 1941 && year <= 1945 ? L"вермахт" : G.warKind == WAR_CONQUEST && G.warTarget >= 0 ? PROVINCES[G.warTarget].owner : L"враг";
+                if (isTarget) swprintf(s, 96, L"%ls · сила %ld", who, lround(E));
+                else swprintf(s, 96, L"%ls", who);
+                tag(ex, ey + SC(4), s, F_TINY, P.ink, RGB(110, 36, 30));
+            }
+            anim = 1;
+        }
+    }
     /* армии: дальние — первыми; несколько армий в одном узле — рядом */
     int order_[MAX_ARMIES], na = 0;
     for (int a = 0; a < MAX_ARMIES; a++) if (front_army_alive(&G, a) && nv[G.armies[a].node]) order_[na++] = a;
@@ -842,9 +924,9 @@ void front_overlay(const MapProj *pj, int interactive, int large)
     for (int i = 0; i < na; i++) {
         int a = order_[i], n = G.armies[a].node;
         double sc = mapv_view(pj) ? pow(nk[n] / (mapv_px_per_km(pj) > 0 ? mapv_px_per_km(pj) : 1), 0.6) : 1.0;
-        int sz = (int)((large ? SC(92) : SC(62)) * sc);
-        if (sz < SC(40)) sz = SC(40);
-        if (sz > SC(150)) sz = SC(150);
+        int sz = (int)((large ? SC(120) : SC(84)) * sc);     /* отряд — несколько фигур, ему нужно место */
+        if (sz < SC(56)) sz = SC(56);
+        if (sz > SC(190)) sz = SC(190);
         unsigned here = front_armies_at(&G, n);
         int cnt = 0, idx = 0;
         for (int b = 0; b < MAX_ARMIES; b++) if ((here >> b) & 1u) { if (b < a) idx++; cnt++; }
@@ -867,12 +949,24 @@ void front_overlay(const MapProj *pj, int interactive, int large)
                 anim = 1;
             }
         }
-        if (x < mx - sz || x > mx + mw + sz || y < my - sz || y > my + mh + sz) continue;
-        army_token(a, x, y, sz, a == sel, interactive, t);
-        if (battle) {   /* бой в конце хода: пушки перед армией бьют по врагу */
-            fx_cannon(x + sz * 58 / 100, y + SC(4), sz * 46 / 100, +1, t);
+        /* реальное время: армия идёт к следующей клетке пути — 10 секунд на клетку */
+        int dir = battle ? +1 : -1, mode = battle ? TM_FIRE : TM_STAND;
+        int nxt = front_next_node(&G, a);
+        if (nxt >= 0) {
+            int px, py;
+            double pk, f = step_frac(a);
+            if (node_xy(pj, nxt, 0.5, &px, &py, &pk)) {
+                int tx = px + sz / 2, ty = py + sz / 5;
+                x += (int)((tx - x) * f);
+                y += (int)((ty - y) * f);
+                dir = tx >= nx[n] + sz / 2 ? +1 : -1;
+            }
+            mode = TM_MARCH;
             anim = 1;
         }
+        if (x < mx - sz || x > mx + mw + sz || y < my - sz || y > my + mh + sz) continue;
+        army_token(a, x, y, sz, a == sel, interactive, t, dir, mode);
+        if (battle) anim = 1;
     }
     if (G.battleTurn == G.turn && !G.over) { battle_cannons(pj, large, t); anim = 1; }
     if (sel >= 0) anim = 1;
@@ -949,11 +1043,11 @@ int front_tab_armies(int x, int y, int w)
     int y0 = y;
     front_sync(&G);         /* после загрузки старого сохранения армии появляются сразу (идемпотентно) */
     tab_section(x, &y, L"АРМИИ НА КАРТЕ");
-    y += d_wrap(x, y, w, L"Война идёт сама: объявите поход или освобождение — свободная армия сама выступит к цели, а марш и бои "
-                         L"идут каждый раз, когда вы нажимаете «Завершить ход». Можно командовать и самим, как в стратегиях: нажмите "
-                         L"на фигурку армии на карте (или «На карте» ниже), затем щёлкните город или землю — армия пойдёт туда; правая "
-                         L"кнопка мыши тоже отдаёт приказ. За ход армия проходит одну дорогу (в долгие ходы средних веков — две-три), "
-                         L"а по своей железной дороге — до трёх перегонов. Армии нужно снабжение: не дальше двух дорог от столицы, "
+    y += d_wrap(x, y, w, L"Война идёт сама, в реальном времени: объявите поход или освобождение — свободная армия сама выступит к цели "
+                         L"и пройдёт клетку за 10 секунд (по своей железной дороге — втрое быстрее), а у цели раз в 10 секунд идёт бой; "
+                         L"«Завершить ход» тоже двигает войну. Можно командовать и самим, как в стратегиях: нажмите "
+                         L"на отряд армии на карте (или «На карте» ниже), затем щёлкните город или землю — армия пойдёт туда; правая "
+                         L"кнопка мыши тоже отдаёт приказ. Армии нужно снабжение: не дальше двух дорог от столицы, "
                          L"крупного города, своей земли или станции; без него сила ×0,6.",
                   F_SMALL, P.muted, 1) + SC(10);
     int any = 0;

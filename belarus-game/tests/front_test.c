@@ -348,6 +348,34 @@ static void test_lands_and_old_saves(void)
     } else CHECK(0, "сохранение");
 }
 
+/* ---------- реальное время: клетка за 10 секунд и бой у цели раз в 10 секунд ---------- */
+static void test_realtime(void)
+{
+    static Game g;
+    fresh(&g, 1310);
+    int kh = unit("khorugv"), vol = prov("volhynia"), node = front_node_of_prov(vol);
+    for (int i = 0; i < 10; i++) war_recruit(&g, kh);
+    CHECK(war_declare(&g, WAR_CONQUEST, vol), "поход на Волынь: %ls", war_cannot_declare(&g, WAR_CONQUEST, vol));
+    CHECK(g.armies[0].dest == node, "армия не выступила сама");
+    CHECK(!war_front_battle(&g), "бой до прихода армии");
+    int steps = 0;
+    while (g.armies[0].node != node && steps < 20) {
+        int ms = front_step_ms(&g, 0);
+        CHECK(ms == FRONT_STEP_MS || ms == FRONT_STEP_MS / 3, "время шага %d мс", ms);
+        int nx = front_next_node(&g, 0);
+        CHECK(front_step(&g, 0) && g.armies[0].node == nx, "шаг на следующую клетку");
+        steps++;
+    }
+    CHECK(g.armies[0].node == node && g.armies[0].dest < 0, "армия не дошла по клеткам (%d шагов)", steps);
+    CHECK(!front_step(&g, 0), "шаг без приказа");
+    int wt = g.warTurns;
+    CHECK(war_front_battle(&g), "нет боя у цели в реальном времени");
+    CHECK(g.warTurns == wt + 1 && g.battleTurn == g.turn, "бой не засчитан или звезда боя не на этом ходу");
+    for (int i = 0; i < 12 && g.warKind != WAR_NONE; i++) war_front_battle(&g);
+    CHECK(g.warKind == WAR_NONE, "война не закончилась боями в реальном времени");
+    CHECK(!war_front_battle(&g), "бой без войны");
+}
+
 int main(void)
 {
     setlocale(LC_ALL, "C.UTF-8");
@@ -357,6 +385,7 @@ int main(void)
     test_march();
     test_rails();
     test_battle_at_node();
+    test_realtime();
     test_supply();
     test_defense();
     test_lands_and_old_saves();
