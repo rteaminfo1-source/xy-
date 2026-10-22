@@ -197,9 +197,15 @@ static void test_war_rules(void)
     if (!war_declare(&g, WAR_CONQUEST, sm)) FAIL("поход на Смоленск не начат: %ls", war_cannot_declare(&g, WAR_CONQUEST, sm));
     if (war_declare(&g, WAR_CONQUEST, prov_index("podlasie"))) FAIL("вторая война одновременно");
     if (front_army_count(&g) != 1 || g.armies[0].node != front_capital(&g)) FAIL("войско не встало армией у столицы");
+    /* война идёт сама: после объявления свободная армия выступает к цели без приказа */
+    if (g.armies[0].dest != front_node_of_prov(sm)) FAIL("армия не выступила к Смоленску сама");
+    /* если игрок остановил армию, на «Завершить ход» она снова выступит, а боя без армии у цели нет */
+    front_halt(&g, 0);
+    int wt0 = g.warTurns;
     war_end_turn(&g);
-    if (g.warTurns != 0) FAIL("бой без армии у цели");
-    if (!front_send(&g, 0, front_node_of_prov(sm))) FAIL("армия не идёт к Смоленску: %ls", front_cannot_send(&g, 0, front_node_of_prov(sm)));
+    if (g.warTurns > wt0 && !front_armies_at(&g, front_node_of_prov(sm))) FAIL("бой без армии у цели");
+    if (g.armies[0].dest != front_node_of_prov(sm) && g.armies[0].node != front_node_of_prov(sm))
+        FAIL("остановленная армия не пошла к цели по «Завершить ход»");
     int guard = 0;
     while (g.warKind != WAR_NONE && guard++ < 14) {
         g.gold = 1000;

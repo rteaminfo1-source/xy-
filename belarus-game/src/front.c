@@ -730,6 +730,25 @@ int front_send(Game *g, int a, int node)
     return 1;
 }
 
+/* Война идёт сама: если к цели не идёт ни одна армия, к ней отправляется самая сильная армия без
+ * приказа, которая может дойти. Армии с приказами игрока не трогаем. Возвращает армию или -1. */
+int front_auto_target(Game *g)
+{
+    int tn = front_target_node(g);
+    if (tn < 0 || g->over) return -1;
+    for (int a = 0; a < MAX_ARMIES; a++)
+        if (front_army_alive(g, a) && (g->armies[a].node == tn || g->armies[a].dest == tn)) return -1;
+    int best = -1;
+    double bv = -1;
+    for (int a = 0; a < MAX_ARMIES; a++)
+        if (front_army_alive(g, a) && g->armies[a].dest < 0 && !front_cannot_send(g, a, tn)) {
+            double v = front_army_attack(g, a, g->warKind, tn);
+            if (v > bv) { bv = v; best = a; }
+        }
+    if (best >= 0) g->armies[best].dest = tn;
+    return best;
+}
+
 int front_halt(Game *g, int a)
 {
     if (!front_army_alive(g, a) || g->armies[a].dest < 0) return 0;
@@ -916,6 +935,14 @@ void front_end_turn(Game *g, wchar_t *news, int n)
     front_sync(g);
     int moved = 0;
     for (int a = 0; a < MAX_ARMIES; a++) g->armyPrev[a] = -1;
+    {   /* идёт война, а к цели никто не идёт — свободная армия выступает сама */
+        int a = front_auto_target(g);
+        if (a >= 0 && news) {
+            wchar_t s[160];
+            swprintf(s, 160, L"Армия %d сама выступила к цели: %ls.", a + 1, FRONT_NODES[g->armies[a].dest].name);
+            cat_news(news, n, s);
+        }
+    }
     /* марш */
     for (int a = 0; a < MAX_ARMIES; a++) {
         if (!front_army_alive(g, a) || g->armies[a].dest < 0) continue;

@@ -211,11 +211,23 @@ static void test_battle_at_node(void)
     CHECK(front_army_count(&g) == 1, "армия для похода");
     CHECK(war_declare(&g, WAR_CONQUEST, vol), "поход на Волынь: %ls", war_cannot_declare(&g, WAR_CONQUEST, vol));
     CHECK(front_node_open(&g, node), "цель похода закрыта для армии");
-    war_end_turn(&g);
-    CHECK(g.warTurns == 0 && g.warKind == WAR_CONQUEST, "бой без армии у цели");
-    CHECK(wcsstr(g.warReport, L"ни одна армия") != 0, "нет подсказки отправить армию: %ls", g.warReport);
+    /* война идёт сама: армия выступила к цели без приказа */
+    CHECK(g.armies[0].dest == node, "армия не выступила к Волыни сама");
     CHECK(war_eta(&g, WAR_CONQUEST, vol) < 99, "прогноз похода с маршем");
-    CHECK(front_send(&g, 0, node), "армия не идёт на Волынь: %ls", front_cannot_send(&g, 0, node));
+    /* игрок отправил армию в другое место: к цели никто не идёт — подсказка, боя нет */
+    int other = front_capital(&g);
+    g.armies[0].node = other == node ? g.armies[0].node : other;
+    front_halt(&g, 0);
+    int nb[8], ne[8], k = front_neighbors(other, nb, ne, 8), side = -1;
+    for (int i = 0; i < k && side < 0; i++) if (nb[i] != node && !front_cannot_send(&g, 0, nb[i])) side = nb[i];
+    if (side >= 0) {
+        CHECK(front_send(&g, 0, side), "приказ идти в сторону");
+        war_end_turn(&g);
+        CHECK(g.warTurns == 0 && g.warKind == WAR_CONQUEST, "бой без армии у цели");
+        CHECK(wcsstr(g.warReport, L"другие приказы") != 0, "нет подсказки отправить армию: %ls", g.warReport);
+    }
+    /* свободная армия на «Завершить ход» снова выступает сама */
+    front_halt(&g, 0);
     int arrived = 0;
     for (int i = 0; i < 12 && g.warKind != WAR_NONE; i++) {
         war_end_turn(&g);

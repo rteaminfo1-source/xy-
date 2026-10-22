@@ -319,11 +319,18 @@ static void draw_map_panel(int x, int y, int w, int h)
         hit(rx - SC(4), ry - SC(2), rw + SC(8), ph + SC(4), A_RULER, ri);
         titleR = rx - SC(10);
     }
-    d_ellipsis(x + pad, y + SC(10), titleR - x - pad, ERAS[G.era - 1].polity, F_ERA_M, P.ink);
-    d_ellipsis(x + pad, y + SC(10) + d_font_h(F_ERA_M), titleR - x - pad,
-               map3d_on() ? L"3D-карта: колесо — ближе, мышь — повернуть · флажки — задания" :
-               art_map_available() ? L"3D-карта: постройки появляются у городов · флажки — задания" : L"Карта земель · контур современной границы для ориентира",
-               F_TINY, P.muted);
+    /* название — целиком: шрифт поменьше, если не помещается (без «…» посреди слова) */
+    int tw = titleR - x - pad, tf = F_ERA_M;
+    static const int TF[] = { F_ERA_M, F_H2, F_H3, F_BODY_B };
+    for (int i = 0; i < 4; i++) { tf = TF[i]; if (d_text_w(ERAS[G.era - 1].polity, tf) <= tw) break; }
+    int th = d_font_h(F_ERA_M);
+    d_ellipsis(x + pad, y + SC(10) + (th - d_font_h(tf)) / 2, tw, ERAS[G.era - 1].polity, tf, P.ink);
+    static const wchar_t *SUB3D[] = { L"3D-карта: колесо — ближе, мышь — повернуть · флажки — задания",
+                                      L"3D-карта: колесо — ближе, мышь — повернуть", L"колесо — ближе, мышь — повернуть" };
+    const wchar_t *sub = map3d_on() ? SUB3D[0] :
+                         art_map_available() ? L"3D-карта: постройки появляются у городов · флажки — задания" : L"Карта земель · контур современной границы для ориентира";
+    for (int i = 1; map3d_on() && i < 3 && d_text_w(sub, F_TINY) > tw; i++) sub = SUB3D[i];
+    d_ellipsis(x + pad, y + SC(10) + th, tw, sub, F_TINY, P.muted);
     int top = y + SC(16) + d_font_h(F_ERA_M) + d_font_h(F_TINY);
     int foot = SC(56);
     map_draw(x + 2, top, w - 4, h - (top - y) - foot, 1);
@@ -346,11 +353,15 @@ static void draw_map_panel(int x, int y, int w, int h)
     }
     /* легенда — в нижнем левом углу карты */
     int lx = x + pad, ly = fy - SC(32);
-    {
-        d_circle(lx + SC(5), ly + SC(7), SC(5), CLR_INVALID, P.blue, 2);
+    {   /* отступы — по ширине подписей, на подложке, чтобы читалось поверх карты */
+        int fh = d_font_h(F_TINY), w1 = d_text_w(L"можно строить", F_TINY), w2 = d_text_w(L"построено", F_TINY);
+        int lw = SC(16) + w1 + SC(14) + SC(12) + w2 + SC(8);
+        d_blend(lx - SC(6), ly - SC(3), lw + SC(6), fh + SC(6), P.surface, 190);
+        d_circle(lx + SC(5), ly + fh / 2, SC(5), CLR_INVALID, P.blue, 2);
         d_text(lx + SC(16), ly, L"можно строить", F_TINY, P.muted);
-        d_fill(lx + SC(96), ly + SC(3), SC(7), SC(7), P.red);
-        d_text(lx + SC(108), ly, L"построено", F_TINY, P.muted);
+        int qx = lx + SC(16) + w1 + SC(14);
+        d_fill(qx, ly + fh / 2 - SC(4), SC(8), SC(8), P.red);
+        d_text(qx + SC(12), ly, L"построено", F_TINY, P.muted);
     }
 }
 

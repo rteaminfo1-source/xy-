@@ -314,7 +314,7 @@ int tab_army(int x, int y, int w)
             int e = front_eta(&G, G.armies[going].node, tn);
             swprintf(army, 200, L"Армия %d идёт к цели: ещё %d %ls, бой начнётся, когда она дойдёт.", going + 1, e,
                      e == 1 ? L"ход" : e < 5 ? L"хода" : L"ходов");
-        } else swprintf(army, 200, L"К цели не идёт ни одна армия — без армии боя не будет. Нажмите «Отправить армию».");
+        } else swprintf(army, 200, L"Все армии заняты другими приказами. Нажмите «Отправить армию» — или освободите армию, и по «Завершить ход» она пойдёт к цели сама.");
         int ha = d_wrap(0, 0, tw, army, F_SMALL_B, 0, 0) + SC(6);
         int hl = d_wrap(0, 0, tw, line, F_SMALL_B, 0, 0);
         int hr = G.warReport[0] ? d_wrap(0, 0, tw, G.warReport, F_SMALL, 0, 0) + SC(6) : 0;

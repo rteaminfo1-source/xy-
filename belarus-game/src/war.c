@@ -305,6 +305,7 @@ int war_declare(Game *g, int kind, int target)
     } else {
         game_log(g, LOG_WAR, L"Начата операция по освобождению: %ls", REGION_NAMES[target]);
     }
+    front_auto_target(g);   /* армия сразу выступает к цели; дальше война идёт по кнопке «Завершить ход» */
     return 1;
 }
 
@@ -664,10 +665,10 @@ void war_end_turn(Game *g)
             for (int a = 0; a < MAX_ARMIES; a++) going |= front_army_alive(g, a) && g->armies[a].dest == node;
             if (g->warKind == WAR_CONQUEST)
                 swprintf(g->warReport, 200, going ? L"Поход на землю «%ls»: бой начнётся, когда армия дойдёт до цели."
-                                                  : L"Поход на землю «%ls»: к цели не идёт ни одна армия — выберите армию на карте и отправьте её туда.", name);
+                                                  : L"Поход на землю «%ls»: все армии выполняют другие приказы — отправьте одну из них к цели.", name);
             else
                 swprintf(g->warReport, 200, going ? L"Освобождение: %ls — бой начнётся, когда армия дойдёт до центра области."
-                                                  : L"Освобождение: %ls — к центру области не идёт ни одна армия. Отправьте армию туда.", name);
+                                                  : L"Освобождение: %ls — все армии выполняют другие приказы. Отправьте одну из них к центру области.", name);
             g->warNews = 1;
         }
     } else raid(g);

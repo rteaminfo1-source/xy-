@@ -98,7 +98,8 @@ double front_army_attack(const Game *g, int a, int kind, int node);
 double front_army_defense(const Game *g, int a);
 unsigned front_armies_at(const Game *g, int node);   /* битовая маска армий на узле */
 double front_defense_at(const Game *g, int node);    /* армии на узле, соседние ×0,75, дальние ×0,5 */
-int  front_army_for(const Game *g, int node);   /* армия на узле или идущая к нему, иначе самая сильная; -1 */
+int  front_army_for(const Game *g, int node);
+int  front_auto_target(Game *g);                /* война идёт сама: свободная армия выступает к цели, -1 — некому */   /* армия на узле или идущая к нему, иначе самая сильная; -1 */
 int  front_strongest(const Game *g);
 
 const wchar_t *front_cannot_send(const Game *g, int a, int node);   /* NULL — приказ можно отдать */
