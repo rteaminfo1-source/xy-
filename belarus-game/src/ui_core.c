@@ -315,6 +315,23 @@ void d_round_mask(int x, int y, int w, int h, int r)
     }
 }
 
+/* то же, но за углами — заданный цвет (сверху и снизу), например фон панели */
+void d_round_mask_c(int x, int y, int w, int h, int r, COLORREF top, COLORREF bottom)
+{
+    GdiFlush();
+    float cx = x + w * 0.5f, cy = y + h * 0.5f, hx = w * 0.5f, hy = h * 0.5f;
+    for (int k = 0; k < 4; k++) {
+        COLORREF c = k & 2 ? bottom : top;
+        int x0 = k & 1 ? x + w - r - 1 : x, y0 = k & 2 ? y + h - r - 1 : y, x1 = x0 + r + 1, y1 = y0 + r + 1;
+        if (!px_box(&x0, &y0, &x1, &y1)) continue;
+        for (int yy = y0; yy < y1; yy++)
+            for (int xx = x0; xx < x1; xx++) {
+                float out = 1.0f - cover(sd_rbox(xx + 0.5f - cx, yy + 0.5f - cy, hx, hy, (float)r));
+                if (out > 0) px_blend(s_bits + (size_t)yy * s_bw + xx, GetRValue(c), GetGValue(c), GetBValue(c), (unsigned)(out * 255 + 0.5f));
+            }
+    }
+}
+
 /* вертикальный градиент прямоугольника */
 void d_grad(int x, int y, int w, int h, COLORREF top, COLORREF bottom)
 {

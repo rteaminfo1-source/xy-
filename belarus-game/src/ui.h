@@ -44,6 +44,7 @@ void d_shadow(int x, int y, int w, int h, int r, int spread, int alpha);        
 void d_grad(int x, int y, int w, int h, COLORREF top, COLORREF bottom);
 void d_backdrop(void);                                                                               /* фон окна с виньеткой */
 void d_round_mask(int x, int y, int w, int h, int r);                                                /* скруглить углы картинки поверх фона */
+void d_round_mask_c(int x, int y, int w, int h, int r, COLORREF top, COLORREF bottom);               /* … поверх цвета панели */
 void d_poly(const POINT *pts, int n, COLORREF fill, COLORREF border, int t);
 void d_text(int x, int y, const wchar_t *s, int f, COLORREF c);
 int  d_text_w(const wchar_t *s, int f);

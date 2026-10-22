@@ -261,7 +261,9 @@ static void draw_header(int *outH)
         case 7: swprintf(val, 40, L"%ld", lround(inc.total[R_DEF])); break;
         }
         int hv = hover(A_HOVER_RES, i);
-        if (hv) d_rrect(cx, cy, cw - SC(6), ch, SC(5), P.surface2, CLR_INVALID);
+        /* «стеклянная» плашка ресурса и значок в цветном кружке */
+        d_rrect_a(cx, cy, cw - SC(6), ch, SC(10), hv ? mix(P.surface2, P.ink, 30) : P.surface2, g_dark ? (hv ? 200 : 120) : (hv ? 230 : 160));
+        d_circle(cx + SC(15), cy + ch / 2, SC(12), mix(ic, P.surface, g_dark ? 190 : 210), CLR_INVALID, 1);
         d_icon(icons[i], cx + SC(6), cy + (ch - SC(18)) / 2, SC(18), ic);
         /* всё в своей колонке: прибавка не наезжает на соседа — сначала короче («+0,26%» без «/год»),
          * потом в строку названия, иначе не показывается (подсказка при наведении объясняет) */
@@ -355,6 +357,8 @@ static void draw_map_panel(int x, int y, int w, int h)
     int top = y + SC(16) + d_font_h(F_ERA_M) + d_font_h(F_TINY);
     int foot = SC(56);
     map_draw(x + 2, top, w - 4, h - (top - y) - foot, 1);
+    /* карта со скруглёнными углами, как и сама панель */
+    d_round_mask_c(x + 2, top, w - 4, h - (top - y) - foot, SC(12), mix(P.surface, P.ink, g_dark ? 6 : 0), mix(P.surface, P.bg, 50));
 
     /* сводка */
     int fy = y + h - foot + SC(6);

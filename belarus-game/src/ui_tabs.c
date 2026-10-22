@@ -18,6 +18,13 @@ static void section(int x, int *y, const wchar_t *s)
 void tab_section(int x, int *y, const wchar_t *s) { section(x, y, s); }
 COLORREF tab_card_fill(void) { return card_fill(); }
 
+/* карточка: мягкая тень (при наведении глубже), лёгкий градиент, рамка */
+static void card(int x, int y, int w, int h, COLORREF fill, COLORREF border, int hv)
+{
+    d_shadow(x, y, w, h, SC(10), SC(hv ? 12 : 8), g_dark ? (hv ? 150 : 110) : (hv ? 70 : 45));
+    d_rrect_grad(x, y, w, h, SC(10), mix(fill, P.ink, hv ? 18 : 8), fill, border);
+}
+
 static int chip(int x, int y, const wchar_t *s, int sel, int dim, int act, int arg)
 {
     int w = d_text_w(s, F_SMALL_B) + SC(22), h = SC(28);
@@ -36,8 +43,8 @@ static void tech_card(int t, int x, int y, int w, int h)
     int st = game_tech_state(&G, t), cost = game_tech_cost(&G, t);
     int hv = hover(A_TECH, t) || hover(A_RESEARCH, t);
     COLORREF fill = st == TS_DONE ? mix(card_fill(), P.green, 26) : card_fill();
-    d_rrect(x, y, w, h, SC(6), fill, hv ? P.muted : P.line);
-    d_fill(x + 1, y + SC(10), SC(4), h - SC(20), branch_color(T->branch));
+    card(x, y, w, h, fill, hv ? P.muted : P.line, hv);
+    d_rrect(x + SC(5), y + SC(12), SC(4), h - SC(24), SC(2), branch_color(T->branch), CLR_INVALID);
     hit(x, y, w, h, A_TECH, t);
     int px = x + SC(16), pw = w - SC(26);
     int faded = st == TS_FUTURE || st == TS_LOCKED;
@@ -125,7 +132,7 @@ static void proj_card(int p, int x, int y, int w, int h)
     int st = game_proj_state(&G, p);
     int hv = hover(A_PROJ, p) || hover(A_BUILD, p);
     COLORREF fill = st == PS_DONE ? mix(card_fill(), P.red, 22) : card_fill();
-    d_rrect(x, y, w, h, SC(6), fill, hv ? P.muted : P.line);
+    card(x, y, w, h, fill, hv ? P.muted : P.line, hv);
     d_icon(IC_BUILD, x + SC(12), y + SC(10), SC(18), st == PS_DONE ? P.red : P.muted);
     hit(x, y, w, h, A_PROJ, p);
     int px = x + SC(38), pw = w - SC(48);
@@ -211,7 +218,7 @@ static void person_card(int i, int x, int y, int w, int h)
     int st = game_person_state(&G, i);
     int hv = hover(A_PERSON, i) || hover(A_HIRE, i);
     COLORREF fill = st == HS_ACTIVE ? mix(card_fill(), P.blue, 24) : card_fill();
-    d_rrect(x, y, w, h, SC(6), fill, hv ? P.muted : P.line);
+    card(x, y, w, h, fill, hv ? P.muted : P.line, hv);
     hit(x, y, w, h, A_PERSON, i);
     /* 3D-портрет (или инициалы, если портретов нет) */
     portrait_box(R->id, R->name, x + SC(10), y + SC(10), SC(46), SC(58), st == HS_ACTIVE ? P.blue : P.line);
