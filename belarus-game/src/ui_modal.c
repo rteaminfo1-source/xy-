@@ -654,8 +654,9 @@ static void modal_run(int width, int (*body)(int, int, int), int closable)
     U.modalView = mh - 2 * pad;
     if (U.modalScroll > ch - U.modalView) U.modalScroll = ch - U.modalView;
     if (U.modalScroll < 0) U.modalScroll = 0;
-    d_rrect(mx + SC(3), my + SC(6), mw, mh, SC(12), mix(P.bg, P.shadow, 160), CLR_INVALID);
-    d_rrect(mx, my, mw, mh, SC(12), P.surface, P.line);
+    d_shadow(mx, my, mw, mh, SC(18), SC(30), g_dark ? 200 : 110);
+    d_rrect_grad(mx, my, mw, mh, SC(18), mix(P.surface, P.ink, g_dark ? 10 : 0), mix(P.surface, P.bg, 60), mix(P.line, P.gold, 50));
+    d_fill(mx + SC(18), my + 1, mw - SC(36), SC(2), mix(P.gold, P.surface, 90));    /* золотая нить по верхнему краю */
     d_clip(mx + 1, my + SC(10), mw - 2, mh - SC(20));
     hits_clip(mx + 1, my + SC(10), mw - 2, mh - SC(20));
     body(mx + pad, my + pad - U.modalScroll, cw);

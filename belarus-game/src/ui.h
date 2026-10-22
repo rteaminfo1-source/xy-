@@ -38,6 +38,12 @@ void d_frame(int x, int y, int w, int h, COLORREF c);
 void d_rrect(int x, int y, int w, int h, int r, COLORREF fill, COLORREF border);
 void d_line(int x1, int y1, int x2, int y2, COLORREF c, int t);
 void d_circle(int cx, int cy, int r, COLORREF fill, COLORREF border, int t);
+void d_rrect_grad(int x, int y, int w, int h, int r, COLORREF top, COLORREF bottom, COLORREF border);   /* градиент сверху вниз */
+void d_rrect_a(int x, int y, int w, int h, int r, COLORREF fill, int alpha);                         /* полупрозрачная */
+void d_shadow(int x, int y, int w, int h, int r, int spread, int alpha);                             /* мягкая тень карточки */
+void d_grad(int x, int y, int w, int h, COLORREF top, COLORREF bottom);
+void d_backdrop(void);                                                                               /* фон окна с виньеткой */
+void d_round_mask(int x, int y, int w, int h, int r);                                                /* скруглить углы картинки поверх фона */
 void d_poly(const POINT *pts, int n, COLORREF fill, COLORREF border, int t);
 void d_text(int x, int y, const wchar_t *s, int f, COLORREF c);
 int  d_text_w(const wchar_t *s, int f);

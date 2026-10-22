@@ -5,7 +5,7 @@
 #include <string.h>
 #include <math.h>
 
-static COLORREF card_fill(void) { return mix(P.surface, P.surface2, 150); }
+static COLORREF card_fill(void) { return mix(P.surface2, P.surface, g_dark ? 90 : 60); }
 
 static void section(int x, int *y, const wchar_t *s)
 {

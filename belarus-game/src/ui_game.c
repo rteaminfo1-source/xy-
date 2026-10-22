@@ -82,7 +82,7 @@ static void spaced(int x, int y, const wchar_t *s, int f, COLORREF c)
 static void draw_title(void)
 {
     ui_set_era_font(1);
-    d_fill(0, 0, g_w, g_h, P.bg);
+    d_backdrop();
     int cell = SC(4) > 2 ? SC(4) : 2;
     d_ornament(0, SC(26), g_w, cell, P.red, mix(P.red, P.bg, 140));
     d_ornament(0, g_h - SC(26) - 9 * cell, g_w, cell, mix(P.red, P.bg, 90), mix(P.red, P.bg, 170));
@@ -144,13 +144,17 @@ static void draw_title(void)
         int mx = x0 + colW + SC(30), my = SC(26) + 9 * cell + SC(30);
         int mw = g_w - mx - x0 / 2, mh = g_h - my - SC(150);
         if (mw > SC(260) && mh > SC(220)) {
-            d_rrect(mx, my, mw, mh, SC(8), P.surface, P.line);
+            /* карта в рамке-«витрине»: тень, скруглённые углы и золотая кромка */
+            d_shadow(mx, my, mw, mh, SC(18), SC(28), g_dark ? 190 : 90);
+            d_rrect(mx, my, mw, mh, SC(18), P.surface, CLR_INVALID);
             map_draw(mx + 1, my + 1, mw - 2, mh - 2, 0);
+            d_round_mask(mx, my, mw, mh, SC(18));
+            d_rrect(mx, my, mw, mh, SC(18), CLR_INVALID, mix(P.gold, P.surface, 110));
             /* восемь эпох */
             int ey = my + mh + SC(14), ew = mw / 8;
             for (int e = 1; e <= ERA_COUNT; e++) {
                 int ex = mx + (e - 1) * ew;
-                d_fill(ex, ey, ew - SC(4), SC(3), e % 2 ? P.red : mix(P.red, P.bg, 120));
+                d_rrect(ex, ey, ew - SC(6), SC(4), SC(2), e % 2 ? P.red : P.gold, CLR_INVALID);
                 d_text(ex, ey + SC(8), roman(e), F_SMALL_B, P.ink);
                 wchar_t yr[16];
                 swprintf(yr, 16, L"%d", ERAS[e - 1].from);
@@ -182,8 +186,8 @@ static void draw_header(int *outH)
     Income inc;
     game_income(&G, &inc);
     int pad = SC(16), H = SC(88);
-    d_fill(0, 0, g_w, H, P.surface);
-    d_fill(0, H - 1, g_w, 1, P.line);
+    d_grad(0, 0, g_w, H, mix(P.surface, P.ink, g_dark ? 10 : 0), mix(P.surface, P.bg, g_dark ? 90 : 40));
+    d_fill(0, H - 1, g_w, 1, mix(P.line, P.gold, 60));
 
     wchar_t s[64];
     swprintf(s, 64, L"%d", G.year);
@@ -295,11 +299,11 @@ static void draw_timeline(int x, int y, int w, int h)
         int sx = x + w * a / n, ex = x + w * (b + 1) / n;
         int cur = e == G.era;
         COLORREF bg = cur ? P.redSoft : (e % 2 ? P.surface2 : mix(P.surface2, P.bg, 120));
-        d_fill(sx, y, ex - sx - 1, h, bg);
-        /* пройденные ходы */
+        d_rrect(sx, y, ex - sx - SC(2), h, SC(5), bg, cur ? mix(P.red, P.surface, 90) : CLR_INVALID);
+        /* пройденные ходы — золотая полоска */
         int done = 0;
         for (int t = a; t <= b; t++) if (t < G.turn) done++;
-        if (done) d_fill(sx, y + h - SC(3), (ex - sx - 1) * done / (b - a + 1), SC(3), mix(P.red, P.surface2, 80));
+        if (done) d_rrect(sx + SC(2), y + h - SC(4), (ex - sx - SC(6)) * done / (b - a + 1), SC(3), SC(1), cur ? P.red : mix(P.gold, P.surface2, 70), CLR_INVALID);
         wchar_t lab[96];
         swprintf(lab, 96, L"%ls  %d", roman(e), ERAS[e - 1].from);
         int lw = d_text_w(lab, F_TINY);
@@ -309,15 +313,15 @@ static void draw_timeline(int x, int y, int w, int h)
     }
     int t = G.turn < n ? G.turn : n - 1;
     int mx = x + w * t / n + (w / n) / 2;
-    d_fill(mx - SC(1), y - SC(4), SC(3), h + SC(8), P.red);
-    POINT tri[4] = { { mx - SC(5), y - SC(8) }, { mx + SC(6), y - SC(8) }, { mx, y - SC(2) }, { mx - SC(5), y - SC(8) } };
-    d_poly(tri, 4, P.red, CLR_INVALID, 1);
+    d_rrect(mx - SC(1), y - SC(4), SC(3), h + SC(8), SC(1), P.red, CLR_INVALID);
+    d_circle(mx, y - SC(5), SC(5), P.red, P.surface, 2);
 }
 
 /* ---------- панель карты ---------- */
 static void draw_map_panel(int x, int y, int w, int h)
 {
-    d_rrect(x, y, w, h, SC(8), P.surface, P.line);
+    d_shadow(x, y, w, h, SC(14), SC(16), g_dark ? 150 : 60);
+    d_rrect_grad(x, y, w, h, SC(14), mix(P.surface, P.ink, g_dark ? 8 : 0), mix(P.surface, P.bg, 70), P.line);
     int pad = SC(14);
     /* справа: кнопка «развернуть» и правитель эпохи */
     int bw = SC(96), bx = x + w - pad - bw;
@@ -385,17 +389,21 @@ static void draw_map_panel(int x, int y, int w, int h)
 /* ---------- вкладки ---------- */
 static void draw_tabs_panel(int x, int y, int w, int h)
 {
-    d_rrect(x, y, w, h, SC(8), P.surface, P.line);
+    d_shadow(x, y, w, h, SC(14), SC(16), g_dark ? 150 : 60);
+    d_rrect_grad(x, y, w, h, SC(14), mix(P.surface, P.ink, g_dark ? 8 : 0), mix(P.surface, P.bg, 70), P.line);
     int tx = x + SC(8), ty = y + SC(8), th = SC(34);
+    d_rrect(x + SC(6), ty - SC(3), w - SC(12), th + SC(6), (th + SC(6)) / 2, mix(P.surface2, P.bg, 60), CLR_INVALID);   /* дорожка вкладок */
     int total = 0;
     for (int i = 0; i < TAB_COUNT; i++) total += d_text_w(TAB_NAMES[i], F_SMALL_B) + SC(22);
     int f = total > w - SC(16) ? F_TINY : F_SMALL_B;
     for (int i = 0; i < TAB_COUNT; i++) {
         int tw = d_text_w(TAB_NAMES[i], f) + (f == F_TINY ? SC(14) : SC(22));
         int sel = U.tab == i, hv = hover(A_TAB, i);
-        if (sel) d_rrect(tx, ty, tw, th, SC(5), P.redSoft, CLR_INVALID);
-        else if (hv) d_rrect(tx, ty, tw, th, SC(5), P.surface2, CLR_INVALID);
-        d_text_c(tx, ty + (th - d_font_h(f)) / 2, tw, TAB_NAMES[i], f, sel ? P.red : P.ink);
+        if (sel) {   /* выбранная вкладка — карминовая «таблетка» с объёмом */
+            d_shadow(tx, ty, tw, th, th / 2, SC(6), g_dark ? 120 : 60);
+            d_rrect_grad(tx, ty, tw, th, th / 2, mix(P.red, RGB(255, 255, 255), 40), mix(P.red, RGB(0, 0, 0), 40), CLR_INVALID);
+        } else if (hv) d_rrect(tx, ty, tw, th, th / 2, P.surface2, CLR_INVALID);
+        d_text_c(tx, ty + (th - d_font_h(f)) / 2, tw, TAB_NAMES[i], f, sel ? P.onAccent : P.ink);
         /* метка «есть что сделать» */
         int dot = 0;
         if (i == TAB_QUIZ && !G.over && !G.quizAnswered) dot = 1;
@@ -403,12 +411,11 @@ static void draw_tabs_panel(int x, int y, int w, int h)
         if (i == TAB_ARMY) dot = !G.over && ((G.occupied && G.warKind == WAR_NONE) || (G.warKind != WAR_NONE && G.warNews));
         if (i == TAB_QUESTS) for (int q = 0; q < QUEST_COUNT && !dot; q++)
             dot = game_quest_state(&G, q) == QS_ACTIVE && QUESTS[q].deadline < game_next_year(&G);
-        if (dot) d_circle(tx + tw - SC(5), ty + SC(6), SC(3), P.red, CLR_INVALID, 1);
+        if (dot) d_circle(tx + tw - SC(7), ty + SC(7), SC(3), sel ? P.onAccent : P.gold, CLR_INVALID, 1);
         hit(tx, ty, tw, th, A_TAB, i);
         tx += tw + SC(2);
     }
     int cy = ty + th + SC(8);
-    d_fill(x + SC(8), cy - SC(4), w - SC(16), 1, P.line);
     int cx = x + SC(16), cw = w - SC(36), ch = y + h - cy - SC(8);
     U.panelX = x; U.panelY = cy; U.panelW = w; U.panelH = ch;
     U.view = ch;
@@ -426,7 +433,7 @@ static void draw_tabs_panel(int x, int y, int w, int h)
 static void draw_game(void)
 {
     ui_set_era_font(G.era);
-    d_fill(0, 0, g_w, g_h, P.bg);
+    d_backdrop();
     int H;
     draw_header(&H);
     int cell = SC(2) > 2 ? SC(2) : 2;
@@ -445,8 +452,8 @@ static void draw_game(void)
 
     /* строка состояния */
     int sy = g_h - statusH;
-    d_fill(0, sy, g_w, statusH, P.surface);
-    d_fill(0, sy, g_w, 1, P.line);
+    d_grad(0, sy, g_w, statusH, mix(P.surface, P.bg, 60), mix(P.surface, P.bg, 120));
+    d_fill(0, sy, g_w, 1, mix(P.line, P.gold, 40));
     const wchar_t *keys = L"Enter — ход · 1–9 — вкладки · M — карта · Ctrl+S — сохранить · Ctrl+колесо — масштаб · F1 — справка";
     int kw = d_text_w(keys, F_TINY);
     d_text(g_w - pad - kw, sy + (statusH - d_font_h(F_TINY)) / 2, keys, F_TINY, P.muted);

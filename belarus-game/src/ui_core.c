@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <math.h>
+#include <stdlib.h>
 
 Pal P;
 int g_dark = 1;
@@ -20,19 +21,21 @@ static HBITMAP s_bmp, s_oldBmp;
 static unsigned *s_bits;
 static int s_bw, s_bh;
 
+/* светлая — «льняная бумага»: тёплый лён, чернила, кармин и золото вышивки */
 static const Pal PAL_LIGHT = {
-    .bg = RGB(236, 236, 228), .surface = RGB(248, 247, 242), .surface2 = RGB(226, 226, 215),
-    .ink = RGB(27, 33, 29), .muted = RGB(88, 96, 89), .line = RGB(203, 203, 190),
-    .red = RGB(163, 31, 40), .redSoft = RGB(243, 222, 219), .blue = RGB(40, 72, 156), .blueSoft = RGB(222, 229, 246),
-    .green = RGB(46, 106, 54), .gold = RGB(146, 100, 14), .land = RGB(232, 231, 216), .landEdge = RGB(58, 64, 58),
-    .water = RGB(76, 120, 186), .forest = RGB(92, 136, 84), .shadow = RGB(0, 0, 0), .onAccent = RGB(255, 255, 255)
+    .bg = RGB(240, 234, 222), .surface = RGB(253, 250, 244), .surface2 = RGB(238, 231, 218),
+    .ink = RGB(30, 34, 40), .muted = RGB(104, 108, 112), .line = RGB(222, 212, 194),
+    .red = RGB(186, 28, 48), .redSoft = RGB(248, 226, 226), .blue = RGB(44, 92, 196), .blueSoft = RGB(226, 234, 250),
+    .green = RGB(36, 128, 84), .gold = RGB(170, 118, 20), .land = RGB(236, 230, 214), .landEdge = RGB(70, 70, 66),
+    .water = RGB(76, 120, 186), .forest = RGB(92, 136, 84), .shadow = RGB(40, 30, 20), .onAccent = RGB(255, 255, 255)
 };
+/* тёмная — «полночный музей»: глубокий сине-зелёный, золото и кармин */
 static const Pal PAL_DARK = {
-    .bg = RGB(15, 20, 17), .surface = RGB(24, 31, 27), .surface2 = RGB(35, 44, 38),
-    .ink = RGB(230, 231, 220), .muted = RGB(150, 160, 148), .line = RGB(54, 65, 58),
-    .red = RGB(228, 94, 98), .redSoft = RGB(72, 34, 37), .blue = RGB(140, 165, 238), .blueSoft = RGB(37, 47, 76),
-    .green = RGB(140, 190, 116), .gold = RGB(222, 176, 84), .land = RGB(37, 48, 41), .landEdge = RGB(176, 186, 172),
-    .water = RGB(92, 138, 210), .forest = RGB(78, 124, 82), .shadow = RGB(0, 0, 0), .onAccent = RGB(22, 14, 15)
+    .bg = RGB(10, 15, 20), .surface = RGB(20, 27, 35), .surface2 = RGB(31, 41, 52),
+    .ink = RGB(238, 241, 244), .muted = RGB(150, 162, 174), .line = RGB(46, 59, 72),
+    .red = RGB(236, 76, 96), .redSoft = RGB(70, 30, 40), .blue = RGB(118, 168, 255), .blueSoft = RGB(30, 46, 76),
+    .green = RGB(98, 206, 146), .gold = RGB(240, 184, 82), .land = RGB(33, 44, 52), .landEdge = RGB(176, 186, 196),
+    .water = RGB(92, 138, 210), .forest = RGB(78, 124, 82), .shadow = RGB(0, 0, 0), .onAccent = RGB(255, 255, 255)
 };
 
 /* ---------- шрифты ---------- */
@@ -175,15 +178,185 @@ void d_frame(int x, int y, int w, int h, COLORREF c)
     FrameRect(s_dc, &r, (HBRUSH)GetStockObject(DC_BRUSH));
 }
 
+/* ---------- сглаженные фигуры: рисуем прямо в пиксели буфера (расстояние до края → покрытие) ---------- */
+/* окно, куда можно рисовать: пересечение буфера и отсечения */
+static int px_box(int *x0, int *y0, int *x1, int *y1)
+{
+    int cx = 0, cy = 0, cw = s_bw, ch = s_bh;
+    if (!s_bits) return 0;
+    if (d_clip_get(&cx, &cy, &cw, &ch)) {
+        if (*x0 < cx) *x0 = cx;
+        if (*y0 < cy) *y0 = cy;
+        if (*x1 > cx + cw) *x1 = cx + cw;
+        if (*y1 > cy + ch) *y1 = cy + ch;
+    }
+    if (*x0 < 0) *x0 = 0;
+    if (*y0 < 0) *y0 = 0;
+    if (*x1 > s_bw) *x1 = s_bw;
+    if (*y1 > s_bh) *y1 = s_bh;
+    return *x1 > *x0 && *y1 > *y0;
+}
+
+static inline void px_blend(unsigned *p, unsigned cr, unsigned cg, unsigned cb, unsigned a)
+{
+    if (a >= 255) { *p = cr << 16 | cg << 8 | cb; return; }
+    unsigned v = *p, ia = 255 - a;
+    *p = ((((v >> 16) & 255) * ia + cr * a) / 255) << 16 | ((((v >> 8) & 255) * ia + cg * a) / 255) << 8 | (((v & 255) * ia + cb * a) / 255);
+}
+
+/* расстояние со знаком от точки до края скруглённого прямоугольника (полуширины hx, hy, радиус r) */
+static inline float sd_rbox(float px, float py, float hx, float hy, float r)
+{
+    float qx = fabsf(px) - (hx - r), qy = fabsf(py) - (hy - r);
+    if (qx <= 0 || qy <= 0) return (qx > qy ? qx : qy) - r;
+    return sqrtf(qx * qx + qy * qy) - r;
+}
+
+static inline float cover(float d) { return d <= -0.5f ? 1.0f : d >= 0.5f ? 0.0f : 0.5f - d; }
+
+/* заливка (с вертикальным градиентом fill → fill2), рамка толщиной bt, общая прозрачность alpha 0..255 */
+static void rrect_px(int x, int y, int w, int h, int r, COLORREF fill, COLORREF fill2, COLORREF border, int bt, int alpha)
+{
+    if (w <= 0 || h <= 0) return;
+    if (r * 2 > w) r = w / 2;
+    if (r * 2 > h) r = h / 2;
+    int x0 = x, y0 = y, x1 = x + w, y1 = y + h;
+    if (!px_box(&x0, &y0, &x1, &y1)) return;
+    GdiFlush();
+    float cx = x + w * 0.5f, cy = y + h * 0.5f, hx = w * 0.5f, hy = h * 0.5f;
+    int hasFill = fill != CLR_INVALID, hasBorder = border != CLR_INVALID && bt > 0;
+    unsigned br = GetRValue(border), bgc = GetGValue(border), bb = GetBValue(border);
+    for (int yy = y0; yy < y1; yy++) {
+        unsigned fr = 0, fg = 0, fb = 0;
+        if (hasFill) {
+            COLORREF c = fill2 == CLR_INVALID ? fill : mix(fill, fill2, h > 1 ? (yy - y) * 255 / (h - 1) : 0);
+            fr = GetRValue(c); fg = GetGValue(c); fb = GetBValue(c);
+        }
+        unsigned *row = s_bits + (size_t)yy * s_bw;
+        float py = yy + 0.5f - cy;
+        int inner = py > -(hy - r) && py < hy - r;       /* строка без скруглений: середину заполняем быстро */
+        for (int xx = x0; xx < x1; xx++) {
+            float px = xx + 0.5f - cx;
+            float d;
+            if (inner) {
+                float ex = fabsf(px) - hx, ey = fabsf(py) - hy;
+                d = ex > ey ? ex : ey;
+            } else d = sd_rbox(px, py, hx, hy, (float)r);
+            float cv = cover(d);
+            if (cv <= 0) continue;
+            if (hasFill) px_blend(row + xx, fr, fg, fb, (unsigned)(cv * alpha + 0.5f));
+            if (hasBorder) {
+                float ring = cv - cover(d + bt);
+                if (ring > 0) px_blend(row + xx, br, bgc, bb, (unsigned)(ring * alpha + 0.5f));
+            }
+        }
+    }
+}
+
+static int border_px(void) { return g_s >= 1.75f ? 2 : 1; }
+
 void d_rrect(int x, int y, int w, int h, int r, COLORREF fill, COLORREF border)
 {
-    HGDIOBJ ob = SelectObject(s_dc, fill == CLR_INVALID ? GetStockObject(NULL_BRUSH) : GetStockObject(DC_BRUSH));
-    HGDIOBJ op = SelectObject(s_dc, border == CLR_INVALID ? GetStockObject(NULL_PEN) : GetStockObject(DC_PEN));
-    if (fill != CLR_INVALID) SetDCBrushColor(s_dc, fill);
-    if (border != CLR_INVALID) SetDCPenColor(s_dc, border);
-    RoundRect(s_dc, x, y, x + w + (border == CLR_INVALID ? 1 : 0), y + h + (border == CLR_INVALID ? 1 : 0), r * 2, r * 2);
-    SelectObject(s_dc, ob);
-    SelectObject(s_dc, op);
+    rrect_px(x, y, w, h, r, fill, CLR_INVALID, border, border_px(), 255);
+}
+
+void d_rrect_grad(int x, int y, int w, int h, int r, COLORREF top, COLORREF bottom, COLORREF border)
+{
+    rrect_px(x, y, w, h, r, top, bottom, border, border_px(), 255);
+}
+
+void d_rrect_a(int x, int y, int w, int h, int r, COLORREF fill, int alpha)
+{
+    rrect_px(x, y, w, h, r, fill, CLR_INVALID, CLR_INVALID, 0, alpha);
+}
+
+/* мягкая тень под карточкой: размытый край, чуть ниже самой карточки */
+void d_shadow(int x, int y, int w, int h, int r, int spread, int alpha)
+{
+    if (spread < 1) spread = 1;
+    int oy = spread / 3;
+    int x0 = x - spread, y0 = y - spread + oy, x1 = x + w + spread, y1 = y + h + spread + oy;
+    if (!px_box(&x0, &y0, &x1, &y1)) return;
+    GdiFlush();
+    unsigned sr = GetRValue(P.shadow), sg = GetGValue(P.shadow), sb = GetBValue(P.shadow);
+    float cx = x + w * 0.5f, cy = y + h * 0.5f + oy, hx = w * 0.5f, hy = h * 0.5f;
+    for (int yy = y0; yy < y1; yy++) {
+        unsigned *row = s_bits + (size_t)yy * s_bw;
+        for (int xx = x0; xx < x1; xx++) {
+            float d = sd_rbox(xx + 0.5f - cx, yy + 0.5f - cy, hx, hy, (float)r);
+            if (d < -spread) continue;                       /* глубоко под карточкой — её всё равно закроет */
+            float t = 1.0f - (d + spread * 0.25f) / (spread * 1.25f);
+            if (t <= 0) continue;
+            if (t > 1) t = 1;
+            px_blend(row + xx, sr, sg, sb, (unsigned)(t * t * alpha));
+        }
+    }
+}
+
+static unsigned *s_back;                       /* готовый фон окна (d_backdrop) */
+static int s_backW, s_backH, s_backDark = -1;
+
+/* скруглить углы уже нарисованной картинки: за краем — снова фон окна (d_backdrop) */
+void d_round_mask(int x, int y, int w, int h, int r)
+{
+    if (!s_back || s_backW != s_bw || s_backH != s_bh) return;
+    GdiFlush();
+    float cx = x + w * 0.5f, cy = y + h * 0.5f, hx = w * 0.5f, hy = h * 0.5f;
+    for (int k = 0; k < 4; k++) {
+        int x0 = k & 1 ? x + w - r - 1 : x, y0 = k & 2 ? y + h - r - 1 : y, x1 = x0 + r + 1, y1 = y0 + r + 1;
+        if (!px_box(&x0, &y0, &x1, &y1)) continue;
+        for (int yy = y0; yy < y1; yy++)
+            for (int xx = x0; xx < x1; xx++) {
+                float out = 1.0f - cover(sd_rbox(xx + 0.5f - cx, yy + 0.5f - cy, hx, hy, (float)r));
+                if (out <= 0) continue;
+                unsigned b = s_back[(size_t)yy * s_bw + xx];
+                px_blend(s_bits + (size_t)yy * s_bw + xx, (b >> 16) & 255, (b >> 8) & 255, b & 255, (unsigned)(out * 255 + 0.5f));
+            }
+    }
+}
+
+/* вертикальный градиент прямоугольника */
+void d_grad(int x, int y, int w, int h, COLORREF top, COLORREF bottom)
+{
+    int x0 = x, y0 = y, x1 = x + w, y1 = y + h;
+    if (!px_box(&x0, &y0, &x1, &y1)) return;
+    GdiFlush();
+    for (int yy = y0; yy < y1; yy++) {
+        COLORREF c = mix(top, bottom, h > 1 ? (yy - y) * 255 / (h - 1) : 0);
+        unsigned v = (unsigned)GetRValue(c) << 16 | (unsigned)GetGValue(c) << 8 | GetBValue(c);
+        unsigned *row = s_bits + (size_t)yy * s_bw;
+        for (int xx = x0; xx < x1; xx++) row[xx] = v;
+    }
+}
+
+/* фон окна: мягкий градиент со светлым пятном сверху и тёмной виньеткой по краям; считается один раз */
+
+void d_backdrop(void)
+{
+    if (!s_bits) return;
+    if (!s_back || s_backW != s_bw || s_backH != s_bh || s_backDark != g_dark) {
+        free(s_back);
+        s_back = malloc(sizeof(unsigned) * (size_t)s_bw * s_bh);
+        if (!s_back) { d_fill(0, 0, g_w, g_h, P.bg); return; }
+        s_backW = s_bw; s_backH = s_bh; s_backDark = g_dark;
+        COLORREF top = g_dark ? mix(P.bg, P.blue, 22) : mix(P.bg, RGB(255, 252, 244), 120);
+        COLORREF bot = g_dark ? mix(P.bg, RGB(0, 0, 0), 60) : mix(P.bg, P.gold, 18);
+        float gx = s_bw * 0.32f, gy = -s_bh * 0.15f, gr = (float)(s_bw > s_bh ? s_bw : s_bh) * 0.9f;
+        for (int yy = 0; yy < s_bh; yy++) {
+            COLORREF c = mix(top, bot, s_bh > 1 ? yy * 255 / (s_bh - 1) : 0);
+            float r0 = GetRValue(c), g0 = GetGValue(c), b0 = GetBValue(c);
+            for (int xx = 0; xx < s_bw; xx++) {
+                float dx = (xx - gx) / gr, dy = (yy - gy) / gr, d2 = dx * dx + dy * dy;
+                float glow = d2 < 1 ? (1 - d2) * (g_dark ? 0.10f : 0.06f) : 0;       /* светлое пятно сверху */
+                float vx = (xx - s_bw * 0.5f) / (s_bw * 0.5f), vy = (yy - s_bh * 0.5f) / (s_bh * 0.5f);
+                float vig = 1.0f - (vx * vx + vy * vy) * (g_dark ? 0.16f : 0.07f);  /* виньетка */
+                float r = (r0 + (255 - r0) * glow) * vig, g = (g0 + (255 - g0) * glow) * vig, b = (b0 + (255 - b0) * glow) * vig;
+                s_back[(size_t)yy * s_bw + xx] = (unsigned)r << 16 | (unsigned)g << 8 | (unsigned)b;
+            }
+        }
+    }
+    GdiFlush();
+    memcpy(s_bits, s_back, sizeof(unsigned) * (size_t)s_bw * s_bh);
 }
 
 void d_line(int x1, int y1, int x2, int y2, COLORREF c, int t)
@@ -211,17 +384,30 @@ void d_poly(const POINT *pts, int n, COLORREF fill, COLORREF border, int t)
     if (pen) DeleteObject(pen);
 }
 
+/* круг со сглаженным краем; рамка толщиной t — по окружности (как перо GDI) */
 void d_circle(int cx, int cy, int r, COLORREF fill, COLORREF border, int t)
 {
-    HPEN pen = border != CLR_INVALID && t > 1 ? CreatePen(PS_SOLID, t, border) : 0;
-    HGDIOBJ op = SelectObject(s_dc, pen ? (HGDIOBJ)pen : border == CLR_INVALID ? GetStockObject(NULL_PEN) : GetStockObject(DC_PEN));
-    HGDIOBJ ob = SelectObject(s_dc, fill == CLR_INVALID ? GetStockObject(NULL_BRUSH) : GetStockObject(DC_BRUSH));
-    if (border != CLR_INVALID && !pen) SetDCPenColor(s_dc, border);
-    if (fill != CLR_INVALID) SetDCBrushColor(s_dc, fill);
-    Ellipse(s_dc, cx - r, cy - r, cx + r + 1, cy + r + 1);
-    SelectObject(s_dc, op);
-    SelectObject(s_dc, ob);
-    if (pen) DeleteObject(pen);
+    if (r < 0) return;
+    float ht = border != CLR_INVALID ? (t < 1 ? 1 : t) * 0.5f : 0;
+    int e = (int)(r + ht + 2);
+    int x0 = cx - e, y0 = cy - e, x1 = cx + e + 1, y1 = cy + e + 1;
+    if (!px_box(&x0, &y0, &x1, &y1)) return;
+    GdiFlush();
+    float fcx = cx + 0.5f, fcy = cy + 0.5f;
+    unsigned fr = GetRValue(fill), fg = GetGValue(fill), fb = GetBValue(fill);
+    unsigned br = GetRValue(border), bgc = GetGValue(border), bb = GetBValue(border);
+    for (int yy = y0; yy < y1; yy++) {
+        unsigned *row = s_bits + (size_t)yy * s_bw;
+        float dy = yy + 0.5f - fcy;
+        for (int xx = x0; xx < x1; xx++) {
+            float dx = xx + 0.5f - fcx, d = sqrtf(dx * dx + dy * dy) - r;
+            if (fill != CLR_INVALID) { float c = cover(d); if (c > 0) px_blend(row + xx, fr, fg, fb, (unsigned)(c * 255 + 0.5f)); }
+            if (border != CLR_INVALID) {
+                float c = cover(d - ht) - cover(d + ht);
+                if (c > 0) px_blend(row + xx, br, bgc, bb, (unsigned)(c * 255 + 0.5f));
+            }
+        }
+    }
 }
 
 void d_text(int x, int y, const wchar_t *s, int f, COLORREF c)
@@ -522,13 +708,28 @@ int hit_at(int x, int y, int *act, int *arg)
 /* ---------- виджеты ---------- */
 void w_button(int x, int y, int w, int h, const wchar_t *label, int kind, int enabled, int act, int arg)
 {
-    int hv = enabled && hover(act, arg);
-    COLORREF bg, fg, br = CLR_INVALID;
-    if (!enabled) { bg = P.surface2; fg = mix(P.muted, P.surface2, 60); }
-    else if (kind == B_PRIMARY || kind == B_DANGER) { bg = hv ? mix(P.red, P.ink, 40) : P.red; fg = P.onAccent; }
-    else if (kind == B_SECONDARY) { bg = hv ? mix(P.surface2, P.ink, 22) : P.surface2; fg = P.ink; br = P.line; }
-    else { bg = hv ? P.blueSoft : CLR_INVALID; fg = P.blue; }
-    d_rrect(x, y, w, h, SC(5), bg, br);
+    int hv = enabled && hover(act, arg), r = h / 2 < SC(10) ? h / 2 : SC(10);
+    COLORREF fg;
+    if (!enabled) {
+        d_rrect(x, y, w, h, r, mix(P.surface2, P.surface, 80), P.line);
+        fg = mix(P.muted, P.surface2, 70);
+    } else if (kind == B_PRIMARY || kind == B_DANGER) {
+        /* кармин с объёмом: светлее сверху, тень и блик по верхнему краю */
+        COLORREF base = kind == B_DANGER ? mix(P.red, RGB(120, 0, 20), 40) : P.red;
+        COLORREF top = mix(base, RGB(255, 255, 255), hv ? 70 : 40), bot = mix(base, RGB(0, 0, 0), hv ? 10 : 40);
+        d_shadow(x, y, w, h, r, SC(hv ? 10 : 7), g_dark ? 120 : 70);
+        d_rrect_grad(x, y, w, h, r, top, bot, mix(base, RGB(0, 0, 0), 70));
+        d_fill(x + r, y + SC(1), w - 2 * r, 1, mix(top, RGB(255, 255, 255), 90));
+        fg = P.onAccent;
+    } else if (kind == B_SECONDARY) {
+        COLORREF top = mix(P.surface2, P.ink, hv ? 26 : 10), bot = mix(P.surface2, P.bg, hv ? 20 : 60);
+        d_shadow(x, y, w, h, r, SC(5), g_dark ? 90 : 40);
+        d_rrect_grad(x, y, w, h, r, top, bot, hv ? mix(P.line, P.ink, 70) : P.line);
+        fg = P.ink;
+    } else {
+        if (hv) d_rrect(x, y, w, h, r, P.blueSoft, CLR_INVALID);
+        fg = P.blue;
+    }
     int th = d_font_h(F_BODY_B);
     d_text_c(x, y + (h - th) / 2, w, label, F_BODY_B, fg);
     if (enabled) hit(x, y, w, h, act, arg);
@@ -548,8 +749,8 @@ void w_scrollbar(int x, int y, int h, int content, int view, int scroll)
     int th = h * view / content;
     if (th < SC(30)) th = SC(30);
     int ty = y + (int)((long long)(h - th) * scroll / (content - view));
-    d_rrect(x, y, SC(5), h, SC(2), mix(P.surface, P.line, 120), CLR_INVALID);
-    d_rrect(x, ty, SC(5), th, SC(2), P.muted, CLR_INVALID);
+    d_rrect(x + SC(1), y, SC(4), h, SC(2), mix(P.surface, P.line, 140), CLR_INVALID);
+    d_rrect(x, ty, SC(6), th, SC(3), mix(P.muted, P.surface, 40), CLR_INVALID);
 }
 
 /* ---------- сервис ---------- */
