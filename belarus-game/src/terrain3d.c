@@ -39,6 +39,14 @@ static Chunk  *s_chunks;
 static int     s_nchunks;
 static double  s_x0 = TERRAIN_X0, s_y0 = TERRAIN_Y0, s_x1 = TERRAIN_X1, s_y1 = TERRAIN_Y1;
 static double  s_outlineSign = 1.0;  /* +1 — контур против часовой стрелки */
+static unsigned char *s_sh;          /* тень плиты на плоскости земель государств, 0..255 */
+static int     s_shW, s_shH, s_shDirty = 1;
+static float   s_shX0, s_shY0;
+/* Плита по кускам (Chunk): 0 — земель нет, 1 — одна земля без границ рядом (оттенок без поиска),
+ * 2 — рядом граница (поиск земли и линии в каждой точке). Считается при смене земель. */
+static unsigned char *s_chMode, *s_chTop;
+static int     s_chDirty = 1, s_slabMode, s_slabTop;
+static unsigned s_slabPlain, s_slabF;   /* режим 1 без штриховки: цвет земли и доля оттенка 0..256 */
 
 /* ---------- кадр ---------- */
 static float  *s_vx, *s_vy, *s_vz;   /* вершины в координатах камеры */
@@ -61,6 +69,12 @@ void t3d_free(void)
 {
     for (int i = 0; i < s_nmip; i++) image_free(&s_mip[i]);
     s_nmip = 0;
+    free(s_sh);
+    s_sh = 0;
+    s_shDirty = 1;                       /* тень земель — от новой плиты */
+    free(s_chMode); free(s_chTop);
+    s_chMode = s_chTop = 0;
+    s_chDirty = 1;
     free(s_hz); free(s_in); free(s_cells); free(s_chunks);
     free(s_vx); free(s_vy); free(s_vz); free(s_sx); free(s_sy);
     free(s_cb); free(s_zb);
@@ -187,15 +201,18 @@ void t3d_cam_clamp(T3Cam *c)
 {
     if (!(c->pitch >= 14.0)) c->pitch = 14.0;      /* !(…) ловит и NaN */
     if (c->pitch > 89.0) c->pitch = 89.0;
-    if (!(c->zoom >= 0.7)) c->zoom = 0.7;
+    /* отдаление до 0.35 — целиком видны земли государств вокруг (Речь Посполитая, Российская империя) */
+    if (!(c->zoom >= 0.35)) c->zoom = 0.35;
     if (c->zoom > 9.0) c->zoom = 9.0;
     c->yaw = fmod(c->yaw, 360.0);
     if (!(c->yaw == c->yaw)) c->yaw = 0;
     if (c->yaw < 0) c->yaw += 360.0;
-    if (!(c->tx >= s_x0)) c->tx = s_x0;
-    if (c->tx > s_x1) c->tx = s_x1;
-    if (!(c->ty >= s_y0)) c->ty = s_y0;
-    if (c->ty > s_y1) c->ty = s_y1;
+    /* цель — над плитой или над соседними землями (до ~250 км от плиты), но тем ближе к плите, чем ближе камера */
+    double m = c->zoom < 1.0 ? 250.0 : 250.0 / c->zoom;
+    if (!(c->tx >= s_x0 - m)) c->tx = s_x0 - m;
+    if (c->tx > s_x1 + m) c->tx = s_x1 + m;
+    if (!(c->ty >= s_y0 - m)) c->ty = s_y0 - m;
+    if (c->ty > s_y1 + m) c->ty = s_y1 + m;
 }
 
 static void basis(double yaw, double pitch, double fwd[3], double right[3], double up[3])
@@ -289,14 +306,61 @@ typedef struct { float x, y, z, a, b, c; } VV;       /* вершина в коо
 static int s_rw, s_rh;                               /* размер рабочего буфера */
 static double s_f, s_cx, s_cy;
 
-enum { M_TERRAIN, M_WALL, M_BLOB };
+enum { M_TERRAIN, M_WALL, M_BLOB, M_FLAT };
 static int   s_mode, s_mipL;
 static float s_shade;
 static float s_tint[3], s_grey;
+static unsigned s_flat;                              /* M_FLAT: готовый цвет */
 
 #define MAX_BLOBS 24
 static T3Blob s_blobs[MAX_BLOBS];
 static int    s_nblobs;
+
+/* ---------- земли государств ---------- */
+#define AG_CELL    6.0f      /* ячейка сетки поиска земли, км */
+#define AG_MARGIN  7.0f      /* рёбра с линией попадают и в соседние ячейки — запас под ширину линии */
+#define AREA_WALL  2.6       /* стенка по краю плиты, км */
+#define BOARD_WALL 9.0       /* стенка по краю доски — толщина «столешницы», км */
+#define STRIPE_KM  24.0f     /* шаг штриховки, км */
+#define SLAB_TOL   7.0       /* ребро ближе к контуру плиты — граница Беларуси, линия не нужна */
+#define SH_CELL    2.0f      /* сетка тени плиты Беларуси на плоскости земель, км */
+
+typedef struct { float x0, y0, x1, y1; unsigned char area, line, wall; } AEdge;
+typedef struct { float r, g, b; unsigned rgb, srgb; } ACol;      /* плита; она же и вторая полоса штриховки */
+
+static T3Area   s_areas[T3_MAX_AREAS];   /* по возрастанию prio: бит i маски — земля s_areas[i] */
+static ACol     s_acol[T3_MAX_AREAS];
+static int      s_nareas;
+static unsigned s_plateMask, s_wholeMask;   /* земли с плитой; земли n = 0 (вся плита Беларуси) */
+static float    s_bx0, s_by0, s_bx1, s_by1;  /* «доска» */
+static AEdge   *s_ae;
+static int      s_nae;
+static int      s_agW, s_agH;
+static float    s_agX0, s_agY0;
+static unsigned *s_agIn;                 /* земли, в которых лежит центр ячейки */
+static int     *s_agOff;                 /* рёбра у ячейки c: s_agE[s_agOff[c] .. s_agOff[c + 1]) */
+static unsigned short *s_agE;
+/* мелкая сетка AF_CELL (3×3 в ячейке AG_CELL): земли в центре и далеко ли граница — в большинстве точек
+ * поиск по рёбрам не нужен */
+#define AF_CELL    2.0f
+#define AF_HALF    1.4143f   /* полудиагональ мелкой ячейки, км */
+#define AF_STEP    0.125f    /* шаг расстояния до линии в s_afInfo, км */
+static unsigned short *s_afMask;
+static unsigned char  *s_afInfo;         /* бит 7 — ребро проходит через ячейку; биты 0..6 — до линии, шаги AF_STEP */
+static int      s_afW, s_afH;
+static void     build_fine_grid(void);
+static float    s_lineHalf;              /* полуширина линии границы, пикселей рабочего буфера */
+static float    s_kmScale;               /* км на пиксель рабочего буфера на глубине 1 км (с поправкой на наклон) */
+static int      s_slabOn;                /* земли видны и на плите Беларуси */
+
+static inline unsigned bilerp(unsigned a, unsigned b, unsigned f)   /* f: 0..256 */
+{
+    unsigned rb = ((a & 0x00FF00FFu) * (256 - f) + (b & 0x00FF00FFu) * f) >> 8;
+    unsigned ag = (((a >> 8) & 0x00FF00FFu) * (256 - f) + ((b >> 8) & 0x00FF00FFu) * f) >> 8;
+    return (rb & 0x00FF00FFu) | ((ag & 0x00FF00FFu) << 8);
+}
+
+static inline unsigned frac256(float t) { return t <= 0 ? 0u : t >= 1 ? 256u : (unsigned)(t * 256.0f); }
 
 void t3d_set_blobs(const T3Blob *b, int n)
 {
@@ -345,12 +409,404 @@ double t3d_outline_hit(double x, double y, double dx, double dy)
     return best;
 }
 
-static inline unsigned bilerp(unsigned a, unsigned b, unsigned f)   /* f: 0..256 */
+/* ---------- земли государств: сетка поиска, тень, цвет точки ---------- */
+static double outline_dist(double x, double y)
 {
-    unsigned rb = ((a & 0x00FF00FFu) * (256 - f) + (b & 0x00FF00FFu) * f) >> 8;
-    unsigned ag = (((a >> 8) & 0x00FF00FFu) * (256 - f) + ((b >> 8) & 0x00FF00FFu) * f) >> 8;
-    return (rb & 0x00FF00FFu) | ((ag & 0x00FF00FFu) << 8);
+    double best = 1e30;
+    for (int i = 0; i < TERRAIN_OUTLINE_N; i++) {
+        const float *a = TERRAIN_OUTLINE[i], *b = TERRAIN_OUTLINE[(i + 1) % TERRAIN_OUTLINE_N];
+        double ex = b[0] - a[0], ey = b[1] - a[1], qx = x - a[0], qy = y - a[1], l2 = ex * ex + ey * ey;
+        double s = l2 > 0 ? (qx * ex + qy * ey) / l2 : 0;
+        if (s < 0) s = 0;
+        if (s > 1) s = 1;
+        double dx = qx - s * ex, dy = qy - s * ey, d = dx * dx + dy * dy;
+        if (d < best) best = d;
+    }
+    return sqrt(best);
 }
+
+static int on_board_edge(float x0, float y0, float x1, float y1)
+{
+    const float e = 0.6f;
+    return (fabsf(x0 - s_bx0) < e && fabsf(x1 - s_bx0) < e) || (fabsf(x0 - s_bx1) < e && fabsf(x1 - s_bx1) < e) ||
+           (fabsf(y0 - s_by0) < e && fabsf(y1 - s_by0) < e) || (fabsf(y0 - s_by1) < e && fabsf(y1 - s_by1) < e);
+}
+
+/* расстояние от точки до отрезка, км */
+static inline float seg_dist(float x, float y, const AEdge *e)
+{
+    float ex = e->x1 - e->x0, ey = e->y1 - e->y0, qx = x - e->x0, qy = y - e->y0, l2 = ex * ex + ey * ey;
+    float s = l2 > 0 ? (qx * ex + qy * ey) / l2 : 0.0f;
+    if (s < 0) s = 0;
+    if (s > 1) s = 1;
+    float dx = qx - s * ex, dy = qy - s * ey;
+    return sqrtf(dx * dx + dy * dy);
+}
+
+static int in_slab_mask(double X, double Y)
+{
+    int i = (int)lround((X - s_x0) / (s_x1 - s_x0) * (s_nx - 1)), j = (int)lround((Y - s_y0) / (s_y1 - s_y0) * (s_ny - 1));
+    return i >= 0 && j >= 0 && i < s_nx && j < s_ny && s_in[(size_t)j * s_nx + i];
+}
+
+/* Тень плиты Беларуси на плоскости земель: солнце то же, что у стенок (юго-запад, 35°).
+ * Считается один раз: плита и солнце не двигаются. Под самой плитой — «тень» тоже, после
+ * размытия она даёт мягкое затенение у подножия стенок со всех сторон. */
+static void build_shadow(void)
+{
+    s_shDirty = 0;
+    free(s_sh);
+    s_sh = 0;
+    if (!s_ready) return;
+    const float pad = 50.0f;
+    s_shX0 = (float)s_x0 - pad; s_shY0 = (float)s_y0 - pad;
+    s_shW = (int)((s_x1 - s_x0 + 2 * pad) / SH_CELL) + 2;
+    s_shH = (int)((s_y1 - s_y0 + 2 * pad) / SH_CELL) + 2;
+    size_t n = (size_t)s_shW * s_shH;
+    float *v = malloc(sizeof(float) * n), *t = malloc(sizeof(float) * n);
+    s_sh = malloc(n);
+    if (!v || !t || !s_sh) { free(v); free(t); free(s_sh); s_sh = 0; return; }
+    const double kx = -0.5786 / 0.5736, ky = -0.5786 / 0.5736;     /* к солнцу на 1 км подъёма */
+    for (int j = 0; j < s_shH; j++)
+        for (int i = 0; i < s_shW; i++) {
+            double X = s_shX0 + i * SH_CELL, Y = s_shY0 + j * SH_CELL;
+            float s = 0;
+            if (in_slab_mask(X, Y)) s = 1;
+            else
+                for (double dz = 0.5; dz < 19.0; dz += 0.75) {
+                    double qx = X + kx * dz, qy = Y + ky * dz;
+                    if (qx < s_x0 || qy < s_y0) break;                 /* луч ушёл за плиту — дальше её нет */
+                    if (in_slab_mask(qx, qy) && t3d_height(qx, qy) >= T3_AREA_Z + dz) { s = 1; break; }
+                }
+            v[(size_t)j * s_shW + i] = s;
+        }
+    /* размытие 5×5 дважды — полутень */
+    for (int pass = 0; pass < 2; pass++) {
+        for (int j = 0; j < s_shH; j++)
+            for (int i = 0; i < s_shW; i++) {
+                float s = 0;
+                int c = 0;
+                for (int k = -2; k <= 2; k++) if (i + k >= 0 && i + k < s_shW) { s += v[(size_t)j * s_shW + i + k]; c++; }
+                t[(size_t)j * s_shW + i] = s / c;
+            }
+        for (int j = 0; j < s_shH; j++)
+            for (int i = 0; i < s_shW; i++) {
+                float s = 0;
+                int c = 0;
+                for (int k = -2; k <= 2; k++) if (j + k >= 0 && j + k < s_shH) { s += t[(size_t)(j + k) * s_shW + i]; c++; }
+                v[(size_t)j * s_shW + i] = s / c;
+            }
+    }
+    for (size_t k = 0; k < n; k++) s_sh[k] = (unsigned char)(v[k] * 255.0f + 0.5f);
+    free(v);
+    free(t);
+}
+
+static inline float shadow_at(float X, float Y)
+{
+    float fx = (X - s_shX0) * (1.0f / SH_CELL), fy = (Y - s_shY0) * (1.0f / SH_CELL);
+    if (!(fx >= 0 && fy >= 0 && fx < s_shW - 1 && fy < s_shH - 1)) return 0;
+    int i = (int)fx, j = (int)fy;
+    float tx = fx - i, ty = fy - j;
+    const unsigned char *p = s_sh + (size_t)j * s_shW + i;
+    return ((p[0] * (1 - tx) + p[1] * tx) * (1 - ty) + (p[s_shW] * (1 - tx) + p[s_shW + 1] * tx) * ty) * (1.0f / 255.0f);
+}
+
+void t3d_set_areas(const T3Area *a, int n, double bx0, double by0, double bx1, double by1)
+{
+    if (n < 0 || !a) n = 0;
+    if (n > T3_MAX_AREAS) n = T3_MAX_AREAS;
+    /* по возрастанию prio, при равных — в порядке списка */
+    s_nareas = 0;
+    for (int i = 0; i < n; i++) {
+        int j = s_nareas++;
+        while (j > 0 && s_areas[j - 1].prio > a[i].prio) { s_areas[j] = s_areas[j - 1]; j--; }
+        s_areas[j] = a[i];
+        if (s_areas[j].n > T3_AREA_PTS) s_areas[j].n = T3_AREA_PTS;
+        if (s_areas[j].n < 3) s_areas[j].n = 0;
+    }
+    s_bx0 = (float)bx0; s_by0 = (float)by0; s_bx1 = (float)bx1; s_by1 = (float)by1;
+    s_chDirty = 1;
+    s_plateMask = s_wholeMask = 0;
+    s_nae = 0;
+    free(s_ae); free(s_agIn); free(s_agOff); free(s_agE); free(s_afMask); free(s_afInfo);
+    s_afMask = 0; s_afInfo = 0;
+    s_afW = s_afH = 0;
+    s_ae = 0; s_agIn = 0; s_agOff = 0; s_agE = 0;
+    s_agW = s_agH = 0;
+    if (!s_nareas) return;
+    int total = 0;
+    for (int i = 0; i < s_nareas; i++) total += s_areas[i].n;
+    s_ae = malloc(sizeof(AEdge) * (size_t)(total > 0 ? total : 1));
+    if (!s_ae) { s_nareas = 0; return; }
+    for (int i = 0; i < s_nareas; i++) {
+        T3Area *A = &s_areas[i];
+        ACol *c = &s_acol[i];
+        c->r = (float)(A->color >> 16 & 255); c->g = (float)(A->color >> 8 & 255); c->b = (float)(A->color & 255);
+        c->rgb = A->color & 0xFFFFFFu;
+        c->srgb = bilerp(c->rgb, 0, 87);                  /* вторая полоса — на треть темнее */
+        if (A->slab < 0) A->slab = 0;
+        if (A->slab > 1) A->slab = 1;
+        if (!A->n) { s_wholeMask |= 1u << i; continue; }
+        if (A->plate) s_plateMask |= 1u << i;
+        /* рёбра против часовой стрелки: наружу — вправо от ребра */
+        double ar = 0;
+        for (int k = 0; k < A->n; k++) {
+            int k2 = (k + 1) % A->n;
+            ar += (double)A->x[k] * A->y[k2] - (double)A->x[k2] * A->y[k];
+        }
+        for (int k = 0; k < A->n; k++) {
+            int k2 = (k + 1) % A->n;
+            AEdge *e = &s_ae[s_nae++];
+            if (ar >= 0) { e->x0 = A->x[k]; e->y0 = A->y[k]; e->x1 = A->x[k2]; e->y1 = A->y[k2]; }
+            else { e->x0 = A->x[k2]; e->y0 = A->y[k2]; e->x1 = A->x[k]; e->y1 = A->y[k]; }
+            e->area = (unsigned char)i;
+            int board = on_board_edge(e->x0, e->y0, e->x1, e->y1);
+            int slab = !board && outline_dist(e->x0, e->y0) < SLAB_TOL && outline_dist(e->x1, e->y1) < SLAB_TOL &&
+                       outline_dist((e->x0 + e->x1) / 2, (e->y0 + e->y1) / 2) < SLAB_TOL;
+            e->line = !board && !slab;
+            e->wall = !A->plate ? 0 : board ? 2 : e->line;      /* 2 — край доски: стенка выше */
+        }
+    }
+    /* сетка поиска на всю доску с запасом */
+    s_agX0 = s_bx0 - AG_MARGIN; s_agY0 = s_by0 - AG_MARGIN;
+    s_agW = (int)ceilf((s_bx1 - s_bx0 + 2 * AG_MARGIN) / AG_CELL);
+    s_agH = (int)ceilf((s_by1 - s_by0 + 2 * AG_MARGIN) / AG_CELL);
+    if (s_agW < 1 || s_agH < 1 || s_agW > 4000 || s_agH > 4000) { s_agW = s_agH = 0; return; }
+    size_t nc = (size_t)s_agW * s_agH;
+    s_agIn = calloc(nc, sizeof(unsigned));
+    s_agOff = calloc(nc + 1, sizeof(int));
+    int *cur = malloc(sizeof(int) * nc);
+    if (!s_agIn || !s_agOff || !cur) { free(cur); s_agW = s_agH = 0; return; }
+    /* центры ячеек внутри земель: построчно, правило чёт-нечет */
+    for (int cy = 0; cy < s_agH; cy++) {
+        float yc = s_agY0 + (cy + 0.5f) * AG_CELL;
+        for (int e0 = 0, i = 0; i < s_nareas; i++) {
+            int ne = s_areas[i].n;
+            float xs[T3_AREA_PTS];
+            int k = 0;
+            for (int q = e0; q < e0 + ne; q++) {
+                const AEdge *e = &s_ae[q];
+                if ((e->y0 > yc) != (e->y1 > yc)) xs[k++] = e->x0 + (yc - e->y0) * (e->x1 - e->x0) / (e->y1 - e->y0);
+            }
+            e0 += ne;
+            for (int p = 1; p < k; p++) {
+                float v = xs[p];
+                int q = p - 1;
+                while (q >= 0 && xs[q] > v) { xs[q + 1] = xs[q]; q--; }
+                xs[q + 1] = v;
+            }
+            for (int p = 0; p + 1 < k; p += 2) {
+                int c0 = (int)ceilf((xs[p] - s_agX0) / AG_CELL - 0.5f), c1 = (int)floorf((xs[p + 1] - s_agX0) / AG_CELL - 0.5f);
+                if (c0 < 0) c0 = 0;
+                if (c1 > s_agW - 1) c1 = s_agW - 1;
+                for (int cx = c0; cx <= c1; cx++) s_agIn[(size_t)cy * s_agW + cx] |= 1u << i;
+            }
+        }
+    }
+    /* рёбра, проходящие через ячейку (с линией — и рядом с ней) */
+    const float half = AG_CELL * 0.7072f;
+    for (int pass = 0; pass < 2; pass++) {
+        for (int q = 0; q < s_nae; q++) {
+            const AEdge *e = &s_ae[q];
+            float m = e->line ? AG_MARGIN : 0.05f;
+            int cx0 = (int)floorf((fminf(e->x0, e->x1) - m - s_agX0) / AG_CELL), cx1 = (int)floorf((fmaxf(e->x0, e->x1) + m - s_agX0) / AG_CELL);
+            int cy0 = (int)floorf((fminf(e->y0, e->y1) - m - s_agY0) / AG_CELL), cy1 = (int)floorf((fmaxf(e->y0, e->y1) + m - s_agY0) / AG_CELL);
+            if (cx0 < 0) cx0 = 0;
+            if (cy0 < 0) cy0 = 0;
+            if (cx1 > s_agW - 1) cx1 = s_agW - 1;
+            if (cy1 > s_agH - 1) cy1 = s_agH - 1;
+            for (int cy = cy0; cy <= cy1; cy++)
+                for (int cx = cx0; cx <= cx1; cx++) {
+                    if (seg_dist(s_agX0 + (cx + 0.5f) * AG_CELL, s_agY0 + (cy + 0.5f) * AG_CELL, e) > m + half) continue;
+                    size_t c = (size_t)cy * s_agW + cx;
+                    if (pass == 0) s_agOff[c + 1]++;
+                    else s_agE[cur[c]++] = (unsigned short)q;
+                }
+        }
+        if (pass == 0) {
+            for (size_t c = 0; c < nc; c++) s_agOff[c + 1] += s_agOff[c];
+            s_agE = malloc(sizeof(unsigned short) * (size_t)(s_agOff[nc] > 0 ? s_agOff[nc] : 1));
+            if (!s_agE) { free(cur); s_agW = s_agH = 0; return; }
+            memcpy(cur, s_agOff, sizeof(int) * nc);
+        }
+    }
+    free(cur);
+    build_fine_grid();
+}
+
+/* Земли в точке (бит i — s_areas[i]) и ближайшая видимая линия границы: *ld — расстояние, км, *la — чья.
+ * extra — земли, которые и так лежат в точке (n = 0 на плите Беларуси). Линия земли, накрытой в этой
+ * точке землёй выше, не видна: часть государства и земли под властью соседа ложатся поверх чисто.
+ * Линии дальше lim км не ищутся (*ld остаётся огромным). */
+static inline unsigned area_mask_slow(float X, float Y, unsigned extra, float lim, float *ld, int *la)
+{
+    *ld = 1e9f;
+    if (!(X >= s_agX0 && Y >= s_agY0)) return 0;
+    int cx = (int)((X - s_agX0) * (1.0f / AG_CELL)), cy = (int)((Y - s_agY0) * (1.0f / AG_CELL));
+    if (cx >= s_agW || cy >= s_agH) return 0;
+    size_t c = (size_t)cy * s_agW + cx;
+    unsigned in = s_agIn[c];
+    int o0 = s_agOff[c], o1 = s_agOff[c + 1];
+    if (o0 == o1) return in;
+    /* от центра ячейки (там известно, где он) к точке: каждое пересечённое ребро меняет «внутри» */
+    float mx = s_agX0 + (cx + 0.5f) * AG_CELL, my = s_agY0 + (cy + 0.5f) * AG_CELL;
+    float px = X - mx, py = Y - my, best = 1e18f;
+    float qx0 = fminf(X, mx), qx1 = fmaxf(X, mx), qy0 = fminf(Y, my), qy1 = fmaxf(Y, my);
+    for (int k = o0; k < o1; k++) {
+        const AEdge *e = &s_ae[s_agE[k]];
+        /* рамки отрезка «центр — точка» и ребра не пересекаются — пересечения нет */
+        if (fmaxf(e->x0, e->x1) < qx0 || fminf(e->x0, e->x1) > qx1 || fmaxf(e->y0, e->y1) < qy0 || fminf(e->y0, e->y1) > qy1) continue;
+        float ex = e->x1 - e->x0, ey = e->y1 - e->y0;
+        float den = px * ey - py * ex;
+        if (den != 0.0f) {
+            float wx = e->x0 - mx, wy = e->y0 - my;
+            float t = (wx * ey - wy * ex) / den, u = (wx * py - wy * px) / den;
+            if (t >= 0.0f && t < 1.0f && u >= 0.0f && u < 1.0f) in ^= 1u << e->area;
+        }
+    }
+    unsigned all = in | extra;
+    best = lim;
+    for (int k = o0; k < o1; k++) {
+        const AEdge *e = &s_ae[s_agE[k]];
+        if (!e->line || all >> e->area >> 1) continue;
+        /* быстрый отказ по рамке ребра */
+        if (X < fminf(e->x0, e->x1) - best || X > fmaxf(e->x0, e->x1) + best ||
+            Y < fminf(e->y0, e->y1) - best || Y > fmaxf(e->y0, e->y1) + best) continue;
+        float d = seg_dist(X, Y, e);
+        if (d < best) { best = d; *la = e->area; }
+    }
+    if (best >= lim) return in;
+    *ld = best;
+    return in;
+}
+
+/* то же, сначала по мелкой сетке: точка вдали от рёбер и линий — ответ готов */
+static inline unsigned area_mask(float X, float Y, unsigned extra, float lim, float *ld, int *la)
+{
+    if (s_afInfo && X >= s_agX0 && Y >= s_agY0) {
+        int fx = (int)((X - s_agX0) * (1.0f / AF_CELL)), fy = (int)((Y - s_agY0) * (1.0f / AF_CELL));
+        if (fx < s_afW && fy < s_afH) {
+            size_t f = (size_t)fy * s_afW + fx;
+            unsigned inf = s_afInfo[f];
+            if (!(inf & 0x80) && (float)(inf & 0x7F) * AF_STEP - AF_HALF > lim) { *ld = 1e9f; return s_afMask[f]; }
+        }
+    }
+    return area_mask_slow(X, Y, extra, lim, ld, la);
+}
+
+/* мелкая сетка по готовой крупной */
+static void build_fine_grid(void)
+{
+    s_afW = s_agW * 3; s_afH = s_agH * 3;
+    size_t n = (size_t)s_afW * s_afH;
+    s_afMask = malloc(sizeof(unsigned short) * n);
+    s_afInfo = malloc(n);
+    if (!s_afMask || !s_afInfo) { free(s_afMask); free(s_afInfo); s_afMask = 0; s_afInfo = 0; s_afW = s_afH = 0; return; }
+    for (int fy = 0; fy < s_afH; fy++)
+        for (int fx = 0; fx < s_afW; fx++) {
+            float X = s_agX0 + (fx + 0.5f) * AF_CELL, Y = s_agY0 + (fy + 0.5f) * AF_CELL, ld;
+            int la = 0;
+            size_t f = (size_t)fy * s_afW + fx, c = (size_t)(fy / 3) * s_agW + fx / 3;
+            s_afMask[f] = (unsigned short)area_mask_slow(X, Y, 0, 0, &ld, &la);
+            /* в списке крупной ячейки — все линии ближе ~8 км и все рёбра, проходящие через неё */
+            float dl = 127 * AF_STEP;
+            int cross = 0;
+            for (int k = s_agOff[c]; k < s_agOff[c + 1]; k++) {
+                const AEdge *e = &s_ae[s_agE[k]];
+                float d = seg_dist(X, Y, e);
+                if (d < AF_HALF + 0.01f) cross = 1;
+                if (e->line && d < dl) dl = d;
+            }
+            if (dl > 8.0f) dl = 8.0f;          /* дальше 8 км список неполон */
+            s_afInfo[f] = (unsigned char)((cross ? 0x80 : 0) | (int)(dl / AF_STEP));
+        }
+}
+
+static inline int top_area(unsigned m) { return 31 - __builtin_clz(m); }
+
+/* штриховка: 0 — основной цвет, 1 — вторая полоса; foot — км на пиксель (размытие края полос) */
+static inline float stripe(float X, float Y, float foot)
+{
+    float s = (X + Y) * (1.0f / STRIPE_KM);
+    float f = s - floorf(s);
+    float tri = 1.0f - 2.0f * fabsf(f - 0.5f);                 /* 0 на краю периода, 1 в середине */
+    float w = foot * (1.0f / STRIPE_KM) * 2.5f;                /* ширина перехода в долях tri */
+    if (w > 0.6f) return 0.38f;                                /* полосы мельче пикселя — средний тон */
+    float m = (tri - 0.62f) / (w + 1e-6f) + 0.5f;
+    m = m < 0 ? 0 : m > 1 ? 1 : m;
+    if (w > 0.3f) m = 0.38f + (m - 0.38f) * (0.6f - w) / 0.3f;
+    return m;
+}
+
+static inline unsigned pack_rgb(float r, float g, float b)
+{
+    unsigned R = r > 255 ? 255u : r < 0 ? 0u : (unsigned)r, Gc = g > 255 ? 255u : g < 0 ? 0u : (unsigned)g, B = b > 255 ? 255u : b < 0 ? 0u : (unsigned)b;
+    return R << 16 | Gc << 8 | B;
+}
+
+/* оттенок земли a на плите Беларуси (со штриховкой у земель под властью соседа) */
+static inline unsigned slab_tint(unsigned col, int a, float X, float Y, float kmpx)
+{
+    const T3Area *A = &s_areas[a];
+    float t = A->slab;
+    if (A->stripes) t += (0.46f - t) * stripe(X, Y, kmpx * 1.6f);
+    return bilerp(col, A->color, frac256(t));
+}
+
+/* оттенок, штриховка и линии границ на плите Беларуси; kmpx — км на пиксель рабочего буфера */
+static inline unsigned slab_color(unsigned col, float X, float Y, float kmpx)
+{
+    float ld;
+    int la = 0;
+    float hw = s_lineHalf * 1.2f * kmpx;
+    unsigned mask = area_mask(X, Y, s_wholeMask, hw + kmpx, &ld, &la) | s_wholeMask;
+    if (mask) col = slab_tint(col, top_area(mask), X, Y, kmpx);
+    if (ld < hw + kmpx) col = bilerp(col, s_areas[la].line, frac256(((hw - ld) / kmpx + 0.5f) * 0.9f));
+    return col;
+}
+
+/* режимы кусков плиты: граница ближе SLAB_NEAR км от куска — точный поиск в каждой точке */
+#define SLAB_NEAR 9.0f
+static void build_chunk_modes(void)
+{
+    s_chDirty = 0;
+    free(s_chMode); free(s_chTop);
+    s_chMode = calloc((size_t)(s_nchunks > 0 ? s_nchunks : 1), 1);
+    s_chTop = calloc((size_t)(s_nchunks > 0 ? s_nchunks : 1), 1);
+    if (!s_chMode || !s_chTop) { free(s_chMode); free(s_chTop); s_chMode = s_chTop = 0; return; }
+    for (int c = 0; c < s_nchunks; c++) {
+        const Chunk *ch = &s_chunks[c];
+        float cx = (ch->x0 + ch->x1) * 0.5f, cy = (ch->y0 + ch->y1) * 0.5f;
+        float r = 0.5f * sqrtf((ch->x1 - ch->x0) * (ch->x1 - ch->x0) + (ch->y1 - ch->y0) * (ch->y1 - ch->y0)) + SLAB_NEAR;
+        int near = 0;
+        for (int q = 0; q < s_nae && !near; q++) near = seg_dist(cx, cy, &s_ae[q]) < r;
+        float ld;
+        int la = 0;
+        unsigned m = area_mask(cx, cy, s_wholeMask, 0, &ld, &la) | s_wholeMask;
+        s_chMode[c] = (unsigned char)(near ? 2 : m ? 1 : 0);
+        s_chTop[c] = (unsigned char)(m ? top_area(m) : 0);
+    }
+}
+
+/* цвет плиты земель в точке */
+static inline unsigned plate_color(unsigned mask, float X, float Y, float ld, int la, float kmpx, float foot)
+{
+    int a = top_area(mask);
+    const ACol *c = &s_acol[a];
+    unsigned col = c->rgb;
+    if (s_areas[a].stripes) col = bilerp(col, c->srgb, frac256(stripe(X, Y, foot)));
+    if (s_sh) {
+        float sh = shadow_at(X, Y);
+        if (sh > 0) col = bilerp(col, 0, frac256(0.55f * sh));
+    }
+    if (ld < s_lineHalf * kmpx + kmpx) col = bilerp(col, s_areas[la].line, frac256((s_lineHalf * kmpx - ld) / kmpx + 0.5f));
+    /* у края доски — тонкий светлый кант, как обрез листа атласа */
+    float d = fminf(fminf(X - s_bx0, s_bx1 - X), fminf(Y - s_by0, s_by1 - Y)), e = 1.6f * kmpx;
+    if (d < e) col = bilerp(col, 0xF4EEE0u, frac256(0.55f * (1.0f - d / e)));
+    return col;
+}
+
 
 static inline unsigned tex_sample(const Image *m, float u, float v)
 {
@@ -431,6 +887,13 @@ static void raster(const RV *p0, const RV *p1, const RV *p2)
                     unsigned r = ((t >> 16) & 255u) * 255u / al, g = ((t >> 8) & 255u) * 255u / al, b = (t & 255u) * 255u / al;
                     col = (r > 255 ? 255 : r) << 16 | (g > 255 ? 255 : g) << 8 | (b > 255 ? 255 : b);
                 } else col = t & 0xFFFFFFu;
+                if (s_slabMode == 2)    /* земли государств на плите: u, v — доли вида сверху */
+                    col = slab_color(col, (float)s_x0 + u * (float)(s_x1 - s_x0), (float)s_y1 - v * (float)(s_y1 - s_y0), z * s_kmScale);
+                else if (s_slabMode == 1)
+                    col = s_slabPlain ? bilerp(col, s_slabPlain, s_slabF)
+                                      : slab_tint(col, s_slabTop, (float)s_x0 + u * (float)(s_x1 - s_x0), (float)s_y1 - v * (float)(s_y1 - s_y0), z * s_kmScale);
+            } else if (s_mode == M_FLAT) {
+                col = s_flat;
             } else if (s_mode == M_BLOB) {
                 float u = (ax * px + ay * py + a0) * z, v = (bx * px + by * py + b0) * z;
                 unsigned t = tex_sample(mip, u, v);
@@ -470,7 +933,7 @@ static inline RV to_screen(const VV *v)
 /* mip-уровень по отношению площадей текстуры и экрана */
 static int pick_mip(const VV *v, int n, const RV *s)
 {
-    if (s_mode == M_WALL) return 0;
+    if (s_mode == M_WALL || s_mode == M_FLAT) return 0;
     double ta = 0, sa = 0;
     for (int i = 1; i + 1 < n; i++) {
         ta += fabs((v[i].a - v[0].a) * (v[i + 1].b - v[0].b) - (v[i + 1].a - v[0].a) * (v[i].b - v[0].b));
@@ -547,6 +1010,84 @@ static int ensure_buffers(int w, int h)
     return 1;
 }
 
+/* стенки по внешнему краю плит земель (внутренние границы прячутся под соседней плитой) и по краю доски */
+static void areas_walls(const T3View *v)
+{
+    const double L[3] = { -0.5786, -0.5786, 0.5736 };
+    s_mode = M_FLAT;
+    for (int q = 0; q < s_nae; q++) {
+        const AEdge *e = &s_ae[q];
+        if (!e->wall) continue;
+        double ex = e->x1 - e->x0, ey = e->y1 - e->y0, len = sqrt(ex * ex + ey * ey);
+        if (len < 1e-6) continue;
+        double nx = ey / len, ny = -ex / len;                                   /* наружу (обход против часовой) */
+        double mx = (e->x0 + e->x1) / 2 - v->eye[0], my = (e->y0 + e->y1) / 2 - v->eye[1];
+        if (nx * mx + ny * my >= 0) continue;
+        double d = nx * L[0] + ny * L[1];
+        float k = (float)(0.50 + 0.30 * (d > 0 ? d : 0) - 0.10 * (d < 0 ? -d : 0));
+        const ACol *c = &s_acol[e->area];
+        s_flat = pack_rgb(c->r * k, c->g * k, c->b * k);
+        double depth = e->wall == 2 ? BOARD_WALL : AREA_WALL;
+        VV p[4];
+        view_pt(v, e->x0, e->y0, T3_AREA_Z, &p[0]);
+        view_pt(v, e->x1, e->y1, T3_AREA_Z, &p[1]);
+        view_pt(v, e->x1, e->y1, T3_AREA_Z - depth, &p[2]);
+        view_pt(v, e->x0, e->y0, T3_AREA_Z - depth, &p[3]);
+        for (int i = 0; i < 4; i++) p[i].a = p[i].b = p[i].c = 0;
+        draw_poly(p, 4);
+    }
+}
+
+/* Плоскость земель: построчно луч из пикселя до плоскости Z = T3_AREA_Z. Камера без крена, поэтому
+ * глубина вдоль строки постоянна, а точка на земле движется равномерно — без деления на пиксель. */
+static void areas_plates(const T3View *v)
+{
+    double hgt = T3_AREA_Z - v->eye[2];
+    if (hgt >= 0) return;
+    float gx0 = s_agX0, gy0 = s_agY0, gx1 = s_agX0 + s_agW * AG_CELL, gy1 = s_agY0 + s_agH * AG_CELL;
+    for (int y = 0; y < s_rh; y++) {
+        double b = -((y + 0.5) - s_cy) / s_f;
+        double D[3] = { v->fwd[0] + b * v->up[0], v->fwd[1] + b * v->up[1], v->fwd[2] + b * v->up[2] };
+        if (D[2] > -1e-4) continue;                                             /* выше горизонта */
+        double t = hgt / D[2];                                                  /* глубина */
+        float iw = (float)(1.0 / t);
+        double a0 = (0.5 - s_cx) / s_f, da = 1.0 / s_f;
+        double X0 = v->eye[0] + (D[0] + a0 * v->right[0]) * t, dX = v->right[0] * da * t;
+        double Y0 = v->eye[1] + (D[1] + a0 * v->right[1]) * t, dY = v->right[1] * da * t;
+        /* пиксели строки, попадающие в сетку земель */
+        double lo = 0, hi = s_rw - 1;
+        if (fabs(dX) > 1e-12) {
+            double p0 = (gx0 - X0) / dX, p1 = (gx1 - X0) / dX;
+            if (p0 > p1) { double tt = p0; p0 = p1; p1 = tt; }
+            if (p0 > lo) lo = p0;
+            if (p1 < hi) hi = p1;
+        } else if (X0 < gx0 || X0 >= gx1) continue;
+        if (fabs(dY) > 1e-12) {
+            double p0 = (gy0 - Y0) / dY, p1 = (gy1 - Y0) / dY;
+            if (p0 > p1) { double tt = p0; p0 = p1; p1 = tt; }
+            if (p0 > lo) lo = p0;
+            if (p1 < hi) hi = p1;
+        } else if (Y0 < gy0 || Y0 >= gy1) continue;
+        int xa = (int)ceil(lo), xb = (int)floor(hi);
+        if (xa > xb) continue;
+        /* масштаб: вдоль строки и «в глубину» (наклонная плоскость сжата по вертикали) */
+        double dl = sqrt(D[0] * D[0] + D[1] * D[1] + D[2] * D[2]);
+        float kmH = (float)(t / s_f), kmV = (float)(t * dl * dl / (s_f * -D[2]));
+        float kmpx = sqrtf(kmH * kmV), foot = kmV > kmH ? kmV : kmH, lim = (s_lineHalf + 1.0f) * kmpx;
+        unsigned *crow = s_cb + (size_t)y * s_rw;
+        float *zrow = s_zb + (size_t)y * s_rw;
+        for (int x = xa; x <= xb; x++) {
+            if (iw <= zrow[x]) continue;
+            float X = (float)(X0 + dX * x), Y = (float)(Y0 + dY * x), ld;
+            int la = 0;
+            unsigned m = area_mask(X, Y, 0, lim, &ld, &la) & s_plateMask;
+            if (!m) continue;
+            zrow[x] = iw;
+            crow[x] = plate_color(m, X, Y, ld, la, kmpx, foot);
+        }
+    }
+}
+
 void t3d_render(const T3View *v, unsigned *dst, int stride, unsigned bg, int ss)
 {
     if (ss < 1) ss = 1;
@@ -558,6 +1099,17 @@ void t3d_render(const T3View *v, unsigned *dst, int stride, unsigned bg, int ss)
     }
     s_rw = W; s_rh = H;
     s_f = v->f * ss; s_cx = v->cx * ss; s_cy = v->cy * ss;
+    /* земли государств: линии ~1.7 пикселя; на плите — масштаб по глубине с поправкой на наклон */
+    if (s_shDirty && s_nareas) build_shadow();
+    s_slabOn = s_nareas > 0 && s_agW > 0;
+    if (s_slabOn && s_chDirty) build_chunk_modes();
+    if (!s_chMode) s_slabOn = 0;
+    s_slabMode = 0;
+    s_lineHalf = 0.85f * ss;
+    {
+        double sp = -v->fwd[2];
+        s_kmScale = (float)(1.0 / (s_f * sqrt(sp > 0.2 ? sp : 0.2)));
+    }
     /* фон: лёгкий вертикальный градиент */
     for (int y = 0; y < H; y++) {
         int k = 255 - 26 * y / (H > 1 ? H - 1 : 1);
@@ -610,6 +1162,10 @@ void t3d_render(const T3View *v, unsigned *dst, int stride, unsigned bg, int ss)
     for (int c = 0; c < s_nchunks; c++) {
         const Chunk *ch = &s_chunks[c];
         if (chunk_hidden(v, ch)) continue;
+        s_slabMode = s_slabOn ? s_chMode[c] : 0;
+        s_slabTop = s_slabOn ? s_chTop[c] : 0;
+        s_slabPlain = s_slabMode == 1 && !s_areas[s_slabTop].stripes ? s_areas[s_slabTop].color & 0xFFFFFFu : 0;
+        s_slabF = s_slabPlain ? frac256(s_areas[s_slabTop].slab) : 0;
         for (int n = 0; n < ch->n; n++) {
             int k = s_cells[ch->c0 + n];
             int i = k % s_nx, j = k / s_nx;
@@ -673,6 +1229,12 @@ void t3d_render(const T3View *v, unsigned *dst, int stride, unsigned bg, int ss)
             t[2].a = (float)((bl->x[i2] + bl->ux - s_x0) / W); t[2].b = (float)((s_y1 - (bl->y[i2] + bl->uy)) / H); t[2].c = 0;
             draw_poly(t, 3);
         }
+    }
+
+    /* земли государств — плоскость под плитой: стенки по краю, затем сама плоскость (z-буфер решает, что видно) */
+    if (s_slabOn) {
+        areas_walls(v);
+        areas_plates(v);
     }
 
     /* вывод с усреднением 2x2 */
