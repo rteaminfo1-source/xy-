@@ -218,7 +218,8 @@ static void draw_header(int *outH)
 
     /* ресурсы */
     int rx = pad + yearW, rw = bx - SC(16) - rx;
-    int cols = rw >= 8 * SC(120) ? 8 : 4, rows = cols == 8 ? 1 : 2;
+    /* в одну строку — только если колонка вмещает самое длинное: «4,7 млн +0,27%/год» */
+    int cols = rw >= 8 * SC(172) ? 8 : 4, rows = cols == 8 ? 1 : 2;
     int cw = rw / cols, ch = rows == 1 ? SC(52) : SC(38);
     int ry = rows == 1 ? SC(18) : SC(6);
     double ecoD = inc.total[R_ECO] + (100.0 - G.eco) * 0.1;
@@ -246,20 +247,24 @@ static void draw_header(int *outH)
         int hv = hover(A_HOVER_RES, i);
         if (hv) d_rrect(cx, cy, cw - SC(6), ch, SC(5), P.surface2, CLR_INVALID);
         d_icon(icons[i], cx + SC(6), cy + (ch - SC(18)) / 2, SC(18), ic);
-        int tx = cx + SC(30);
-        if (rows == 1) {
-            d_text(tx, cy + SC(2), names[i], F_TINY, P.muted);
-            d_text(tx, cy + SC(17), val, F_H3, P.ink);
-            if (del[0]) {
-                COLORREF dc = del[0] == L'\x2212' ? P.red : (i == 4 ? P.muted : P.green);
-                d_text(tx + d_text_w(val, F_H3) + SC(6), cy + SC(21), del, F_TINY, dc);
+        /* всё в своей колонке: прибавка не наезжает на соседа — сначала короче («+0,26%» без «/год»),
+         * потом в строку названия, иначе не показывается (подсказка при наведении объясняет) */
+        int tx = cx + SC(30), right = cx + cw - SC(10);
+        int vf = rows == 1 ? F_H3 : F_BODY_B;
+        int ny = cy + (rows == 1 ? SC(2) : SC(1)), vy = cy + (rows == 1 ? SC(17) : SC(15)), dy = cy + (rows == 1 ? SC(21) : SC(17));
+        d_ellipsis(tx, ny, right - tx, names[i], F_TINY, P.muted);
+        d_ellipsis(tx, vy, right - tx, val, vf, P.ink);
+        if (del[0]) {
+            COLORREF dc = del[0] == L'\x2212' ? P.red : (i == 4 ? P.muted : P.green);
+            int dx = tx + d_text_w(val, vf) + SC(rows == 1 ? 6 : 5);
+            if (dx + d_text_w(del, F_TINY) > right) {
+                wchar_t *slash = wcschr(del, L'/');
+                if (slash) *slash = 0;                   /* «+0,26%/год» → «+0,26%» */
             }
-        } else {
-            d_text(tx, cy + SC(1), names[i], F_TINY, P.muted);
-            d_text(tx, cy + SC(15), val, F_BODY_B, P.ink);
-            if (del[0]) {
-                COLORREF dc = del[0] == L'\x2212' ? P.red : (i == 4 ? P.muted : P.green);
-                d_text(tx + d_text_w(val, F_BODY_B) + SC(5), cy + SC(17), del, F_TINY, dc);
+            if (dx + d_text_w(del, F_TINY) <= right) d_text(dx, dy, del, F_TINY, dc);
+            else {
+                int nx = tx + d_text_w(names[i], F_TINY) + SC(6);
+                if (nx + d_text_w(del, F_TINY) <= right) d_text(nx, ny, del, F_TINY, dc);
             }
         }
         hit(cx, cy, cw - SC(6), ch, A_HOVER_RES, i);
@@ -725,7 +730,7 @@ void ui_hover_status(int act, int arg)
         L"Казна: оплачивает стройки, деятелей и решения. Растёт от населения, торговли и производства.",
         L"Знания: тратятся на открытия. Растут от школ, типографий, университетов и вопросов летописца.",
         L"Производство: второй ресурс для строек. Излишки можно продать во вкладке «Курс».",
-        L"Население: растёт от медицины, земледелия и стабильности; падает от войн, эпидемий, низкой экологии.",
+        L"Население: растёт от медицины, земледелия и стабильности; падает от войн, эпидемий, низкой экологии. Зелёное число — рост за год.",
         L"Стабильность: каждый ход сдвигается к целевому уровню. Ниже 40 доходы падают, выше 75 — растут.",
         L"Культура: копится и даёт очки в итоговом счёте. Источник — храмы, книги, театры, газеты, кино.",
         L"Экология: падает от торфа, химии, нефти и мелиорации; ниже 50 тормозит рост населения.",
