@@ -58,6 +58,7 @@ enum { TM_STAND, TM_MARCH, TM_FIRE };
  * count — соединений (рисуется до 9 фигур), dir: +1 — лицом вправо, -1 — влево, mode — TM_*, enemy — враг
  * (форма его эпохи по году year), t — секунды для анимации. Вызывающий сам просит ui_anim_request(). */
 void troops_draw(int x, int y, int size, int unit, int count, int dir, int mode, int enemy, int year, double t);
+void troops_gallery(double t);               /* сцена 39: все виды отрядов во всех режимах */
 
 /* ---------- ui_city.c: городской транспорт (остальное — в citynet.h) ---------- */
 void citynet_map_overlay(const MapProj *pj, int interactive, int large);   /* значки линий у городов */
@@ -78,7 +79,7 @@ int  fx_person_card(int person, int x, int y, int w);    /* блок в окне
 /* пушка у (x, y) — точка опоры колёс; size — длина ствола в пикселях; dir: +1 стреляет вправо, -1 влево;
  * t — время в секундах (выстрел, вспышка, откат, дым — циклом); вызывающий сам просит ui_anim_request() */
 void fx_cannon(int x, int y, int size, int dir, double t);
-void fx_dev_scene(int n);                     /* --scene=70…79 */
+void fx_dev_scene(int n);                     /* --scene=70…79 и 39 (галерея отрядов) */
 
 /* ---------- ui_dev.c: помощники для сцен разработчика ---------- */
 void dev_play_until(int year);                /* новая партия ботом до года (события последнего хода не разрешены) */

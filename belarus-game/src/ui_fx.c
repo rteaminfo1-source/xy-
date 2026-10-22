@@ -22,6 +22,7 @@
 /* свои аргументы A_NEXT: окно взлёта во весь экран, других областей нажатия в нём нет */
 enum { FX_SKIP = 7001, FX_REPLAY, FX_CLOSE, FX_WATCH = 7100 /* + индекс деятеля */ };
 #define FX_BOARD (-2)   /* U.launchPerson: стенд с пушками для проверки (сцена 75) */
+#define FX_TROOPS (-3)  /* U.launchPerson: галерея 3D-отрядов (сцена 39) */
 
 /* небо старта: у каждого полёта своё время суток */
 enum { SKY_GOLDEN, SKY_DUSK, SKY_NIGHT };
@@ -1180,6 +1181,11 @@ void fx_launch_draw(void)
     ui_anim_request();
     double t = launch_time();
     if (U.launchPerson == FX_BOARD) { cannon_board(t); return; }
+    if (U.launchPerson == FX_TROOPS) {
+        troops_gallery(t);
+        w_button(g_w - SC(184), g_h - SC(56), SC(160), SC(42), L"Закрыть", B_SECONDARY, 1, A_NEXT, FX_CLOSE);
+        return;
+    }
     int fi = fx_flight_of(U.launchPerson);
     if (fi < 0) { U.modal = M_NONE; return; }
     const Mission *m = &MISSIONS[fi];
@@ -1461,6 +1467,10 @@ void fx_dev_scene(int n)
         ui_toggle_theme();
         launch_open(person_index("klimuk"));
         s_devT = T_END + 2;
+        break;
+    case 39:                                       /* галерея 3D-отрядов: живая анимация */
+        dev_play_until(1943); dev_resolve();
+        launch_open(FX_TROOPS);
         break;
     case 79:                                       /* окно деятеля с кнопкой «Смотреть взлёт ракеты» */
         dev_play_until(2024); dev_resolve();

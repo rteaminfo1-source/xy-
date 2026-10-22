@@ -9,7 +9,8 @@
 #include <math.h>
 
 /* assets_gen.h объявляет таблицы как static: отметим их использованными, чтобы не было предупреждений */
-__attribute__((unused)) static const void *art_tables_[] = { MAP3D_PTS, MAP3D_CITY, SPR_NAMES, PORTRAIT_IDS, UNIT_IDS };
+__attribute__((unused)) static const void *art_tables_[] = { MAP3D_PTS, MAP3D_CITY, SPR_NAMES, PORTRAIT_IDS, UNIT_IDS,
+                                                             TROOP_IDS, TROOP_FRAMES };
 
 
 
@@ -225,6 +226,77 @@ void art_unit_draw(int idx, int x, int y, int w, int h)
     }
     hit->tick = s_tick;
     blit_clipped(&hit->img, x + (w - dw) / 2, y + (h - dh) / 2, 255);
+}
+
+/* ---------- анимированные отряды ---------- */
+static Image s_tro;
+static int s_troTried, s_troOk;
+/* кэш кадров: (кадр, высота, зеркально); у каждой армии свой размер, а кадров шага и выстрела — 14 на вид */
+#define TCACHE 256
+typedef struct { int cell, h, mirror; unsigned tick; Image img; } TroCache;
+static TroCache s_tc[TCACHE];
+
+int art_troops_available(void)
+{
+    if (!s_troTried) {
+        s_troTried = 1;
+        s_troOk = ASSETS_HAVE_TROOPS && image_load_resource(RES_TROOPS_QOI, &s_tro);
+    }
+    return s_troOk;
+}
+
+int art_troop_variant(const char *id)
+{
+    if (!id || !art_troops_available()) return -1;
+    for (int i = 0; i < TROOP_COUNT; i++)
+        if (strcmp(TROOP_IDS[i], id) == 0) return i;
+    return -1;
+}
+
+int art_troop_frames(int v, int mode, int *first)
+{
+    if (v < 0 || v >= TROOP_COUNT) { *first = 0; return 0; }
+    const short *f = TROOP_FRAMES[v];
+    if (mode == 1) { *first = f[1]; return f[2]; }
+    if (mode == 2) { *first = f[3]; return f[4]; }
+    *first = f[0];
+    return 1;
+}
+
+/* героиня (макушка без убора) — 1,72 единицы модели над землёй в проекции камеры */
+double art_troop_cell_k(void) { return (double)TROOP_CELL_H / (1.72 * TROOP_PPU); }
+
+static void mirror_rows(Image *img)
+{
+    for (int y = 0; y < img->h; y++) {
+        unsigned *r = img->px + (size_t)y * img->w;
+        for (int a = 0, b = img->w - 1; a < b; a++, b--) { unsigned t = r[a]; r[a] = r[b]; r[b] = t; }
+    }
+}
+
+void art_troop_draw(int cell, int ax, int ay, int h, int mirror, int alpha)
+{
+    if (!art_troops_available() || cell < 0 || cell >= TROOP_COUNT * TROOP_COLS || h < 6) return;
+    h = quant_size(h);
+    int w = h * TROOP_CELL_W / TROOP_CELL_H;
+    mirror = mirror ? 1 : 0;
+    s_tick++;
+    TroCache *hit = 0, *old = &s_tc[0];
+    for (int i = 0; i < TCACHE; i++) {
+        if (s_tc[i].img.px && s_tc[i].cell == cell && s_tc[i].h == h && s_tc[i].mirror == mirror) { hit = &s_tc[i]; break; }
+        if (s_tc[i].tick < old->tick) old = &s_tc[i];
+    }
+    if (!hit) {
+        hit = old;
+        image_free(&hit->img);
+        image_scale(&s_tro, (cell % TROOP_COLS) * TROOP_CELL_W, (cell / TROOP_COLS) * TROOP_CELL_H,
+                    TROOP_CELL_W, TROOP_CELL_H, &hit->img, w, h);
+        if (mirror && hit->img.px) mirror_rows(&hit->img);
+        hit->cell = cell; hit->h = h; hit->mirror = mirror;
+    }
+    hit->tick = s_tick;
+    int axc = mirror ? TROOP_CELL_W - TROOP_ANCHOR_X : TROOP_ANCHOR_X;
+    blit_clipped(&hit->img, ax - axc * w / TROOP_CELL_W, ay - TROOP_ANCHOR_Y * h / TROOP_CELL_H, alpha);
 }
 
 /* ---------- интерактивная 3D-карта ---------- */

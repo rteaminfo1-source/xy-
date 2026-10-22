@@ -171,7 +171,8 @@ void dev_scene(int n)
     case 97: play_until(1945); resolve(&G); U.tab = TAB_LOG; break;                  /* летопись войны */
     case 98: play_until(1945); resolve(&G); U.tab = TAB_RESULTS; break;              /* итоги: «каждый третий» */
     default:                                   /* сцены модулей */
-        if (n >= 40 && n < 50) front_dev_scene(n);
+        if (n == 39) fx_dev_scene(n);                                                /* галерея 3D-отрядов */
+        else if (n >= 40 && n < 50) front_dev_scene(n);
         else if (n >= 50 && n < 60) states_dev_scene(n);
         else if (n >= 60 && n < 70) citynet_dev_scene(n);
         else if (n >= 70 && n < 80) fx_dev_scene(n);

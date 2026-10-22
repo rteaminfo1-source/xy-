@@ -1,7 +1,10 @@
 /* Отряды на карте: идущие и стреляющие солдаты (у игрока — женщины-героини с косами), конница,
  * пушки с расчётом, танки, машины и самолёты; вражеские дивизии — в форме своей эпохи
  * (тевтонцы с чёрным крестом, стрельцы, наполеоновская пехота, вермахт в касках).
- * Всё рисуется процедурно и анимируется по времени t: шаг, покачивание, откат, вспышки, дым. */
+ * Основной вид — 3D-фигуры из Blender (tools/blender/build_troops.py, атлас troops.qoi): у каждого вида
+ * ряд кадров «стоит | шаг ×8 | выстрел ×6», фигуры смотрят вправо, влево — зеркально; кадр выбирается
+ * по времени t со своей фазой у каждой фигуры. Без атласа всё рисуется процедурно (ниже — запасной
+ * вариант): шаг, покачивание, откат, вспышки, дым. */
 #include "mapview.h"
 #include "war.h"
 #include <math.h>
@@ -329,10 +332,9 @@ static void plane(int x, int y, int h, int dir, int enemy, double t, double ph, 
     }
 }
 
-/* ---------- отряд ---------- */
-void troops_draw(int x, int y, int size, int unit, int count, int dir, int mode, int enemy, int year, double t)
+/* ---------- отряд (запасной процедурный вариант) ---------- */
+static void troops_draw_proc(int x, int y, int size, int unit, int count, int dir, int mode, int enemy, int year, double t)
 {
-    if (size < SC(14)) size = SC(14);
     int cl;
     Look L;
     if (enemy) L = enemy_look(year, &cl);
@@ -376,4 +378,170 @@ void troops_draw(int x, int y, int size, int unit, int count, int dir, int mode,
     /* у вермахта в 1941–1944 — ещё и танк позади пехоты */
     if (enemy && year >= 1941 && year <= 1945 && count >= 4)
         tank(x + dir * -size * 55 / 100, y - h * 30 / 100, h * 95 / 100, &L, dir, mode, t, 0.2, 1);
+}
+
+/* ---------- 3D-отряды из атласа ---------- */
+enum { TC_INF, TC_CAV, TC_GUN, TC_VEH, TC_AIR };
+
+static const char *enemy_variant(int year)
+{
+    return year < 1250 ? "enemy_early" : year < 1450 ? "enemy_teutonic" : year < 1650 ? "enemy_strelets"
+         : year < 1790 ? "enemy_18c" : year < 1870 ? "enemy_napoleon" : year < 1941 ? "enemy_ww1" : "enemy_wehrmacht";
+}
+
+static int troop_class(const char *id)
+{
+    if (!strcmp(id, "khorugv") || !strcmp(id, "hussars")) return TC_CAV;
+    if (!strcmp(id, "artillery") || !strcmp(id, "rockets")) return TC_GUN;
+    if (!strcmp(id, "tank") || !strcmp(id, "missile") || !strcmp(id, "airdef") || !strcmp(id, "enemy_panzer")) return TC_VEH;
+    if (!strcmp(id, "air")) return TC_AIR;
+    return TC_INF;
+}
+
+static double frac(double v) { return v - floor(v); }
+
+/* кадр по режиму и времени: шаг — по кругу (пехота ~1,7 шага в секунду), выстрел — цикл ~1,4 с с неравными
+ * долями: долгий прицел, короткая вспышка, дым; ph — своя фаза фигуры, чтобы строй не двигался в ногу */
+static int troop_cell(int v, int cls, int mode, double t, double ph)
+{
+    if (cls == TC_AIR && mode == TM_STAND) mode = TM_MARCH;          /* самолёт всегда в полёте */
+    int first, n = art_troop_frames(v, mode == TM_MARCH ? 1 : mode == TM_FIRE ? 2 : 0, &first);
+    if (n <= 1) return first;
+    if (mode == TM_MARCH) {
+        double rate = cls == TC_INF ? 0.85 : cls == TC_CAV ? 1.5 : cls == TC_AIR ? 1.6 : 1.1;   /* циклов в секунду */
+        return first + (int)(frac(t * rate + ph) * n) % n;
+    }
+    double cyc = cls == TC_INF ? 1.4 : cls == TC_AIR ? 0.9 : cls == TC_CAV ? 1.2 : 1.9;
+    double f = frac(t / cyc + ph);
+    if (cls != TC_CAV && cls != TC_AIR && n == 6) {
+        static const double W[6] = { 0.30, 0.07, 0.13, 0.17, 0.17, 0.16 };
+        double a = 0;
+        for (int i = 0; i < 6; i++) { a += W[i]; if (f < a) return first + i; }
+        return first + 5;
+    }
+    return first + (int)(f * n) % n;
+}
+
+/* высота клетки на экране для фигуры ростом fh пикселей (героиня — 1,72 единицы модели над землёй) */
+static int cell_h(double fh) { return (int)(fh * art_troop_cell_k() + 0.5); }
+
+static int troops_draw_3d(int x, int y, int size, int unit, int count, int dir, int mode, int enemy, int year, double t)
+{
+    if (!art_troops_available()) return 0;
+    const char *id = enemy ? enemy_variant(year) : unit >= 0 && unit < UNIT_COUNT ? UNIT_TYPES[unit].id : "rifle";
+    int v = art_troop_variant(id);
+    if (v < 0) return 0;
+    int cls = troop_class(id);
+    if (count < 1) count = 1;
+    int maxN = cls == TC_VEH ? 3 : cls == TC_CAV ? 4 : cls == TC_GUN ? (strcmp(id, "rockets") ? 2 : 3) : cls == TC_AIR ? 3 : 9;
+    int n = count < maxN ? count : maxN;
+    double fh = size * (cls == TC_INF ? 0.5 : cls == TC_CAV ? 0.42 : cls == TC_GUN ? 0.42 : 0.38);
+    int ch = cell_h(fh), mirror = dir < 0;
+    if (cls == TC_AIR) {   /* самолёты кружат над полем: дальние — первыми */
+        int ord[3] = { 0, 1, 2 }, px[3], py[3], mr[3];
+        for (int i = 0; i < n; i++) {
+            double a = t * 0.6 + i * 2.1;
+            px[i] = x + (int)(cos(a) * size * 0.42);
+            py[i] = y - size * 42 / 100 + (int)(sin(a) * size * 0.1);
+            mr[i] = sin(a) >= 0;                        /* по эллипсу против часовой: внизу летит влево */
+        }
+        for (int i = 1; i < n; i++)
+            for (int j = i; j > 0 && py[ord[j - 1]] > py[ord[j]]; j--) { int tmp = ord[j]; ord[j] = ord[j - 1]; ord[j - 1] = tmp; }
+        for (int k = 0; k < n; k++) {
+            int i = ord[k];
+            art_troop_draw(troop_cell(v, cls, mode, t, i * 0.37), px[i], py[i], ch, mr[i], 255);
+        }
+        return 1;
+    }
+    /* у вермахта в 1941–1945 за пехотой — танк */
+    if (enemy && year >= 1941 && year <= 1945 && count >= 4) {
+        int pv = art_troop_variant("enemy_panzer");
+        if (pv >= 0)
+            art_troop_draw(troop_cell(pv, TC_VEH, mode, t, 0.2), x - dir * size * 55 / 100, y - (int)(fh * 0.34),
+                           cell_h(fh * 0.95), mirror, 255);
+    }
+    /* строй: две шеренги, задняя выше и мельче; рисуем по глубине — дальние первыми */
+    int cols = (n + 1) / 2;
+    double spk = cls == TC_INF ? 0.9 : cls == TC_CAV ? 0.62 : cls == TC_GUN ? 0.72 : 0.62;
+    int sp = cols > 1 ? (int)(size * spk / cols) : 0;
+    if (cls != TC_INF && n == 2) sp = (int)(size * 0.3);
+    double back = cls == TC_INF ? 0.2 : cls == TC_CAV ? 0.24 : 0.3;
+    int fx[9], fy[9], fs[9], ord[9];
+    for (int i = 0; i < n; i++) {
+        int row = n > 1 ? i % 2 : 0, c = i / 2;
+        fx[i] = x - (cols - 1) * sp / 2 + c * sp + (row ? sp / 3 + (int)(fh * 0.12) : 0) * -dir + ((i * 5 + 1) % 3 - 1) * size / 90;
+        fy[i] = y - (row ? (int)(fh * back) : 0) + ((i * 7 + 3) % 5 - 2) * size / 240;
+        fs[i] = row ? ch * 9 / 10 : ch;
+        ord[i] = i;
+    }
+    for (int i = 1; i < n; i++)
+        for (int j = i; j > 0 && fy[ord[j - 1]] > fy[ord[j]]; j--) { int tmp = ord[j]; ord[j] = ord[j - 1]; ord[j - 1] = tmp; }
+    for (int k = 0; k < n; k++) {
+        int i = ord[k];
+        double ph = frac(i * 0.377 + i * i * 0.071 + (enemy ? 0.5 : 0.0));
+        art_troop_draw(troop_cell(v, cls, mode, t, ph), fx[i], fy[i], fs[i], mirror, 255);
+    }
+    return 1;
+}
+
+void troops_draw(int x, int y, int size, int unit, int count, int dir, int mode, int enemy, int year, double t)
+{
+    if (size < SC(14)) size = SC(14);
+    if (troops_draw_3d(x, y, size, unit, count, dir, mode, enemy, year, t)) return;
+    troops_draw_proc(x, y, size, unit, count, dir, mode, enemy, year, t);
+}
+
+/* ---------- сцена разработчика 39: все виды во всех режимах и строи в размерах карты ---------- */
+static int unit_by_id(const char *id)
+{
+    for (int u = 0; u < UNIT_COUNT; u++) if (!strcmp(UNIT_TYPES[u].id, id)) return u;
+    return -1;
+}
+
+void troops_gallery(double t)
+{
+    static const char *const IDS[] = {
+        "druzhina", "crossbow", "khorugv", "gunners", "musketeers", "hussars", "rockets", "line",
+        "artillery", "rifle", "air", "partisans", "motor", "tank", "missile", "airdef",
+        "enemy_early", "enemy_teutonic", "enemy_strelets", "enemy_18c", "enemy_napoleon", "enemy_ww1",
+        "enemy_wehrmacht", "enemy_panzer" };
+    enum { NV = (int)(sizeof IDS / sizeof IDS[0]), PER = 6 };
+    d_fill(0, 0, g_w, g_h, P.bg);
+    int x0 = SC(24), y = SC(14);
+    d_text(x0, y, L"Отряды на карте: 3D-фигуры — стоит · шагает · стреляет", F_H2, P.ink);
+    y += SC(36);
+    if (!art_troops_available()) {
+        d_text(x0, y, L"Атласа troops.qoi нет — отряды рисуются простыми фигурами", F_BODY_B, P.red);
+        y += SC(30);
+    }
+    int bw = (g_w - 2 * x0) / PER, bh = SC(112);
+    wchar_t s[64];
+    for (int i = 0; i < NV; i++) {
+        int bx = x0 + (i % PER) * bw, by = y + (i / PER) * bh;
+        d_rrect(bx + SC(3), by, bw - SC(6), bh - SC(6), SC(8), P.land, P.line);
+        int v = art_troop_variant(IDS[i]);
+        int cls = troop_class(IDS[i]);
+        int ch = cell_h(SC(cls == TC_INF ? 62 : 50)), gy = by + bh - SC(26);
+        if (cls == TC_AIR) gy -= SC(4);
+        for (int m = 0; m < 3; m++) {
+            int mode = m == 0 ? TM_STAND : m == 1 ? TM_MARCH : TM_FIRE;
+            if (v >= 0) art_troop_draw(troop_cell(v, cls, mode, t, m * 0.31), bx + bw * (16 + m * 30) / 100, gy, ch, 0, 255);
+        }
+        swprintf(s, 64, L"%hs", IDS[i]);
+        d_text(bx + SC(10), by + bh - SC(24), s, F_TINY, P.muted);
+    }
+    y += ((NV + PER - 1) / PER) * bh + SC(6);
+    d_text(x0, y, L"Строи в размерах карты (армия 56–190 пикселей): марш, бой, гарнизон", F_BODY_B, P.ink);
+    y += SC(26);
+    int fh = g_h - y - SC(70);
+    d_rrect(x0, y, g_w - 2 * x0, fh, SC(8), mix(P.land, RGB(120, 140, 80), 90), P.line);
+    int gy = y + fh * 80 / 100, w = g_w - 2 * x0;
+    troops_draw(x0 + w * 7 / 100, gy, SC(70), unit_by_id("rifle"), 9, 1, TM_MARCH, 0, 1943, t);
+    troops_draw(x0 + w * 22 / 100, gy, SC(110), unit_by_id("rifle"), 9, 1, TM_FIRE, 0, 1943, t);
+    troops_draw(x0 + w * 40 / 100, gy, SC(130), -1, 8, -1, TM_FIRE, 1, 1943, t);
+    troops_draw(x0 + w * 55 / 100, gy, SC(90), unit_by_id("druzhina"), 7, 1, TM_FIRE, 0, 1340, t);
+    troops_draw(x0 + w * 66 / 100, gy, SC(90), -1, 6, -1, TM_FIRE, 1, 1340, t);
+    troops_draw(x0 + w * 78 / 100, gy, SC(110), unit_by_id("hussars"), 4, 1, TM_MARCH, 0, 1650, t);
+    troops_draw(x0 + w * 92 / 100, gy, SC(120), unit_by_id("tank"), 3, -1, TM_MARCH, 0, 1944, t);
+    troops_draw(x0 + w * 92 / 100, gy - SC(60), SC(110), unit_by_id("air"), 3, 1, TM_FIRE, 0, 1944, t);
 }

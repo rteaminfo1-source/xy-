@@ -179,6 +179,13 @@ void art_portrait_draw(int idx, int x, int y, int w, int h);      /* вписа�
 int  art_terrain_ready(void);                                     /* 1 — 3D-карта загружена */
 int  art_unit_index(const char *id);                              /* -1, если фигурки нет */
 void art_unit_draw(int idx, int x, int y, int w, int h);          /* 3D-фигурка войска, вписать в прямоугольник */
+/* анимированные 3D-отряды (troops.qoi): вид — ряд кадров «стоит | шаг | выстрел», все смотрят вправо */
+int  art_troops_available(void);
+int  art_troop_variant(const char *id);                           /* -1, если вида нет */
+int  art_troop_frames(int v, int mode, int *first);               /* mode 0 стоит, 1 шаг, 2 выстрел: число кадров */
+/* кадр cell: точка опоры (ax, ay) на земле, h — высота клетки на экране, mirror — лицом влево */
+void art_troop_draw(int cell, int ax, int ay, int h, int mirror, int alpha);
+double art_troop_cell_k(void);                                    /* высота клетки / рост героини в клетке */
 
 /* ui_tabs.c — общие помощники вкладок */
 void     tab_section(int x, int *y, const wchar_t *s);

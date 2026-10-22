@@ -7,6 +7,7 @@
     assets/portraits.png + portraits.json   ->  res/portraits.qoi  (RCDATA 4)
     assets/units.png     + units.json       ->  res/units.qoi      (RCDATA 5)
     assets/terrain.png + terrain_h.png + terrain.json -> res/terrain.qoi, res/terrain_h.qoi (RCDATA 6, 7)
+    assets/troops.png    + troops.json      ->  res/troops.qoi     (RCDATA 8)
 
 а также src/assets_gen.h (размеры, сетка проекции карты, ячейки атласов) и
 res/assets.rc (строки RCDATA только для имеющихся ассетов; app.rc его включает).
@@ -32,8 +33,8 @@ from array import array
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-RES_IDS = {'map3d': 2, 'sprites': 3, 'portraits': 4, 'units': 5, 'terrain': 6, 'terrain_h': 7}
-ATTR = {'map3d': 'map', 'sprites': 'spr', 'portraits': 'por', 'units': 'uni', 'terrain': 'ter'}
+RES_IDS = {'map3d': 2, 'sprites': 3, 'portraits': 4, 'units': 5, 'terrain': 6, 'terrain_h': 7, 'troops': 8}
+ATTR = {'map3d': 'map', 'sprites': 'spr', 'portraits': 'por', 'units': 'uni', 'terrain': 'ter', 'troops': 'tro'}
 
 
 # ---------------------------------------------------------------- QOI ----
@@ -159,7 +160,7 @@ class Pack:
     def __init__(self, root, assets, res, header):
         self.root, self.assets, self.res, self.header = root, assets, res, header
         self.cities = parse_cities(root)
-        self.map = self.spr = self.por = self.uni = self.ter = None
+        self.map = self.spr = self.por = self.uni = self.ter = self.tro = None
         self.notes = []
 
     def _qoi(self, name, png):
@@ -275,6 +276,28 @@ class Pack:
     def do_units(self):
         self.uni = self._id_atlas('units')
 
+    # --- анимированные отряды: ряд кадров на вид (стоит, шаг, выстрел), общий якорь ---
+    def do_troops(self):
+        if not self._have('troops.png', 'troops.json'):
+            return
+        png = os.path.join(self.assets, 'troops.png')
+        js = self._json('troops.json')
+        iw, ih = png_size(png)
+        cw, ch, cols = int(js['cell_w']), int(js['cell_h']), int(js['cols'])
+        ids, frames = [], []
+        for v in js['variants']:
+            st, wk, fi = int(v['stand']), [int(x) for x in v['walk']], [int(x) for x in v['fire']]
+            last = max(st, wk[0] + wk[1] - 1, fi[0] + fi[1] - 1)
+            if wk[1] < 1 or fi[1] < 1 or (last // cols + 1) * ch > ih or cols * cw > iw:
+                raise ValueError('troops.json: кадры вида %s вне листа' % v['id'])
+            ids.append(str(v['id']))
+            frames.append((st, wk[0], wk[1], fi[0], fi[1]))
+        if not ids:
+            raise ValueError('troops.json: нет видов')
+        self.tro = dict(cw=cw, ch=ch, cols=cols, ax=int(js['anchor_x']), ay=int(js['anchor_y']),
+                        ppu=float(js.get('ppu', 48.0)), ids=ids, frames=frames, count=len(ids), w=iw, h=ih,
+                        qoi=self._qoi('troops', png))
+
     # --- интерактивная 3D-карта: вид сверху, высоты, контур плиты ---
     def do_terrain(self):
         if not self._have('terrain.png', 'terrain_h.png', 'terrain.json'):
@@ -318,12 +341,13 @@ class Pack:
                     qoi=self._qoi(name, png))
 
     def _all(self):
-        return [(name, getattr(self, ATTR[name])) for name in ('map3d', 'sprites', 'portraits', 'units', 'terrain')]
+        return [(name, getattr(self, ATTR[name])) for name in ('map3d', 'sprites', 'portraits', 'units', 'terrain',
+                                                                 'troops')]
 
     def run(self):
         os.makedirs(self.res, exist_ok=True)
         for name, fn in (('map3d', self.do_map), ('sprites', self.do_sprites), ('portraits', self.do_portraits),
-                         ('units', self.do_units), ('terrain', self.do_terrain)):
+                         ('units', self.do_units), ('terrain', self.do_terrain), ('troops', self.do_troops)):
             try:
                 fn()
             except Exception as e:          # битый ассет не должен ломать сборку
@@ -364,11 +388,11 @@ def _rows(items, per):
 
 
 def header_text(p):
-    m, s, q, u, t = p.map, p.spr, p.por, p.uni, p.ter
+    m, s, q, u, t, tr = p.map, p.spr, p.por, p.uni, p.ter, p.tro
     ncity = len(p.cities) or (len(m['city']) if m else 1)
     L = ['/* assets_gen.h — СГЕНЕРИРОВАНО tools/pack_assets.py, НЕ РЕДАКТИРОВАТЬ (do not edit).',
          ' * Встроенные рендеры Blender: RCDATA 2 = map3d.qoi, 3 = sprites.qoi, 4 = portraits.qoi, 5 = units.qoi,',
-         ' * 6 = terrain.qoi (вид сверху), 7 = terrain_h.qoi (высоты).',
+         ' * 6 = terrain.qoi (вид сверху), 7 = terrain_h.qoi (высоты), 8 = troops.qoi (анимированные отряды).',
          ' * Если ассета нет, ASSETS_HAVE_* = 0, а остальные определения — безопасные заглушки. */',
          '#ifndef ASSETS_GEN_H', '#define ASSETS_GEN_H', '']
     L += ['/* ---- 3D-карта: пиксели точек сетки (lon0 + i*step, lat0 + j*step), индекс j*NLON + i ---- */',
@@ -441,6 +465,25 @@ def header_text(p):
               '#define TERRAIN_TEX_W 1', '#define TERRAIN_TEX_H 1', '#define TERRAIN_NX 2', '#define TERRAIN_NY 2',
               '#define TERRAIN_ZBOTTOM -22.0', '#define TERRAIN_OUTLINE_N 1',
               'static const float TERRAIN_OUTLINE[1][3] = {{0.0f, 0.0f, 0.0f}};']
+    L += ['', '/* ---- анимированные отряды: ряд кадров на вид (стоит | шаг | выстрел), ячейка TROOP_CELL_W x TROOP_CELL_H,',
+          ' * TROOP_COLS в ряд; якорь (TROOP_ANCHOR_X, TROOP_ANCHOR_Y) — точка опоры на земле; TROOP_PPU — пикселей',
+          ' * клетки на единицу модели (рост героини ~1.9). TROOP_FRAMES: стоит, первый и число кадров шага,',
+          ' * первый и число кадров выстрела ---- */',
+          '#define ASSETS_HAVE_TROOPS %d' % (1 if tr else 0)]
+    if tr:
+        L += ['#define TROOP_CELL_W %d' % tr['cw'], '#define TROOP_CELL_H %d' % tr['ch'],
+              '#define TROOP_COLS %d' % tr['cols'], '#define TROOP_ANCHOR_X %d' % tr['ax'],
+              '#define TROOP_ANCHOR_Y %d' % tr['ay'], '#define TROOP_PPU %s' % _d(tr['ppu']),
+              '#define TROOP_COUNT %d' % tr['count'],
+              'static const char *const TROOP_IDS[%d] = {' % tr['count'],
+              _rows([_cstr(x) for x in tr['ids']], 6), '};',
+              'static const short TROOP_FRAMES[%d][5] = {' % tr['count'],
+              _rows(['{%d, %d, %d, %d, %d}' % f for f in tr['frames']], 4), '};']
+    else:
+        L += ['#define TROOP_CELL_W 1', '#define TROOP_CELL_H 1', '#define TROOP_COLS 1', '#define TROOP_ANCHOR_X 0',
+              '#define TROOP_ANCHOR_Y 0', '#define TROOP_PPU 1.0', '#define TROOP_COUNT 0',
+              'static const char *const TROOP_IDS[1] = {""};',
+              'static const short TROOP_FRAMES[1][5] = {{0, 0, 1, 0, 1}};']
     L += ['', '#endif', '']
     return '\n'.join(L)
 

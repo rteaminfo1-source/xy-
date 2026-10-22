@@ -1,6 +1,6 @@
 /* assets_gen.h — СГЕНЕРИРОВАНО tools/pack_assets.py, НЕ РЕДАКТИРОВАТЬ (do not edit).
  * Встроенные рендеры Blender: RCDATA 2 = map3d.qoi, 3 = sprites.qoi, 4 = portraits.qoi, 5 = units.qoi,
- * 6 = terrain.qoi (вид сверху), 7 = terrain_h.qoi (высоты).
+ * 6 = terrain.qoi (вид сверху), 7 = terrain_h.qoi (высоты), 8 = troops.qoi (анимированные отряды).
  * Если ассета нет, ASSETS_HAVE_* = 0, а остальные определения — безопасные заглушки. */
 #ifndef ASSETS_GEN_H
 #define ASSETS_GEN_H
@@ -572,6 +572,33 @@ static const float TERRAIN_OUTLINE[TERRAIN_OUTLINE_N][3] = {
     {-281.02f, -243.50f, 5.24f}, {-279.26f, -242.55f, 5.35f}, {-277.54f, -241.53f, 5.38f}, {-275.86f, -240.46f, 5.38f},
     {-274.20f, -239.34f, 5.35f}, {-272.56f, -238.20f, 5.30f}, {-270.94f, -237.03f, 5.30f}, {-269.33f, -235.83f, 5.28f},
     {-267.74f, -234.63f, 5.26f}, {-266.16f, -233.40f, 5.24f}, {-264.58f, -232.17f, 5.18f}
+};
+
+/* ---- анимированные отряды: ряд кадров на вид (стоит | шаг | выстрел), ячейка TROOP_CELL_W x TROOP_CELL_H,
+ * TROOP_COLS в ряд; якорь (TROOP_ANCHOR_X, TROOP_ANCHOR_Y) — точка опоры на земле; TROOP_PPU — пикселей
+ * клетки на единицу модели (рост героини ~1.9). TROOP_FRAMES: стоит, первый и число кадров шага,
+ * первый и число кадров выстрела ---- */
+#define ASSETS_HAVE_TROOPS 1
+#define TROOP_CELL_W 144
+#define TROOP_CELL_H 128
+#define TROOP_COLS 15
+#define TROOP_ANCHOR_X 52
+#define TROOP_ANCHOR_Y 116
+#define TROOP_PPU 48.0
+#define TROOP_COUNT 24
+static const char *const TROOP_IDS[24] = {
+    "druzhina", "crossbow", "khorugv", "gunners", "musketeers", "hussars",
+    "rockets", "line", "artillery", "rifle", "air", "partisans",
+    "motor", "tank", "missile", "airdef", "enemy_early", "enemy_teutonic",
+    "enemy_strelets", "enemy_18c", "enemy_napoleon", "enemy_ww1", "enemy_wehrmacht", "enemy_panzer"
+};
+static const short TROOP_FRAMES[24][5] = {
+    {0, 1, 8, 9, 6}, {15, 16, 8, 24, 6}, {30, 31, 8, 39, 6}, {45, 46, 8, 54, 6},
+    {60, 61, 8, 69, 6}, {75, 76, 8, 84, 6}, {90, 91, 8, 99, 6}, {105, 106, 8, 114, 6},
+    {120, 121, 8, 129, 6}, {135, 136, 8, 144, 6}, {150, 151, 8, 159, 6}, {165, 166, 8, 174, 6},
+    {180, 181, 8, 189, 6}, {195, 196, 8, 204, 6}, {210, 211, 8, 219, 6}, {225, 226, 8, 234, 6},
+    {240, 241, 8, 249, 6}, {255, 256, 8, 264, 6}, {270, 271, 8, 279, 6}, {285, 286, 8, 294, 6},
+    {300, 301, 8, 309, 6}, {315, 316, 8, 324, 6}, {330, 331, 8, 339, 6}, {345, 346, 8, 354, 6}
 };
 
 #endif
