@@ -131,6 +131,9 @@ static void draw_title(void)
         w_button(x0, y, bw, bh, L"Новая игра", B_PRIMARY, 1, A_NEW, 0); y += bh + gap;
     }
     w_button(x0, y, bw, bh, L"Как играть", B_SECONDARY, 1, A_HELP, 0); y += bh + gap;
+#ifdef ADMIN_BUILD
+    w_button(x0, y, bw, bh, L"Админ-панель (F9)", B_DANGER, 1, A_ADMIN, -1); y += bh + gap;
+#endif
     int tw3 = (bw - 2 * gap) / 3;
     w_button(x0, y, tw3, SC(36), L"Тема", B_GHOST, 1, A_THEME, 0);
     w_button(x0 + tw3 + gap, y, tw3, SC(36), L"Об игре", B_GHOST, 1, A_CREDITS, 0);
@@ -213,8 +216,17 @@ static void draw_header(int *outH)
         swprintf(lbl, 64, L"Завершить ход  \x2192 %d", game_next_year(&G));
         w_button(bx, SC(12), bw, SC(40), lbl, B_PRIMARY, U.modal == M_NONE, A_END_TURN, 0);
     }
+#ifdef ADMIN_BUILD
+    {   /* админ-версия: третья кнопка — панель */
+        int b3 = (bw - 2 * SC(6)) / 3;
+        w_button(bx, SC(56), b3, SC(26), L"Меню", B_GHOST, 1, A_MENU, 0);
+        w_button(bx + b3 + SC(6), SC(56), b3, SC(26), L"Справка", B_GHOST, 1, A_HELP, 0);
+        w_button(bx + 2 * (b3 + SC(6)), SC(56), b3, SC(26), L"Админ", B_DANGER, 1, A_ADMIN, -1);
+    }
+#else
     w_button(bx, SC(56), bw / 2 - SC(3), SC(26), L"Меню", B_GHOST, 1, A_MENU, 0);
     w_button(bx + bw / 2 + SC(3), SC(56), bw / 2 - SC(3), SC(26), L"Справка", B_GHOST, 1, A_HELP, 0);
+#endif
 
     /* ресурсы */
     int rx = pad + yearW, rw = bx - SC(16) - rx;
@@ -630,6 +642,10 @@ void ui_click(int act, int arg)
     case A_PEACE: { int lib = G.warKind == WAR_LIBERATION; war_peace(&G); ui_toast(L"%ls", lib ? L"Операция остановлена: область остаётся под оккупацией" : L"Поход окончен: войска вернулись без победы"); map_invalidate(); break; }
     case A_PROVINCE: U.modal = M_NONE; U.tab = TAB_ARMY; break;
     case A_MAP_CAM: map_cam_action(arg); U.mapFast = 0; break;
+    case A_ADMIN:
+        if (arg < 0) { U.modal = M_ADMIN; U.modalScroll = 0; }
+        else admin_click(arg);
+        break;
     }
     ui_invalidate();
 }
@@ -645,6 +661,9 @@ void ui_key(WPARAM vk)
     if (U.modal == M_CITYNET && citynet_ui_key(vk)) { ui_invalidate(); return; }
     if (U.modal == M_LAUNCH && fx_ui_key(vk)) { ui_invalidate(); return; }
     if (vk == VK_F1) { U.modal = M_HELP; U.modalScroll = 0; ui_invalidate(); return; }
+#ifdef ADMIN_BUILD
+    if (vk == VK_F9) { U.modal = U.modal == M_ADMIN ? M_NONE : M_ADMIN; U.modalScroll = 0; ui_invalidate(); return; }
+#endif
     if (vk == VK_F2) { ui_toggle_theme(); return; }
     if (U.modal == M_EVENT) {
         if (U.evResult) { if (vk == VK_RETURN || vk == VK_SPACE || vk == VK_ESCAPE) ui_click(A_NEXT, 0); return; }

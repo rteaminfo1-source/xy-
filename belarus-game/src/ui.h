@@ -68,7 +68,8 @@ enum {
     A_PFILTER, A_TIMELINE, A_SCROLLBAR, A_CREDITS, A_MAP_FULL, A_QUEST, A_RULER,
     A_RECRUIT, A_DISBAND, A_DECLARE, A_LIBERATE, A_PEACE, A_PROVINCE, A_MAP_CAM,
     A_NET_OPEN, A_NET_EDGE, A_NET_NODE, A_NET_CLOSE,         /* городской транспорт (ui_city.c) */
-    A_ARMY_SEL, A_FRONT_NODE, A_RAIL_BUILD, A_ARMY_SPLIT      /* армии на карте */
+    A_ARMY_SEL, A_FRONT_NODE, A_RAIL_BUILD, A_ARMY_SPLIT,     /* армии на карте */
+    A_ADMIN                                                   /* админ-версия: команда панели (ui_admin.c) */
 };
 /* кнопки камеры 3D-карты (аргумент A_MAP_CAM) */
 enum { MC_ZOOM_OUT, MC_ZOOM_IN, MC_ROT_LEFT, MC_ROT_RIGHT, MC_RESET, MC_TILT_UP, MC_TILT_DOWN };
@@ -90,7 +91,7 @@ void w_scrollbar(int x, int y, int h, int content, int view, int scroll);
 /* ---------- состояние интерфейса ---------- */
 enum { SCR_TITLE, SCR_GAME };
 enum { M_NONE, M_EVENT, M_ERA, M_FINAL, M_HELP, M_MENU, M_NEWGAME, M_TECH, M_PROJ, M_PERSON, M_CITY, M_CREDITS, M_MAP, M_RULER,
-       M_CITYNET, M_LAUNCH };
+       M_CITYNET, M_LAUNCH, M_ADMIN };
 enum { TAB_TECH, TAB_PROJ, TAB_PEOPLE, TAB_ARMY, TAB_QUESTS, TAB_POLICY, TAB_QUIZ, TAB_LOG, TAB_RESULTS, TAB_COUNT };
 
 typedef struct {
@@ -180,6 +181,10 @@ COLORREF tab_card_fill(void);
 int  tab_army(int x, int y, int w);
 void unit_badge(int u, int x, int y, int w, int h, COLORREF border);  /* фигурка или значок */
 int  landmark_sprite(int p);                                      /* ui_landmarks.c */
+
+/* ui_admin.c — админ-версия (сборка с -DADMIN_BUILD) */
+int  admin_body(int x, int y, int w);
+int  admin_click(int arg);
 
 /* ui_dev.c */
 void dev_scene(int n);

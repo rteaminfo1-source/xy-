@@ -577,7 +577,11 @@ static void data_dir(wchar_t *out, int n)
         swprintf(out, n, L"%ls", base);
         return;
     }
+#ifdef ADMIN_BUILD
+    swprintf(out, n, L"%ls\\BelarusTechFate-Admin", base);   /* у админ-версии свои сохранения */
+#else
     swprintf(out, n, L"%ls\\BelarusTechFate", base);
+#endif
     CreateDirectoryW(out, NULL);
 }
 
@@ -879,7 +883,12 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     int ww = (int)(1400 * s_dpi), wh = (int)(880 * s_dpi);
     if (ww > wa.right - wa.left) ww = wa.right - wa.left;
     if (wh > wa.bottom - wa.top) wh = wa.bottom - wa.top;
-    g_hwnd = CreateWindowExW(0, wc.lpszClassName, L"Судьба Республики Беларусь в объективе технологий",
+#ifdef ADMIN_BUILD
+    const wchar_t *title = L"Судьба Республики Беларусь в объективе технологий — админ-версия";
+#else
+    const wchar_t *title = L"Судьба Республики Беларусь в объективе технологий";
+#endif
+    g_hwnd = CreateWindowExW(0, wc.lpszClassName, title,
                              WS_OVERLAPPEDWINDOW, wa.left + (wa.right - wa.left - ww) / 2, wa.top + (wa.bottom - wa.top - wh) / 2,
                              ww, wh, NULL, NULL, inst, NULL);
     SetTimer(g_hwnd, 2, 1000, NULL);   /* часы минутного дохода */

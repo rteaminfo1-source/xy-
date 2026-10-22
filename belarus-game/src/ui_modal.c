@@ -693,5 +693,6 @@ void modal_draw(void)
     case M_MAP:     map_full(); break;
     case M_CITYNET: citynet_ui_draw(); break;     /* ui_city.c — во весь экран */
     case M_LAUNCH:  fx_launch_draw(); break;      /* ui_fx.c — во весь экран */
+    case M_ADMIN:   modal_run(SC(940), admin_body, 1); break;   /* админ-версия */
     }
 }

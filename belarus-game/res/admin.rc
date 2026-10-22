@@ -1,0 +1,5 @@
+#pragma code_page(65001)
+/* Админ-версия: всё из app.rc и встроенные презентация (801) и текст выступления (802) — их открывает панель (ui_admin.c). */
+#include "app.rc"
+801 RCDATA "presentation.pptx"
+802 RCDATA "speech.docx"

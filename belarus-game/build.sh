@@ -18,3 +18,15 @@ $CC -std=c11 -O2 -s -municode -mwindows -static -D__USE_MINGW_ANSI_STDIO=1 \
     -Wall -Wextra -Wno-missing-field-initializers -Wno-unused-parameter \
     src/*.c build/app.res -o BelarusTech.exe -lgdi32 -luser32 -lkernel32 -lm
 echo "Готово: $(pwd)/BelarusTech.exe"
+# Админ-версия: те же исходники + панель администратора, встроенные презентация и текст выступления (docs/)
+PPTX="docs/Презентация - Судьба Республики Беларусь.pptx"; DOCX="docs/Текст выступления.docx"
+if [ -f "$PPTX" ] && [ -f "$DOCX" ]; then
+    mkdir -p build/admin
+    cp "$PPTX" build/admin/presentation.pptx
+    cp "$DOCX" build/admin/speech.docx
+    $WINDRES -c 65001 -I res -I build/admin -DADMIN_BUILD res/admin.rc -O coff -o build/admin.res
+    $CC -std=c11 -O2 -s -municode -mwindows -static -D__USE_MINGW_ANSI_STDIO=1 -DADMIN_BUILD \
+        -Wall -Wextra -Wno-missing-field-initializers -Wno-unused-parameter \
+        src/*.c build/admin.res -o BelarusTech_Admin.exe -lgdi32 -luser32 -lkernel32 -lm
+    echo "Готово: $(pwd)/BelarusTech_Admin.exe"
+fi
