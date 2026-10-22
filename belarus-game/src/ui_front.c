@@ -868,11 +868,11 @@ void front_overlay(const MapProj *pj, int interactive, int large)
             }
         }
         if (x < mx - sz || x > mx + mw + sz || y < my - sz || y > my + mh + sz) continue;
-        if (battle) {   /* бой в конце хода: пушки бьют по врагу */
-            fx_cannon(x + sz * 32 / 100, y + SC(2), sz * 40 / 100, +1, t);
+        army_token(a, x, y, sz, a == sel, interactive, t);
+        if (battle) {   /* бой в конце хода: пушки перед армией бьют по врагу */
+            fx_cannon(x + sz * 58 / 100, y + SC(4), sz * 46 / 100, +1, t);
             anim = 1;
         }
-        army_token(a, x, y, sz, a == sel, interactive, t);
     }
     if (G.battleTurn == G.turn && !G.over) { battle_cannons(pj, large, t); anim = 1; }
     if (sel >= 0) anim = 1;

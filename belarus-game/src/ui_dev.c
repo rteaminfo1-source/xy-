@@ -2,6 +2,7 @@
 #include "ui.h"
 #include "mapview.h"
 #include "citynet.h"
+#include "front.h"
 #include "war.h"
 #include <string.h>
 
@@ -144,6 +145,31 @@ void dev_scene(int n)
         if (n != 28) U.modal = M_MAP;
         break;
     }
+    /* сцены для презентации: Великая Отечественная война */
+    case 90: play_until(1941); break;                                                /* окно эпохи VI (1941) */
+    case 91: case 92: {                                                              /* «Возмездие», карточка Мазаник */
+        play_until(1943); resolve(&G);
+        for (int i = 0; i < HIST_COUNT; i++)
+            if (n == 91 && strcmp(HIST_EVENTS[i].id, "vozmezdie") == 0) { U.modal = M_EVENT; U.evShown = &HIST_EVENTS[i]; U.evResult = 0; }
+        for (int i = 0; i < PEOPLE_COUNT; i++)
+            if (n == 92 && strcmp(PEOPLE[i].id, "mazanik") == 0) { U.modal = M_PERSON; U.modalArg = i; }
+        break;
+    }
+    case 93: play_until(1943); resolve(&G); U.tab = TAB_PEOPLE; break;               /* героини на вкладке «Деятели» */
+    case 94: case 95: {                                                              /* бой за Могилёвщину: пушки у армии */
+        front_dev_scene(43);
+        int tn = front_target_node(&G);
+        if (tn >= 0) { G.armies[0].node = tn; G.armies[0].dest = -1; }
+        U.selArmy = -1;
+        t3d_cam_reset(&U.cam); U.camInit = 1;
+        t3d_lonlat(n == 94 ? 30.0 : 29.2, n == 94 ? 53.85 : 53.9, &U.cam.tx, &U.cam.ty);
+        U.cam.zoom = n == 94 ? 2.7 : 1.15; U.cam.pitch = n == 94 ? 40 : 50; U.cam.yaw = n == 94 ? 0 : 10;
+        if (n == 95) U.modal = M_NONE;                                               /* панель карты и вкладка «Армия» */
+        break;
+    }
+    case 96: play_until(1943); resolve(&G); U.tab = TAB_QUESTS; break;               /* задания 1943 года */
+    case 97: play_until(1945); resolve(&G); U.tab = TAB_LOG; break;                  /* летопись войны */
+    case 98: play_until(1945); resolve(&G); U.tab = TAB_RESULTS; break;              /* итоги: «каждый третий» */
     default:                                   /* сцены модулей */
         if (n >= 40 && n < 50) front_dev_scene(n);
         else if (n >= 50 && n < 60) states_dev_scene(n);
