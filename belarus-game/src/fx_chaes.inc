@@ -576,6 +576,7 @@ static void chaes_draw(double t)
 /* открывается перед событием «Чернобыль» (один раз за партию) */
 int fx_ui_event(const Event *e)
 {
+    if (berlin_due()) return 1;                      /* 1945: штурм Берлина (fx_berlin.inc) — до окон хода */
     if (!e || !e->id || strcmp(e->id, "chernobyl") != 0 || (G.cutscenes & CS_CHERNOBYL)) return 0;
     G.cutscenes |= CS_CHERNOBYL;
     launch_open(FX_CHAES);

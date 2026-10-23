@@ -5,6 +5,7 @@
  * времени, поэтому заставку можно пропустить, повторить и снять на скриншот в любой момент. */
 #include "mapview.h"
 #include "fx.h"
+#include "war.h"
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
@@ -20,10 +21,11 @@
 #define T_DIP   0.25    /* затемнение при смене плана */
 
 /* свои аргументы A_NEXT: окно взлёта во весь экран, других областей нажатия в нём нет */
-enum { FX_SKIP = 7001, FX_REPLAY, FX_CLOSE, FX_CHAES_WATCH = FX_ARG_CHAES, FX_WATCH = 7100 /* + индекс деятеля */ };
+enum { FX_SKIP = 7001, FX_REPLAY, FX_CLOSE, FX_CHAES_WATCH = FX_ARG_CHAES, FX_BERLIN_WATCH = FX_ARG_BERLIN, FX_WATCH = 7100 /* + индекс деятеля */ };
 #define FX_BOARD (-2)   /* U.launchPerson: стенд с пушками для проверки (сцена 75) */
 #define FX_TROOPS (-3)  /* U.launchPerson: галерея 3D-отрядов (сцена 39) */
 #define FX_CHAES (-4)   /* U.launchPerson: авария на Чернобыльской АЭС (fx_chaes.inc) */
+#define FX_BERLIN (-5)  /* U.launchPerson: штурм Берлина, Знамя Победы (fx_berlin.inc) */
 
 /* небо старта: у каждого полёта своё время суток */
 enum { SKY_GOLDEN, SKY_DUSK, SKY_NIGHT };
@@ -1182,10 +1184,12 @@ static double launch_time(void)
     return s_devT >= 0 ? s_devT : (GetTickCount() - U.animStart) / 1000.0;
 }
 
+static int berlin_due(void);
 #include "fx_chaes.inc"
+#include "fx_berlin.inc"
 
 /* когда заставка доходит до рассказа (карточки) */
-static double launch_end(void) { return U.launchPerson == FX_CHAES ? CH_END : T_END; }
+static double launch_end(void) { return U.launchPerson == FX_CHAES ? CH_END : U.launchPerson == FX_BERLIN ? BE_END : T_END; }
 
 void fx_launch_draw(void)
 {
@@ -1194,6 +1198,7 @@ void fx_launch_draw(void)
     double t = launch_time();
     if (U.launchPerson == FX_BOARD) { cannon_board(t); return; }
     if (U.launchPerson == FX_CHAES) { chaes_draw(t); return; }
+    if (U.launchPerson == FX_BERLIN) { berlin_draw(t); return; }
     if (U.launchPerson == FX_TROOPS) {
         troops_gallery(t);
         w_button(g_w - SC(184), g_h - SC(56), SC(160), SC(42), L"Закрыть", B_SECONDARY, 1, A_NEXT, FX_CLOSE);
@@ -1263,6 +1268,7 @@ int fx_ui_click(int act, int arg)
 {
     if (act != A_NEXT || arg < FX_SKIP) return 0;
     if (arg == FX_CHAES_WATCH) { launch_open(FX_CHAES); return 1; }
+    if (arg == FX_BERLIN_WATCH) { launch_open(FX_BERLIN); return 1; }
     if (arg >= FX_WATCH) {
         if (arg - FX_WATCH >= PEOPLE_COUNT) return 0;
         launch_open(arg - FX_WATCH);
@@ -1279,9 +1285,10 @@ int fx_ui_click(int act, int arg)
 void fx_ui_hover(int act, int arg, wchar_t *buf, int n)
 {
     if (n <= 0 || act != A_NEXT || arg < FX_SKIP) return;
-    int ch = U.modal == M_LAUNCH && U.launchPerson == FX_CHAES;
+    int ch = U.modal == M_LAUNCH && (U.launchPerson == FX_CHAES || U.launchPerson == FX_BERLIN);
     const wchar_t *s = arg >= FX_WATCH ? L"Посмотреть взлёт ракеты с Байконура и узнать о полёте"
                      : arg == FX_CHAES_WATCH ? L"Посмотреть анимацию: авария на Чернобыльской АЭС и облако над Беларусью"
+                     : arg == FX_BERLIN_WATCH ? L"Посмотреть анимацию: штурм Берлина и Знамя Победы над Рейхстагом"
                      : arg == FX_SKIP ? (ch ? L"Пропустить и сразу открыть рассказ (Пробел или Enter)" : L"Пропустить взлёт и сразу открыть рассказ о полёте (Пробел или Enter)")
                      : arg == FX_REPLAY ? (ch ? L"Посмотреть анимацию ещё раз" : L"Посмотреть взлёт ракеты ещё раз")
                      : arg == FX_CLOSE ? L"Вернуться к игре (Esc)" : 0;
@@ -1295,7 +1302,7 @@ int fx_ui_key(WPARAM vk)
     double t = launch_time();
     if (vk == VK_ESCAPE) launch_close();
     else if (vk == VK_RETURN || vk == VK_SPACE) {
-        if ((U.launchPerson >= 0 || U.launchPerson == FX_CHAES) && t < launch_end()) { s_devT = -1; U.animStart = GetTickCount() - (DWORD)(launch_end() * 1000); }
+        if ((U.launchPerson >= 0 || U.launchPerson == FX_CHAES || U.launchPerson == FX_BERLIN) && t < launch_end()) { s_devT = -1; U.animStart = GetTickCount() - (DWORD)(launch_end() * 1000); }
         else launch_close();
     } else if (vk == 'R') { s_devT = -1; U.animStart = GetTickCount(); }
     return 1;                              /* остальные клавиши во время заставки ничего не делают */
@@ -1304,6 +1311,7 @@ int fx_ui_key(WPARAM vk)
 /* нет событий и окон: пора ли показать взлёт этого хода */
 int fx_ui_idle(void)
 {
+    if (berlin_due()) return 1;
     int late = 0, i;
     while ((i = fx_flight_due(&G, &late)) >= 0) {
         G.cutscenes |= FX_FLIGHTS[i].cs;
@@ -1501,6 +1509,16 @@ void fx_dev_scene(int n)
         dev_play_until(1986);
         launch_open(FX_CHAES);
         s_devT = n == 80 ? 1.5 : n == 81 ? CH_BOOM + 0.5 : n == 82 ? CH_FIRE + 1.8 : n == 83 ? CH_FALL + 1.0 : n == 84 ? CH_ZONE + 4.0 : CH_END + 2;
+        break;
+    case 88: case 89: case 34: case 35: case 36:   /* Берлин: улица, штурм Рейхстага, знамя, салют, карточка */
+        dev_play_until(1945);
+        launch_open(FX_BERLIN);
+        s_devT = n == 88 ? 4.2 : n == 89 ? BE_REICH + 2.6 : n == 34 ? BE_FLAG + 2.6 : n == 35 ? BE_SALUTE + 2.4 : BE_END + 2;
+        break;
+    case 37:                                       /* Берлин целиком, живое время */
+        dev_play_until(1945);
+        launch_open(FX_BERLIN);
+        s_liveAt = GetTickCount() + 16000;
         break;
     case 87:                                       /* авария на ЧАЭС целиком, живое время (для записи видео) */
         dev_play_until(1986);

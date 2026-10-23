@@ -175,7 +175,7 @@ void dev_scene(int n)
         else if (n >= 40 && n < 50) front_dev_scene(n);
         else if (n >= 50 && n < 60) states_dev_scene(n);
         else if (n >= 60 && n < 70) citynet_dev_scene(n);
-        else if (n >= 70 && n < 88) fx_dev_scene(n);   /* 80–87: авария на ЧАЭС */
+        else if ((n >= 70 && n < 90) || (n >= 34 && n <= 37)) fx_dev_scene(n);   /* 80–87: ЧАЭС, 88–89 и 34–37: Берлин */
         break;
     }
     if (U.screen == SCR_GAME) {

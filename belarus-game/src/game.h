@@ -332,7 +332,8 @@ _Static_assert(sizeof(((Game *)0)->nets[0]) == 16, "Game.nets: размер за
 enum { CS_METRO_MINSK = 1u << 0,      /* 1984: камера летит к Минску, игрок строит метро */
        CS_LAUNCH_KLIMUK = 1u << 1, CS_LAUNCH_KOVALYONOK = 1u << 2, CS_LAUNCH_VASILEVSKAYA = 1u << 3,
        CS_RESERVED = 1u << 4,
-       CS_CHERNOBYL = 1u << 5 };      /* 1986: авария на ЧАЭС перед событием «Чернобыль»; дальше — свободно */
+       CS_CHERNOBYL = 1u << 5,        /* 1986: авария на ЧАЭС перед событием «Чернобыль» */
+       CS_BERLIN = 1u << 6 };         /* 1945: штурм Берлина и Знамя Победы; дальше — свободно */
 
 /* Флаги исторических решений */
 enum {
