@@ -325,11 +325,25 @@ if ($ny_active) {
      "feb23"     — 23 февраля, День защитника Отечества
      "mar8"      — 8 марта, Международный женский день
      "may9"      — 9 мая, День Победы
+     "birthday"  — день рождения Доминики (24 октября), красно-синяя тема с фото
      "none"      — обычный сайт без праздника
      "auto"      — сам выбирает праздник по дате (за 14 дней до и 7 дней после)
    В режиме "auto" можно принудительно выбрать тему через settings.json: "holiday": "may9"
 ========================================== */
 $HOLIDAY_MODE = "none";
+
+/* День рождения Доминики: до 24 октября 00:00 (по Минску) сайт прежний,
+   с 00:00 сам включается красно-синий дизайн с фото и поздравлением.
+   $BIRTHDAY_FORCE = true — включить праздничный дизайн сразу, без ожидания. */
+$BIRTHDAY_FORCE = false;
+$BIRTHDAY_FROM  = "2026-10-24 00:00:00";
+$BIRTHDAY_TO    = "2026-10-25 00:00:00";
+$BIRTHDAY_ACCOUNTS = ["dominikaapa2410@mail.ru", "dominikaapa2410"]; // логин или email аккаунта именинницы
+$bday_tz  = new DateTimeZone("Europe/Minsk");
+$bday_now = new DateTime("now", $bday_tz);
+if ($BIRTHDAY_FORCE || ($bday_now >= new DateTime($BIRTHDAY_FROM, $bday_tz) && $bday_now < new DateTime($BIRTHDAY_TO, $bday_tz))) {
+    $HOLIDAY_MODE = "birthday";
+}
 
 $HOLIDAYS = [
     "november7" => [
@@ -475,6 +489,35 @@ $HOLIDAYS = [
             ["1965", "9 мая снова становится выходным днём и отмечается ежегодно."],
         ],
     ],
+    "birthday" => [
+        "no_auto" => true, // включается только по таймеру выше, а не режимом "auto"
+        "date" => "10-24", "glyph" => "✦", "nav" => "🎂 День рождения", "logo_sub" => "С днём рождения",
+        "colors" => ["a" => "#ff2346", "b" => "#7fb2ff", "deep" => "#9b0d2a", "ink" => "#06102e", "light" => "#eaf0ff",
+                     "p1" => "#07123a", "p2" => "#16287a", "p3" => "#c4123a", "bg1" => "#0f1f5c", "bg2" => "#060d2b", "bg3" => "#020615",
+                     "card" => "#0a1336", "card2" => "#111d4a", "text" => "#eef2ff", "soft" => "#b3bedf", "muted" => "#8090b8"],
+        "kicker" => "Доминике 19 лет",
+        "age" => 19,
+        "hero_cta" => "🎂 Поздравление",
+        "hero_sub" => "Сегодня особенный день — Доминике исполняется 19! Весь сайт RTeam в её честь переоделся в красный и тёмно-синий.",
+        "ribbon" => ["С днём рождения, Доминика", "Доминике — 19!", "Счастья, любви и вдохновения", "Пусть все мечты сбываются", "Самой яркой — самый яркий день", "RTeam поздравляет"],
+        "phrases" => ["С ДНЁМ РОЖДЕНИЯ, ДОМИНИКА!", "ДОМИНИКЕ — 19!", "24 ОКТЯБРЯ — ТВОЙ ДЕНЬ", "СЧАСТЬЯ, ЛЮБВИ И ВДОХНОВЕНИЯ", "ПУСТЬ ВСЕ МЕЧТЫ СБЫВАЮТСЯ", "RTEAM ПОЗДРАВЛЯЕТ"],
+        "cmd" => ["git commit -m \"🎂 С днём рождения, Доминика!\"", "git tag v19.0 -m \"Доминике 19\"", "npm run birthday -- --confetti"],
+        "boot" => "[OK] loading birthday.module 🎂",
+        "title" => "С днём <em>рождения</em>,<br>Доминика!",
+        "text" => "Доминика, с днём рождения и с 19-летием! Пусть этот год будет самым ярким: с мечтами, которые сбываются, людьми, рядом с которыми тепло, и поводами улыбаться каждый день. Оставайся такой же искренней, красивой и вдохновляющей. Счастья, любви, здоровья и удачи во всём!",
+        "greeting" => "С днём рождения, Доминика!",
+        "wish" => "Сегодня Доминике исполняется 19! Весь сайт RTeam в её честь — присоединяйтесь к поздравлениям 🎂",
+        "wish_personal" => "Доминика, это поздравление лично для тебя! Сегодня весь сайт RTeam — в твою честь: красный и тёмно-синий, твои фото и тёплые слова от всей команды. Пусть твои 19 подарят тебе всё, о чём мечтаешь. С днём рождения!",
+        "photos" => [["img/dominika-1.webp", "✦ именинница ✦"], ["img/dominika-2.webp", "24 · 10 · 2026"]],
+        "cards" => [
+            ["Желаем", "❤️", "Счастья", "Пусть каждый день приносит радость, а рядом всегда будут любимые люди."],
+            ["Желаем", "✨", "Исполнения желаний", "Чтобы всё задуманное сбывалось легко, вовремя и даже лучше, чем мечталось."],
+            ["Желаем", "🌹", "Красоты и вдохновения", "Оставайся такой же яркой и сияющей — как на этих фото."],
+            ["Желаем", "🎁", "Приятных сюрпризов", "Пусть этот год будет щедрым на подарки, путешествия и тёплые моменты."],
+        ],
+        "history_title" => "",
+        "history" => [],
+    ],
 ];
 
 /* Выбор праздника */
@@ -485,6 +528,7 @@ if ($hol_key === "auto") {
         $hol_key = $settings["holiday"];
     } else {
         foreach ($HOLIDAYS as $h_key => $h_data) {
+            if (!empty($h_data["no_auto"])) continue;
             foreach ([-1, 0, 1] as $h_shift) {
                 $h_ts = strtotime((date("Y") + $h_shift) . "-" . $h_data["date"] . " 00:00:00");
                 if (time() >= $h_ts - 14 * 86400 && time() <= $h_ts + 7 * 86400) $hol_key = $h_key;
@@ -505,6 +549,13 @@ if ($hol_active) {
     }
     $hol_year = (int)date("Y", $hol_target);
     $hol_date_label = (int)date("j", $hol_target) . " " . ["", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"][(int)date("n", $hol_target)];
+}
+
+/* Именинница зашла в свой аккаунт — показываем ей личное поздравление */
+$bday_is_hero = false;
+if ($hol_key === "birthday" && $user) {
+    $bday_ids = array_map("mb_strtolower", [$user, (string)($users[$user]["email"] ?? "")]);
+    $bday_is_hero = (bool)array_intersect($bday_ids, array_map("mb_strtolower", $BIRTHDAY_ACCOUNTS));
 }
 function rteam_hex_rgb($hex) {
     $hex = ltrim($hex, "#");
@@ -530,7 +581,8 @@ function rteam_holiday_art($key, $p, $year) {
                "newyear"   => ["С НОВЫМ $year ГОДОМ!", "#ffd76a", "#2a1e00", 19],
                "feb23"     => ["23 ФЕВРАЛЯ", "#e8c547", "#1c2a10", 26],
                "mar8"      => ["8 МАРТА", "#ff4f9a", "#ffffff", 28],
-               "may9"      => ["9 МАЯ · 1945 — $year", "#ffb347", "#1a0a00", 19]][$key] ?? null;
+               "may9"      => ["9 МАЯ · 1945 — $year", "#ffb347", "#1a0a00", 19],
+               "birthday"  => ["С ДНЁМ РОЖДЕНИЯ!", "#ff2346", "#ffffff", 21]][$key] ?? null;
     if (!$banner) return "";
     $defs = "";
     $body = "";
@@ -726,6 +778,63 @@ function rteam_holiday_art($key, $p, $year) {
         $ring = "#ff9f1c";
     }
 
+    if ($key === "birthday") {
+        $defs .= '<radialGradient id="' . $p . 'bg" cx="50%" cy="32%" r="75%"><stop offset="0" stop-color="#2f55c8"/><stop offset=".5" stop-color="#10205e"/><stop offset="1" stop-color="#04081c"/></radialGradient>'
+               . '<radialGradient id="' . $p . 'glow"><stop offset="0" stop-color="#ffd27a" stop-opacity=".9"/><stop offset="1" stop-color="#ffd27a" stop-opacity="0"/></radialGradient>'
+               . '<radialGradient id="' . $p . 'red" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ff8a9a"/><stop offset=".55" stop-color="#ff2346"/><stop offset="1" stop-color="#a50c2a"/></radialGradient>'
+               . '<radialGradient id="' . $p . 'blue" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#b5d0ff"/><stop offset=".55" stop-color="#3f78ff"/><stop offset="1" stop-color="#173a9e"/></radialGradient>'
+               . '<linearGradient id="' . $p . 'tier1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff3a58"/><stop offset="1" stop-color="#b80f30"/></linearGradient>'
+               . '<linearGradient id="' . $p . 'tier2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3567f0"/><stop offset="1" stop-color="#14328f"/></linearGradient>';
+        $body .= '<rect width="400" height="400" fill="url(#' . $p . 'bg)"/>';
+        foreach ([[150, 50], [250, 44], [200, 84], [120, 96], [282, 92], [36, 150], [364, 140], [176, 30], [228, 120], [90, 270], [312, 262]] as $i => [$sx, $sy]) {
+            $body .= '<circle class="art-blink" style="animation-delay:-' . ($i * 0.41) . 's" cx="' . $sx . '" cy="' . $sy . '" r="' . (($i % 3) + 1.2) . '" fill="#ffffff"/>';
+        }
+        $body .= '<circle cx="200" cy="236" r="130" fill="#ff2346" opacity=".16"/>';
+        // Воздушные шары
+        foreach ([[88, 118, 34, 42, "red", 0], [312, 104, 32, 40, "blue", 1.3], [342, 198, 21, 27, "red", 2.1], [58, 214, 20, 26, "blue", .7]] as [$bx, $by, $brx, $bry, $bc, $bd]) {
+            $bot = $by + $bry;
+            $body .= '<g class="art-sway" style="transform-origin:' . $bx . 'px ' . ($bot + 150) . 'px; animation-delay:-' . $bd . 's">'
+                   . '<path d="M' . $bx . ' ' . ($bot + 6) . ' Q' . ($bx - 12) . ' ' . ($bot + 50) . ' ' . ($bx + 6) . ' ' . ($bot + 90) . ' T' . $bx . ' ' . ($bot + 150) . '" stroke="#dfe6ff" stroke-opacity=".7" stroke-width="1.5" fill="none"/>'
+                   . '<path d="M' . $bx . ' ' . ($bot - 1) . ' L' . ($bx - 5) . ' ' . ($bot + 7) . ' L' . ($bx + 5) . ' ' . ($bot + 7) . ' Z" fill="url(#' . $p . $bc . ')"/>'
+                   . '<ellipse cx="' . $bx . '" cy="' . $by . '" rx="' . $brx . '" ry="' . $bry . '" fill="url(#' . $p . $bc . ')"/>'
+                   . '<ellipse cx="' . round($bx - $brx * .38) . '" cy="' . round($by - $bry * .42) . '" rx="' . round($brx * .22) . '" ry="' . round($bry * .3) . '" fill="#ffffff" opacity=".45" transform="rotate(-20 ' . round($bx - $brx * .38) . ' ' . round($by - $bry * .42) . ')"/>'
+                   . '</g>';
+        }
+        // Торт: тарелка, два яруса с глазурью, свечи
+        $drips = function ($x0, $x1, $y, $fill) {
+            $d = "M$x0 " . ($y + 12) . " V" . ($y + 8) . " Q$x0 $y " . ($x0 + 12) . " $y H" . ($x1 - 12) . " Q$x1 $y $x1 " . ($y + 8) . " V" . ($y + 12);
+            $n = 0;
+            for ($x = $x1; $x > $x0 + 10; $x -= 22) {
+                $d .= " Q" . ($x - 6) . " " . ($y + ($n % 2 ? 22 : 30)) . " " . ($x - 11) . " " . ($y + 12) . " Q" . ($x - 16) . " " . ($y + 20) . " " . max($x0, $x - 22) . " " . ($y + 12);
+                $n++;
+            }
+            return '<path d="' . $d . ' Z" fill="' . $fill . '"/>';
+        };
+        $body .= '<ellipse cx="200" cy="324" rx="128" ry="14" fill="#c9d4ff"/><ellipse cx="200" cy="320" rx="118" ry="9" fill="#ffffff"/>';
+        $body .= '<rect x="100" y="250" width="200" height="70" rx="12" fill="url(#' . $p . 'tier1)"/>' . $drips(100, 300, 250, "#fff4f6");
+        for ($x = 118; $x <= 282; $x += 20) $body .= '<circle cx="' . $x . '" cy="300" r="4" fill="' . (intdiv($x - 118, 20) % 2 ? "#9fc2ff" : "#ffffff") . '" opacity=".9"/>';
+        $body .= '<rect x="132" y="196" width="136" height="58" rx="12" fill="url(#' . $p . 'tier2)"/>' . $drips(132, 268, 196, "#ffffff");
+        for ($x = 148; $x <= 252; $x += 26) $body .= '<path d="' . rteam_star_d($x, 238, 6, 2.6) . '" fill="' . (intdiv($x - 148, 26) % 2 ? "#ffffff" : "#ff2346") . '"/>';
+        // Свечи-цифры с возрастом именинницы
+        $digits = str_split((string)($GLOBALS["HOLIDAYS"]["birthday"]["age"] ?? ""));
+        foreach ($digits as $i => $dg) {
+            $cx = 200 + ($i - (count($digits) - 1) / 2) * 48;
+            $body .= '<text x="' . $cx . '" y="203" text-anchor="middle" font-family="Russo One, Segoe UI, Arial, sans-serif" font-size="58" fill="url(#' . $p . ($i % 2 ? 'blue' : 'red') . ')" stroke="#ffffff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">' . $dg . '</text>'
+                   . '<line x1="' . $cx . '" y1="161" x2="' . $cx . '" y2="152" stroke="#2a2a2a" stroke-width="2"/>'
+                   . '<circle class="art-pulse" style="animation-delay:-' . ($i * .5) . 's" cx="' . $cx . '" cy="138" r="20" fill="url(#' . $p . 'glow)"/>'
+                   . '<g class="art-flame" style="transform-origin:' . $cx . 'px 151px; animation-delay:-' . ($i * .3) . 's">'
+                   . '<path d="M' . $cx . ' 152 C' . ($cx - 8) . ' 146 ' . ($cx - 7) . ' 134 ' . $cx . ' 122 C' . ($cx + 7) . ' 134 ' . ($cx + 8) . ' 146 ' . $cx . ' 152 Z" fill="#ffb02e"/>'
+                   . '<path d="M' . $cx . ' 151 C' . ($cx - 4) . ' 147 ' . ($cx - 4) . ' 140 ' . $cx . ' 133 C' . ($cx + 4) . ' 140 ' . ($cx + 4) . ' 147 ' . $cx . ' 151 Z" fill="#fff1a8"/>'
+                   . '</g>';
+        }
+        // Конфетти
+        $cc = ["#ff2346", "#7fb2ff", "#ffffff", "#ffd76a"];
+        foreach ([[140, 70, 20], [262, 64, -30], [196, 108, 45], [40, 112, 10], [366, 250, -15], [126, 146, 60], [276, 150, -50], [30, 288, 35], [358, 84, 25], [104, 222, -40], [298, 224, 15]] as $i => [$fx, $fy, $fr]) {
+            $body .= '<rect class="art-blink" style="animation-delay:-' . ($i * 0.33) . 's" x="' . ($fx - 5) . '" y="' . ($fy - 2) . '" width="10" height="4" rx="1" fill="' . $cc[$i % 4] . '" transform="rotate(' . $fr . ' ' . $fx . ' ' . $fy . ')"/>';
+        }
+        $ring = "#7fb2ff";
+    }
+
     [$btext, $bfill, $bink, $bsize] = $banner;
     return '<svg class="hol-art hol-art-' . $key . '" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' . htmlspecialchars($btext) . '">'
          . '<defs><clipPath id="' . $p . 'clip"><circle cx="200" cy="200" r="194"/></clipPath>' . $defs . '</defs>'
@@ -754,7 +863,7 @@ $stat_squid   = count($squid_winners);
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23<?= $hol_active ? ltrim($hol["colors"]["p3"], '#') : '8b0000' ?>'/%3E%3Cpath d='M32 10l6.2 13.3 14.6 1.7-10.8 10 2.9 14.4L32 42.2l-12.9 7.2 2.9-14.4-10.8-10 14.6-1.7z' fill='%23<?= $hol_active ? ltrim($hol["colors"]["b"], '#') : 'ffffff' ?>'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Inter:wght@400;600;800<?= $hol_key === "birthday" ? "&family=Caveat:wght@600;700" : "" ?>&display=swap" rel="stylesheet">
 <style>
 :root {
     --accent: <?=$accent?>;
@@ -1845,6 +1954,102 @@ body.hol-on footer, body.hol-on footer.site-footer { background: linear-gradient
 body.hol-on .footer-bottom, body.hol-on .blog-date { color: var(--hol-muted); }
 body.hol-on nav a { color: var(--hol-text); }
 @media (max-width: 1440px) { body.hol-on header nav { background: var(--hol-bg2); } }
+
+/* =====================================================================
+   ДЕНЬ РОЖДЕНИЯ: отдельный блок с фото, конфетти, личная открытка
+   ===================================================================== */
+/* Тёмно-синий фон с красными акцентами (без фиолетового смешения) */
+body.hol-on.hol-birthday {
+    background:
+        radial-gradient(560px at 0 0, rgba(var(--hol-a-rgb),.22), transparent),
+        radial-gradient(480px at 100% 420px, rgba(var(--hol-a-rgb),.12), transparent),
+        radial-gradient(1000px at 50% 0, #16297a, transparent),
+        linear-gradient(180deg, var(--hol-bg2), var(--hol-bg3));
+}
+.hol-birthday .hero-glow { opacity: .4; background: radial-gradient(circle at 38% 45%, rgba(var(--hol-a-rgb),.55), transparent 50%), radial-gradient(circle at 62% 55%, rgba(var(--hol-b-rgb),.45), transparent 55%); }
+.hol-birthday .hol-star { animation-name: petalFall; opacity: .75; }
+.confetti { display: block; width: .55em; height: 1em; border-radius: 2px; }
+.confetti-0 { background: var(--hol-a); }
+.confetti-1 { background: var(--hol-b); }
+.confetti-2 { background: #ffffff; }
+.confetti-3 { background: linear-gradient(var(--hol-a), var(--hol-b)); }
+
+@property --bday-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+.bday {
+    position: relative; overflow: hidden; border-radius: 26px;
+    display: grid; grid-template-columns: 1.05fr 1fr; gap: 40px; align-items: center;
+    padding: 50px 46px;
+    background:
+        radial-gradient(circle at 18% 30%, rgba(var(--hol-a-rgb),.32), transparent 45%),
+        radial-gradient(circle at 88% 85%, rgba(var(--hol-b-rgb),.22), transparent 50%),
+        linear-gradient(135deg, var(--hol-p1) 0%, #0b1850 50%, #3a0a24 100%);
+    box-shadow: 0 30px 90px rgba(var(--hol-a-rgb),.25), 0 0 60px rgba(var(--hol-b-rgb),.12);
+}
+.bday::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 2px; pointer-events: none;
+    background: conic-gradient(from var(--bday-angle), var(--hol-a), var(--hol-b), #ffffff, var(--hol-b), var(--hol-a));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+    opacity: .75; animation: bdayBorder 6s linear infinite;
+}
+@keyframes bdayBorder { to { --bday-angle: 360deg; } }
+
+.bday-photos { position: relative; width: 100%; max-width: 540px; margin: 0 auto; aspect-ratio: 1 / 1.12; }
+.bday-photo {
+    position: absolute; margin: 0; width: 56%; padding: 12px 12px 50px;
+    background: #fbf8f3; border-radius: 6px;
+    box-shadow: 0 24px 50px rgba(0,0,0,.55), 0 0 44px rgba(var(--hol-a-rgb),.35);
+    transition: rotate .5s cubic-bezier(.2,1.2,.4,1), scale .5s cubic-bezier(.2,1.2,.4,1), box-shadow .4s ease;
+    animation: bdayFloat 7s ease-in-out infinite;
+}
+.bday-photo img { display: block; width: 100%; aspect-ratio: 1 / 1.47; object-fit: cover; object-position: 50% 30%; border-radius: 3px; }
+.bday-photo figcaption { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font-family: "Caveat", cursive; font-weight: 700; font-size: 27px; line-height: 1.2; color: #16287a; }
+.bday-photo-1 { left: 1%; top: 2%; rotate: -7deg; z-index: 2; }
+.bday-photo-2 { right: 1%; top: 14%; rotate: 6deg; z-index: 1; animation-delay: -3.5s; box-shadow: 0 24px 50px rgba(0,0,0,.55), 0 0 44px rgba(var(--hol-b-rgb),.35); }
+.bday-photo-2 figcaption { color: #c4123a; }
+.bday-photo:hover { z-index: 3; rotate: 0deg; scale: 1.05; }
+.bday-tape {
+    position: absolute; top: -13px; left: 50%; width: 92px; height: 26px; translate: -50% 0; rotate: -4deg; z-index: 1;
+    background: repeating-linear-gradient(45deg, rgba(255,255,255,.28) 0 6px, transparent 6px 12px), rgba(var(--hol-a-rgb),.62);
+    box-shadow: 0 2px 6px rgba(0,0,0,.25);
+}
+.bday-photo-2 .bday-tape { rotate: 5deg; background: repeating-linear-gradient(45deg, rgba(255,255,255,.28) 0 6px, transparent 6px 12px), rgba(var(--hol-b-rgb),.7); }
+@keyframes bdayFloat { 0%, 100% { translate: 0 0; } 50% { translate: 0 -12px; } }
+
+.bday-spark { position: absolute; z-index: 4; pointer-events: none; font-size: 26px; line-height: 1; color: var(--hol-b); text-shadow: 0 0 14px rgba(var(--hol-b-rgb),.85); animation: bdayTwinkle 2.4s ease-in-out infinite; }
+.bday-spark-1 { top: -2%; right: 30%; }
+.bday-spark-2 { bottom: 6%; left: 3%; font-size: 20px; color: var(--hol-a); text-shadow: 0 0 14px rgba(var(--hol-a-rgb),.85); animation-delay: -.8s; }
+.bday-spark-3 { top: 47%; left: 49%; font-size: 30px; color: var(--hol-a); text-shadow: 0 0 16px rgba(var(--hol-a-rgb),.9); animation-delay: -1.4s; }
+.bday-spark-4 { bottom: -1%; right: 8%; font-size: 18px; animation-delay: -2s; }
+@keyframes bdayTwinkle { 0%, 100% { opacity: .35; scale: .8; } 50% { opacity: 1; scale: 1.15; } }
+
+.bday-text { position: relative; z-index: 1; }
+.bday-age {
+    position: absolute; right: -4px; bottom: -46px; z-index: -1; pointer-events: none; user-select: none;
+    font-family: "Russo One", sans-serif; font-size: clamp(150px, 19vw, 240px); line-height: 1;
+    background: linear-gradient(135deg, rgba(var(--hol-a-rgb),.32), rgba(var(--hol-b-rgb),.16)); -webkit-background-clip: text; background-clip: text; color: transparent;
+    -webkit-text-stroke: 2px rgba(var(--hol-b-rgb),.3);
+}
+.bday-text h2 { font-family: "Russo One", sans-serif; font-weight: 400; font-size: clamp(32px, 4.6vw, 54px); line-height: 1.05; margin: 14px 0 16px; color: #fff; text-transform: uppercase; }
+.bday-text h2 em { font-style: normal; background: linear-gradient(90deg, var(--hol-a), #ff7a8c 45%, var(--hol-b)); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 18px rgba(var(--hol-a-rgb),.45)); }
+.bday-text p { color: var(--hol-light); font-size: 16.5px; line-height: 1.65; margin: 0; max-width: 560px; }
+.bday-text .bday-sign { font-family: "Caveat", cursive; font-weight: 700; font-size: 30px; line-height: 1.2; color: var(--hol-b); margin-top: 14px; }
+.bday .hol-date-chip { background: linear-gradient(90deg, var(--hol-a), var(--hol-deep)); color: #fff; box-shadow: 0 6px 18px rgba(var(--hol-a-rgb),.35); }
+.bday .btn { margin-top: 20px; padding: 13px 24px; font-size: 15px; background: linear-gradient(135deg, var(--hol-a), var(--hol-deep)); color: #fff; box-shadow: 0 10px 26px rgba(var(--hol-a-rgb),.45); }
+@media (max-width: 900px) {
+    .bday { grid-template-columns: 1fr; gap: 28px; padding: 36px 18px 30px; }
+    .bday-photo { padding: 8px 8px 38px; }
+    .bday-photo figcaption { font-size: 21px; bottom: 6px; }
+}
+
+/* Личная открытка имениннице: её фото в красно-синей рамке вместо картинки */
+.hol-card-art.bday-card-photo { width: min(190px, 52vw); aspect-ratio: 1; margin: -86px auto 8px; padding: 5px; border-radius: 50%; filter: none; background: conic-gradient(var(--hol-a), var(--hol-b), var(--hol-a)); box-shadow: 0 14px 40px rgba(0,0,0,.5), 0 0 40px rgba(var(--hol-a-rgb),.5); }
+.bday-card-photo img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 60% 32%; border-radius: 50%; border: 4px solid var(--hol-p1); }
+
+#bday-confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9995; }
+@media (prefers-reduced-motion: reduce) {
+    .bday::before, .bday-photo, .bday-spark { animation: none !important; }
+}
 </style>
 <?php if ($hol_active): $hc = $hol["colors"]; ?>
 <style>
@@ -2126,7 +2331,7 @@ body.hol-on {
     <?php if ($hol_active && !($hol_key === "newyear" && $ny_active)): ?>
     <div id="hol-decor">
         <?php for ($i = 0; $i < 18; $i++): ?>
-        <div class="hol-star" style="left:<?=rand(0,100)?>%; font-size:<?=rand(10,20)?>px; animation-duration:<?=rand(12,24)?>s; animation-delay:-<?=rand(0,24)?>s;"><?= ($hol_key === "mar8" && $i % 3) ? '<i class="petal"></i>' : $hol["glyph"] ?></div>
+        <div class="hol-star" style="left:<?=rand(0,100)?>%; font-size:<?=rand(10,20)?>px; animation-duration:<?=rand(12,24)?>s; animation-delay:-<?=rand(0,24)?>s;"><?= ($hol_key === "mar8" && $i % 3) ? '<i class="petal"></i>' : (($hol_key === "birthday" && $i % 3) ? '<i class="confetti confetti-' . ($i % 4) . '"></i>' : $hol["glyph"]) ?></div>
         <?php endfor; ?>
     </div>
     <?php endif; ?>
@@ -2260,7 +2465,7 @@ body.hol-on {
             <?php if ($hol_active): ?>
             <div class="hol-hero-art"><?= rteam_holiday_art($hol_key, "hero", $hol_year) ?></div>
             <?php endif; ?>
-            <span class="hero-kicker"><i></i><?= $hol_active ? "Праздничное обновление · " . htmlspecialchars($hol_date_label) : "Команда программирования RTeam" ?></span>
+            <span class="hero-kicker"><i></i><?= $hol_active ? htmlspecialchars($hol["kicker"] ?? "Праздничное обновление") . " · " . htmlspecialchars($hol_date_label) : "Команда программирования RTeam" ?></span>
             <h1 id="dynamicText" style="color:#ff2a2a; text-shadow:0 0 20px #ff0000aa; transition:0.6s ease;">
                 Загрузка...
             </h1>
@@ -2273,7 +2478,7 @@ body.hol-on {
             </p>
             <div class="hero-cta">
                 <?php if ($hol_active): ?>
-                    <a href="#holiday" class="btn"><?=$hol["glyph"]?> Праздничный ивент</a>
+                    <a href="#holiday" class="btn"><?= htmlspecialchars($hol["hero_cta"] ?? $hol["glyph"] . " Праздничный ивент") ?></a>
                     <a href="#join" class="btn btn-ghost">Вступить в команду</a>
                 <?php else: ?>
                     <a href="#join" class="btn">Вступить в команду</a>
@@ -2295,6 +2500,32 @@ body.hol-on {
 
     <?php if ($hol_active): ?>
     <section id="holiday" class="reveal">
+        <?php if (!empty($hol["photos"])): ?>
+        <!-- ОТДЕЛЬНЫЙ БЛОК: фото именинницы и поздравление -->
+        <div class="bday">
+            <div class="bday-photos">
+                <?php foreach ($hol["photos"] as $bp_i => [$bp_src, $bp_caption]): ?>
+                <figure class="bday-photo bday-photo-<?=$bp_i + 1?>">
+                    <span class="bday-tape" aria-hidden="true"></span>
+                    <img src="<?=htmlspecialchars($bp_src)?>" alt="Именинница — фото <?=$bp_i + 1?>">
+                    <figcaption><?=htmlspecialchars($bp_caption)?></figcaption>
+                </figure>
+                <?php endforeach; ?>
+                <span class="bday-spark bday-spark-1" aria-hidden="true">✦</span>
+                <span class="bday-spark bday-spark-2" aria-hidden="true">✦</span>
+                <span class="bday-spark bday-spark-3" aria-hidden="true">❤</span>
+                <span class="bday-spark bday-spark-4" aria-hidden="true">✦</span>
+            </div>
+            <div class="bday-text">
+                <span class="bday-age" aria-hidden="true"><?=(int)$hol["age"]?></span>
+                <span class="hol-date-chip">🎂 <?=htmlspecialchars($hol_date_label)?> · <?=(int)$hol["age"]?> лет</span>
+                <h2><?=$hol["title"]?></h2>
+                <p><?=htmlspecialchars($hol["text"])?></p>
+                <p class="bday-sign">— с теплом, команда RTeam</p>
+                <button type="button" class="btn" id="bdayConfetti">🎉 Ещё салют!</button>
+            </div>
+        </div>
+        <?php else: ?>
         <div class="hol-poster">
             <div>
                 <span class="hol-date-chip"><?=$hol["glyph"]?> <?=htmlspecialchars($hol_date_label)?> · праздник</span>
@@ -2312,6 +2543,7 @@ body.hol-on {
                 </div>
             </div>
         </div>
+        <?php endif; ?>
 
         <div class="hol-cards">
             <?php foreach ($hol["cards"] as [$hc_tag, $hc_icon, $hc_title, $hc_text]): ?>
@@ -2324,6 +2556,7 @@ body.hol-on {
             <?php endforeach; ?>
         </div>
 
+        <?php if (!empty($hol["history"])): ?>
         <div class="section-head" style="margin-top:46px;">
             <span class="section-eyebrow">Хроника</span>
             <h1><?=htmlspecialchars($hol["history_title"])?></h1>
@@ -2336,6 +2569,7 @@ body.hol-on {
             </div>
             <?php endforeach; ?>
         </div>
+        <?php endif; ?>
     </section>
     <?php endif; ?>
 
@@ -2640,14 +2874,23 @@ body.hol-on {
 
 <?php if ($hol_active): ?>
 <!-- ОТКРЫТКА-ПОЗДРАВЛЕНИЕ: показывается один раз за праздник -->
-<div id="hol-card" role="dialog" aria-modal="true" aria-label="Поздравление" data-key="<?=htmlspecialchars($hol_key . "_" . $hol_year)?>">
-    <div class="hol-card-box">
+<div id="hol-card" role="dialog" aria-modal="true" aria-label="Поздравление" data-key="<?=htmlspecialchars($hol_key . "_" . $hol_year . ($bday_is_hero ? "_personal" : ""))?>">
+    <div class="hol-card-box<?= $bday_is_hero ? " bday-card" : "" ?>">
         <button class="hol-card-close" type="button" aria-label="Закрыть">✕</button>
+        <?php if ($bday_is_hero): ?>
+        <!-- Личная открытка для аккаунта именинницы -->
+        <div class="hol-card-art bday-card-photo"><img src="<?=htmlspecialchars($hol["photos"][0][0])?>" alt=""></div>
+        <h3><?=htmlspecialchars($hol["greeting"])?> 🎂</h3>
+        <p><?=htmlspecialchars($hol["wish_personal"])?></p>
+        <p class="hol-card-sign">— с любовью, вся команда RTeam</p>
+        <button class="btn hol-card-ok" type="button">Спасибо! ❤</button>
+        <?php else: ?>
         <div class="hol-card-art"><?= rteam_holiday_art($hol_key, "card", $hol_year) ?></div>
         <h3><?=htmlspecialchars($hol["greeting"])?></h3>
         <p><?=htmlspecialchars(str_replace("{year}", $hol_year, $hol["wish"]))?></p>
         <p class="hol-card-sign">— команда RTeam</p>
         <button class="btn hol-card-ok" type="button">Спасибо! <?=$hol["glyph"]?></button>
+        <?php endif; ?>
     </div>
 </div>
 <?php endif; ?>
@@ -2942,8 +3185,62 @@ if (typeSelect) {
     // Ждём, пока закончится вступительная анимация (пока она идёт, у body класс no-scroll)
     (function waitIntro() {
         if (document.body.classList.contains('no-scroll')) return setTimeout(waitIntro, 400);
-        setTimeout(() => card.classList.add('show'), 900);
+        setTimeout(() => {
+            card.classList.add('show');
+            if (window.bdayParty) window.bdayParty();
+        }, 900);
     })();
+})();
+
+// ===== КОНФЕТТИ НА ДЕНЬ РОЖДЕНИЯ =====
+(function() {
+    const block = document.querySelector('.bday');
+    if (!block || !HOL || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const colors = HOL.colors.concat(['#ffffff', '#ffd76a']);
+    let canvas, ctx, parts = [], running = false;
+    function burst(x, y, n) {
+        if (!canvas) {
+            canvas = document.createElement('canvas');
+            canvas.id = 'bday-confetti';
+            document.body.appendChild(canvas);
+            ctx = canvas.getContext('2d');
+        }
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = innerWidth * dpr;
+        canvas.height = innerHeight * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        for (let i = 0; i < n; i++) {
+            const a = -Math.PI / 2 + (Math.random() - .5) * 1.6, v = 8 + Math.random() * 10;
+            parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, w: 6 + Math.random() * 6, h: 9 + Math.random() * 8,
+                         r: Math.random() * 6, vr: (Math.random() - .5) * .35, c: colors[i % colors.length], t: Math.random() * 10 });
+        }
+        if (!running) { running = true; requestAnimationFrame(step); }
+    }
+    function step() {
+        ctx.clearRect(0, 0, innerWidth, innerHeight);
+        parts = parts.filter(p => p.y < innerHeight + 40);
+        parts.forEach(p => {
+            p.vy = Math.min(p.vy + .25, 5); p.vx *= .985;
+            p.x += p.vx + Math.sin(p.t) * .6; p.y += p.vy; p.r += p.vr; p.t += .08;
+            ctx.save();
+            ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.scale(1, Math.cos(p.t * 1.6));
+            ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+            ctx.restore();
+        });
+        if (parts.length) requestAnimationFrame(step);
+        else running = false;
+    }
+    window.bdayParty = function() {
+        burst(innerWidth * .12, innerHeight, 80);
+        burst(innerWidth * .88, innerHeight, 80);
+        setTimeout(() => burst(innerWidth * .5, innerHeight, 110), 350);
+    };
+    document.getElementById('bdayConfetti').addEventListener('click', window.bdayParty);
+    // Салют, когда блок с фото появляется на экране
+    const io = new IntersectionObserver(entries => {
+        if (entries.some(e => e.isIntersecting)) { io.disconnect(); window.bdayParty(); }
+    }, { threshold: .35 });
+    io.observe(block);
 })();
 
 // ===== ОТСЧЁТ ДО ПРАЗДНИКА =====
