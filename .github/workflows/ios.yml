@@ -1,0 +1,67 @@
+# Версия игры для iPhone и iPad: сборка на Mac (GitHub Actions), снимки экрана в симуляторе.
+# Готовый BelarusTech.ipa и снимки складываются обратно в ветку (belarus-game/BelarusTech.ipa,
+# belarus-game/port/ios/shots/) — так же, как в репозитории лежит BelarusTech.exe.
+name: iPhone
+
+on:
+  push:
+    branches: [claude/funny-cannon-97m15z]
+    paths:
+      - 'belarus-game/src/**'
+      - 'belarus-game/port/ios/*.m'
+      - 'belarus-game/port/ios/*.sh'
+      - 'belarus-game/port/ios/Info.plist'
+      - 'belarus-game/res/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    runs-on: macos-14
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: belarus-game
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode
+        run: xcodebuild -version && xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Сборка для iPhone (.ipa)
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: sh port/ios/build.sh
+
+      - name: Снимки экрана в симуляторе
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: sh port/ios/shots.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BelarusTech-iPhone
+          path: |
+            belarus-game/build/ios/BelarusTech.ipa
+            belarus-game/build/ios-shots/*.png
+
+      - name: Положить .ipa и снимки в ветку
+        run: |
+          cp build/ios/BelarusTech.ipa BelarusTech.ipa
+          rm -rf port/ios/shots && mkdir -p port/ios/shots
+          for f in build/ios-shots/*.png; do sips -Z 1600 "$f" --out "port/ios/shots/$(basename "$f")" >/dev/null; done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add BelarusTech.ipa port/ios/shots
+          git commit -m "iPhone: BelarusTech.ipa and simulator screenshots (build ${{ github.run_number }}) [skip ci]" || exit 0
+          for i in 1 2 3 4; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && break
+            sleep $((i * 5))
+          done

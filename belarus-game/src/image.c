@@ -137,6 +137,21 @@ int image_load_resource(int id, Image *out)
     if (!p || sz == 0 || sz > 0x7FFFFFFF) return 0;
     return qoi_decode((const unsigned char *)p, (int)sz, out);
 }
+#else
+#include "plat_host.h"
+/* без Windows ресурсы лежат файлами рядом с приложением (assets.rc — номер -> файл) */
+int image_load_resource(int id, Image *out)
+{
+    void *p;
+    int sz, ok;
+    if (!out) return 0;
+    out->w = out->h = 0;
+    out->px = NULL;
+    if (!plat_resource(id, &p, &sz)) return 0;
+    ok = qoi_decode((const unsigned char *)p, sz, out);
+    free(p);
+    return ok;
+}
 #endif
 
 /* ---------------------------------------------------- масштабирование ---- */

@@ -22,10 +22,9 @@ int  qoi_decode(const unsigned char *data, int size, Image *out);
 int  image_alloc(Image *img, int w, int h);
 void image_free(Image *img);              /* освобождает px и обнуляет структуру */
 
-#ifdef _WIN32
-/* Декодирует RCDATA-ресурс id из .exe (RES_*_QOI). 0 — ресурса нет или он битый. */
+/* Декодирует RCDATA-ресурс id из .exe (RES_*_QOI), без Windows — файл рядом с приложением.
+ * 0 — ресурса нет или он битый. */
 int  image_load_resource(int id, Image *out);
-#endif
 
 /* Масштабирует прямоугольник (sx,sy,sw,sh) из src в новый dst размером dw x dh
  * (dst выделяется заново; прежнее содержимое dst НЕ освобождается).

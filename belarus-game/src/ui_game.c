@@ -561,7 +561,7 @@ void ui_click(int act, int arg)
     case A_DIFF: U.diffPick = arg; break;
     case A_START: start_game(); break;
     case A_HELP: U.modal = M_HELP; U.modalScroll = 0; break;
-    case A_EXIT: PostMessageW(g_hwnd, WM_CLOSE, 0, 0); break;
+    case A_EXIT: ui_quit(); break;
     case A_THEME: ui_toggle_theme(); break;
     case A_TAB: U.tab = arg; break;
     case A_ERAF: U.eraFilter = arg; U.scroll[TAB_TECH] = 0; break;

@@ -8,8 +8,12 @@
 #ifndef _UNICODE
 #define _UNICODE
 #endif
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#else
+#include "win32_shim.h"     /* iPhone (и проверка на Linux): то же подмножество Win32/GDI своими силами */
+#endif
 #include "game.h"
 #include "terrain3d.h"
 
@@ -131,6 +135,7 @@ typedef struct {
 
 /* анимации: пока функция зовётся при рисовании кадра, окно перерисовывается ~30 раз в секунду */
 void ui_anim_request(void);
+void ui_quit(void);        /* кнопка «Выход»: Windows — закрыть окно, iPhone — сохранить партию */
 
 extern Game G;
 extern UiState U;

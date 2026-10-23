@@ -1,5 +1,6 @@
 /* Окно, двойная буферизация, шрифты, примитивы рисования, виджеты, сохранения. */
 #include "ui.h"
+#include "plat_host.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -54,15 +55,21 @@ static const wchar_t *ERA_FACES[ERA_COUNT + 1][4] = {
     { L"Consolas", L"Lucida Console", L"Courier New", 0 },
 };
 
+#ifdef _WIN32
 static int CALLBACK face_cb(const LOGFONTW *lf, const TEXTMETRICW *tm, DWORD type, LPARAM lp)
 {
     (void)lf; (void)tm; (void)type;
     *(int *)lp = 1;
     return 0;
 }
+#endif
 
 static int face_exists(const wchar_t *name)
 {
+#ifndef _WIN32
+    (void)name;
+    return 1;          /* без Windows похожий шрифт подбирает plat_font (первый в списке эпохи) */
+#else
     LOGFONTW lf;
     int found = 0;
     memset(&lf, 0, sizeof lf);
@@ -72,6 +79,7 @@ static int face_exists(const wchar_t *name)
     EnumFontFamiliesExW(dc, &lf, face_cb, (LPARAM)&found, 0);
     ReleaseDC(NULL, dc);
     return found;
+#endif
 }
 
 static void resolve_faces(void)
@@ -786,6 +794,18 @@ void ui_toast(const wchar_t *fmt, ...)
 
 static void data_dir(wchar_t *out, int n)
 {
+#ifndef _WIN32
+    const unsigned char *u = (const unsigned char *)host_data_dir();   /* UTF-8 -> wchar_t */
+    int k = 0;
+    while (u && *u && k < n - 1) {
+        unsigned c = *u++;
+        if (c >= 0xF0 && u[0] && u[1] && u[2]) { c = (c & 7) << 18 | (u[0] & 63u) << 12 | (u[1] & 63u) << 6 | (u[2] & 63u); u += 3; }
+        else if (c >= 0xE0 && u[0] && u[1]) { c = (c & 15) << 12 | (u[0] & 63u) << 6 | (u[1] & 63u); u += 2; }
+        else if (c >= 0xC0 && u[0]) { c = (c & 31) << 6 | (u[0] & 63u); u += 1; }
+        out[k++] = (wchar_t)c;
+    }
+    out[k] = 0;
+#else
     wchar_t base[MAX_PATH];
     DWORD len = GetEnvironmentVariableW(L"APPDATA", base, MAX_PATH);
     if (len == 0 || len >= MAX_PATH) {
@@ -801,13 +821,18 @@ static void data_dir(wchar_t *out, int n)
     swprintf(out, n, L"%ls\\BelarusTechFate", base);
 #endif
     CreateDirectoryW(out, NULL);
+#endif
 }
 
 static void data_file(const wchar_t *name, wchar_t *out, int n)
 {
     wchar_t dir[MAX_PATH];
     data_dir(dir, MAX_PATH);
+#ifdef _WIN32
     swprintf(out, n, L"%ls\\%ls", dir, name);
+#else
+    swprintf(out, n, L"%ls/%ls", dir, name);
+#endif
 }
 
 int ui_save(void)
@@ -892,7 +917,7 @@ void ui_toggle_theme(void)
     ui_invalidate();
 }
 
-/* ---------- оконная процедура ---------- */
+/* ---------- события окна: общие для Windows (wnd_proc ниже) и iPhone (plat_host.h) ---------- */
 /* анимации: кто-то нарисовал движущийся кадр — через 33 мс перерисуем снова */
 static int s_animWanted;
 void ui_anim_request(void) { s_animWanted = 1; }
@@ -900,173 +925,20 @@ void ui_anim_request(void) { s_animWanted = 1; }
 /* перетаскивание 3D-карты: 1 — вращение (левая кнопка), 2 — сдвиг (правая) */
 static int s_drag, s_dragging, s_dragX0, s_dragY0, s_dragLX, s_dragLY;
 
-static void map_fast(HWND h)
+static void map_fast(void)
 {
     U.mapFast = 1;
-    SetTimer(h, 3, 220, NULL);      /* после паузы — перерисовать со сглаживанием */
+    SetTimer(g_hwnd, 3, 220, NULL);      /* после паузы — перерисовать со сглаживанием */
     ui_invalidate();
 }
 
-static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
+void ui_ev_start(float dpi, const wchar_t *cmd)
 {
-    switch (m) {
-    case WM_SIZE:
-        g_w = LOWORD(lp); g_h = HIWORD(lp);
-        ui_invalidate();
-        return 0;
-    case WM_ERASEBKGND:
-        return 1;
-    case WM_PAINT: {
-        PAINTSTRUCT ps;
-        HDC wdc = BeginPaint(h, &ps);
-        if (g_w > 0 && g_h > 0) {
-            ensure_buffer(wdc);
-            hits_reset();
-            d_unclip();
-            U.mapVOn = 0;
-            s_animWanted = 0;
-            ui_paint();
-            if (s_animWanted && !IsIconic(h)) SetTimer(h, 4, 33, NULL);
-            GdiFlush();
-            BitBlt(wdc, 0, 0, g_w, g_h, s_dc, 0, 0, SRCCOPY);
-        }
-        EndPaint(h, &ps);
-        return 0;
-    }
-    case WM_LBUTTONDOWN:
-    case WM_RBUTTONDOWN:
-    case WM_LBUTTONDBLCLK:            /* у окна CS_DBLCLKS: второе нажатие приходит так */
-    case WM_RBUTTONDBLCLK: {
-        int x = (short)LOWORD(lp), y = (short)HIWORD(lp);
-        if (map_cam_hit(x, y) && !s_drag) {
-            s_drag = m == WM_LBUTTONDOWN || m == WM_LBUTTONDBLCLK ? 1 : 2;
-            s_dragging = 0;
-            s_dragX0 = s_dragLX = x;
-            s_dragY0 = s_dragLY = y;
-            SetCapture(h);
-        }
-        return 0;
-    }
-    case WM_RBUTTONUP: {
-        int a, g2, was = 0;
-        if (s_drag == 2) {
-            was = s_dragging;
-            s_drag = s_dragging = 0;
-            ReleaseCapture();
-        } else if (s_drag) return 0;    /* идёт вращение левой кнопкой — правую не трогаем */
-        if (!was && hit_at((short)LOWORD(lp), (short)HIWORD(lp), &a, &g2) && a > 0) ui_rclick(a, g2);
-        s_hovAct = s_hovArg = -1;
-        ui_invalidate();
-        return 0;
-    }
-    case WM_CAPTURECHANGED:
-        if ((HWND)lp != h) s_drag = s_dragging = 0;
-        return 0;
-    case WM_MOUSEMOVE: {
-        int a, g2;
-        if (s_drag) {
-            int x = (short)LOWORD(lp), y = (short)HIWORD(lp);
-            if (!s_dragging && (abs(x - s_dragX0) > 4 || abs(y - s_dragY0) > 4)) s_dragging = 1;
-            if (s_dragging) {
-                if (s_drag == 1) map_cam_rotate((x - s_dragLX) * 0.35, (y - s_dragLY) * 0.25);
-                else map_cam_pan(s_dragLX, s_dragLY, x, y);
-                s_dragLX = x; s_dragLY = y;
-                map_fast(h);
-                return 0;
-            }
-        }
-        hit_at((short)LOWORD(lp), (short)HIWORD(lp), &a, &g2);
-        if (a != s_hovAct || g2 != s_hovArg) {
-            s_hovAct = a; s_hovArg = g2;
-            ui_hover_status(a, g2);
-            ui_invalidate();
-        }
-        TRACKMOUSEEVENT tme = { sizeof tme, TME_LEAVE, h, 0 };
-        TrackMouseEvent(&tme);
-        return 0;
-    }
-    case WM_MOUSELEAVE:
-        s_hovAct = s_hovArg = -1;
-        ui_hover_status(-1, -1);
-        ui_invalidate();
-        return 0;
-    case WM_SETCURSOR:
-        if (LOWORD(lp) == HTCLIENT) {
-            SetCursor(LoadCursor(NULL, s_hovAct > 0 && s_hovAct < A_HOVER_RES ? IDC_HAND : IDC_ARROW));
-            return TRUE;
-        }
-        break;
-    case WM_LBUTTONUP: {
-        int a, g2;
-        if (s_drag == 2) return 0;      /* идёт сдвиг правой кнопкой */
-        if (s_drag) {
-            int was = s_dragging;
-            s_drag = s_dragging = 0;
-            ReleaseCapture();
-            if (was) { ui_invalidate(); return 0; }      /* это было вращение, а не щелчок */
-        }
-        if (hit_at((short)LOWORD(lp), (short)HIWORD(lp), &a, &g2) && a > 0 && a < A_HOVER_RES) ui_click(a, g2);
-        /* после действия сетка областей меняется: пересчитаем подсветку */
-        s_hovAct = s_hovArg = -1;
-        ui_invalidate();
-        return 0;
-    }
-    case WM_MOUSEWHEEL: {
-        POINT pt = { (short)LOWORD(lp), (short)HIWORD(lp) };
-        ScreenToClient(h, &pt);
-        if (GetKeyState(VK_CONTROL) < 0) ui_zoom(GET_WHEEL_DELTA_WPARAM(wp) > 0 ? 10 : -10);
-        else if (map_cam_hit(pt.x, pt.y)) {
-            map_cam_zoom_at(pow(1.18, GET_WHEEL_DELTA_WPARAM(wp) / 120.0), pt.x, pt.y);
-            map_fast(h);
-        }
-        else ui_wheel(GET_WHEEL_DELTA_WPARAM(wp), pt.x, pt.y);
-        return 0;
-    }
-    case WM_KEYDOWN:
-        if (GetKeyState(VK_CONTROL) < 0) {
-            if (wp == 'S') { if (U.screen == SCR_GAME && ui_save()) ui_toast(L"Игра сохранена"); return 0; }
-            if (wp == VK_OEM_PLUS || wp == VK_ADD) { ui_zoom(10); return 0; }
-            if (wp == VK_OEM_MINUS || wp == VK_SUBTRACT) { ui_zoom(-10); return 0; }
-            if (wp == '0' || wp == VK_NUMPAD0) { ui_zoom(100 - U.zoom); return 0; }
-        }
-        ui_key(wp);
-        return 0;
-    case WM_SYSKEYDOWN:
-        if (wp == VK_F10) { ui_key(VK_F10); return 0; }
-        break;
-    case WM_TIMER:
-        if (wp == 2) { ui_minute_tick(); return 0; }
-        if (wp == 3) { KillTimer(h, 3); U.mapFast = 0; ui_invalidate(); return 0; }
-        if (wp == 4) { KillTimer(h, 4); ui_invalidate(); return 0; }
-        if (GetTickCount() > U.toastUntil) { U.toast[0] = 0; KillTimer(h, 1); }
-        ui_invalidate();
-        return 0;
-    case WM_GETMINMAXINFO: {
-        MINMAXINFO *mm = (MINMAXINFO *)lp;
-        mm->ptMinTrackSize.x = (LONG)(960 * s_dpi);
-        mm->ptMinTrackSize.y = (LONG)(640 * s_dpi);
-        return 0;
-    }
-    case WM_CLOSE:
-        if (U.screen == SCR_GAME && !G.over) ui_save();
-        DestroyWindow(h);
-        return 0;
-    case WM_DESTROY:
-        PostQuitMessage(0);
-        return 0;
-    }
-    return DefWindowProcW(h, m, wp, lp);
-}
-
-int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
-{
-    (void)prev; (void)cmd;
-    SetProcessDPIAware();
-    HDC sdc = GetDC(NULL);
-    s_dpi = GetDeviceCaps(sdc, LOGPIXELSX) / 96.0f;
-    ReleaseDC(NULL, sdc);
-    if (s_dpi < 1.0f) s_dpi = 1.0f;
-
+    s_dpi = dpi < 1.0f ? 1.0f : dpi;
+#ifndef _WIN32
+    static int dummy;
+    g_hwnd = (HWND)&dummy;            /* без Windows окно одно — у хозяина */
+#endif
     data_init();
     load_settings();
     resolve_faces();
@@ -1079,10 +951,247 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
         static Game probe;
         U.hasSave = load_into(&probe) && !probe.over;
     }
-    {
-        const wchar_t *sc = cmd ? wcsstr(cmd, L"--scene=") : 0;
-        if (sc) { g_dev = 1; g_dark = 1; apply_scale(); dev_scene(_wtoi(sc + 8)); }
+    const wchar_t *sc = cmd ? wcsstr(cmd, L"--scene=") : 0;
+    if (sc) { g_dev = 1; g_dark = 1; apply_scale(); dev_scene(_wtoi(sc + 8)); }
+}
+
+void ui_ev_size(int w, int h)
+{
+    g_w = w; g_h = h;
+    ui_invalidate();
+}
+
+/* кадр в буфер; 1 — нужна анимация (следующий кадр через 33 мс) */
+static int paint_frame(HDC wdc)
+{
+    ensure_buffer(wdc);
+    hits_reset();
+    d_unclip();
+    U.mapVOn = 0;
+    s_animWanted = 0;
+    ui_paint();
+    GdiFlush();
+    return s_animWanted;
+}
+
+int ui_ev_paint(void) { return g_w > 0 && g_h > 0 ? paint_frame(NULL) : 0; }
+
+int ui_ev_down(int x, int y, int right)
+{
+    if (map_cam_hit(x, y) && !s_drag) {
+        s_drag = right ? 2 : 1;
+        s_dragging = 0;
+        s_dragX0 = s_dragLX = x;
+        s_dragY0 = s_dragLY = y;
+        return 1;
     }
+    return 0;
+}
+
+int ui_ev_up(int x, int y, int right)
+{
+    int a, g2;
+    if (right) {
+        int was = 0, rel = 0;
+        if (s_drag == 2) {
+            was = s_dragging;
+            s_drag = s_dragging = 0;
+            rel = 1;
+        } else if (s_drag) return 0;    /* идёт вращение левой кнопкой — правую не трогаем */
+        if (!was && hit_at(x, y, &a, &g2) && a > 0) ui_rclick(a, g2);
+        s_hovAct = s_hovArg = -1;
+        ui_invalidate();
+        return rel;
+    }
+    if (s_drag == 2) return 0;          /* идёт сдвиг правой кнопкой */
+    if (s_drag) {
+        int was = s_dragging;
+        s_drag = s_dragging = 0;
+        if (was) { ui_invalidate(); return 1; }      /* это было вращение, а не щелчок */
+        if (hit_at(x, y, &a, &g2) && a > 0 && a < A_HOVER_RES) ui_click(a, g2);
+        s_hovAct = s_hovArg = -1;
+        ui_invalidate();
+        return 1;
+    }
+    if (hit_at(x, y, &a, &g2) && a > 0 && a < A_HOVER_RES) ui_click(a, g2);
+    /* после действия сетка областей меняется: пересчитаем подсветку */
+    s_hovAct = s_hovArg = -1;
+    ui_invalidate();
+    return 0;
+}
+
+void ui_ev_move(int x, int y)
+{
+    int a, g2;
+#ifndef _WIN32
+    g_plat_cursor.x = x; g_plat_cursor.y = y;
+#endif
+    if (s_drag) {
+        if (!s_dragging && (abs(x - s_dragX0) > 4 || abs(y - s_dragY0) > 4)) s_dragging = 1;
+        if (s_dragging) {
+            if (s_drag == 1) map_cam_rotate((x - s_dragLX) * 0.35, (y - s_dragLY) * 0.25);
+            else map_cam_pan(s_dragLX, s_dragLY, x, y);
+            s_dragLX = x; s_dragLY = y;
+            map_fast();
+            return;
+        }
+    }
+    hit_at(x, y, &a, &g2);
+    if (a != s_hovAct || g2 != s_hovArg) {
+        s_hovAct = a; s_hovArg = g2;
+        ui_hover_status(a, g2);
+        ui_invalidate();
+    }
+}
+
+void ui_ev_leave(void)
+{
+    s_hovAct = s_hovArg = -1;
+    ui_hover_status(-1, -1);
+    ui_invalidate();
+}
+
+void ui_ev_wheel(int delta, int x, int y, int ctrl)
+{
+    if (ctrl) ui_zoom(delta > 0 ? 10 : -10);
+    else if (map_cam_hit(x, y)) {
+        map_cam_zoom_at(pow(1.18, delta / 120.0), x, y);
+        map_fast();
+    }
+    else ui_wheel(delta, x, y);
+}
+
+void ui_ev_key(int vk, int ctrl)
+{
+    if (ctrl) {
+        if (vk == 'S') { if (U.screen == SCR_GAME && ui_save()) ui_toast(L"Игра сохранена"); return; }
+        if (vk == VK_OEM_PLUS || vk == VK_ADD) { ui_zoom(10); return; }
+        if (vk == VK_OEM_MINUS || vk == VK_SUBTRACT) { ui_zoom(-10); return; }
+        if (vk == '0' || vk == VK_NUMPAD0) { ui_zoom(100 - U.zoom); return; }
+    }
+    ui_key((WPARAM)vk);
+}
+
+void ui_ev_timer(int id)
+{
+    if (id == 2) { ui_minute_tick(); return; }
+    if (id == 3) { KillTimer(g_hwnd, 3); U.mapFast = 0; ui_invalidate(); return; }
+    if (id == 4) { KillTimer(g_hwnd, 4); ui_invalidate(); return; }
+    if (GetTickCount() > U.toastUntil) { U.toast[0] = 0; KillTimer(g_hwnd, 1); }
+    ui_invalidate();
+}
+
+void ui_ev_close(void)
+{
+    if (U.screen == SCR_GAME && !G.over) ui_save();
+}
+
+int ui_ev_on_map(int x, int y) { return map_cam_hit(x, y); }
+int ui_ev_scroll_unit(void) { return SC(64); }
+
+/* кнопка «Выход» */
+void ui_quit(void)
+{
+#ifdef _WIN32
+    PostMessageW(g_hwnd, WM_CLOSE, 0, 0);
+#else
+    ui_ev_close();
+    host_quit();
+#endif
+}
+
+#ifdef _WIN32
+/* ---------- оконная процедура Windows ---------- */
+static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM wp, LPARAM lp)
+{
+    switch (m) {
+    case WM_SIZE:
+        ui_ev_size(LOWORD(lp), HIWORD(lp));
+        return 0;
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC wdc = BeginPaint(h, &ps);
+        if (g_w > 0 && g_h > 0) {
+            if (paint_frame(wdc) && !IsIconic(h)) SetTimer(h, 4, 33, NULL);
+            BitBlt(wdc, 0, 0, g_w, g_h, s_dc, 0, 0, SRCCOPY);
+        }
+        EndPaint(h, &ps);
+        return 0;
+    }
+    case WM_LBUTTONDOWN:
+    case WM_RBUTTONDOWN:
+    case WM_LBUTTONDBLCLK:            /* у окна CS_DBLCLKS: второе нажатие приходит так */
+    case WM_RBUTTONDBLCLK:
+        if (ui_ev_down((short)LOWORD(lp), (short)HIWORD(lp), m == WM_RBUTTONDOWN || m == WM_RBUTTONDBLCLK)) SetCapture(h);
+        return 0;
+    case WM_RBUTTONUP:
+        if (ui_ev_up((short)LOWORD(lp), (short)HIWORD(lp), 1)) ReleaseCapture();
+        return 0;
+    case WM_CAPTURECHANGED:
+        if ((HWND)lp != h) s_drag = s_dragging = 0;
+        return 0;
+    case WM_MOUSEMOVE: {
+        ui_ev_move((short)LOWORD(lp), (short)HIWORD(lp));
+        if (!s_dragging) {
+            TRACKMOUSEEVENT tme = { sizeof tme, TME_LEAVE, h, 0 };
+            TrackMouseEvent(&tme);
+        }
+        return 0;
+    }
+    case WM_MOUSELEAVE:
+        ui_ev_leave();
+        return 0;
+    case WM_SETCURSOR:
+        if (LOWORD(lp) == HTCLIENT) {
+            SetCursor(LoadCursor(NULL, s_hovAct > 0 && s_hovAct < A_HOVER_RES ? IDC_HAND : IDC_ARROW));
+            return TRUE;
+        }
+        break;
+    case WM_LBUTTONUP:
+        if (ui_ev_up((short)LOWORD(lp), (short)HIWORD(lp), 0)) ReleaseCapture();
+        return 0;
+    case WM_MOUSEWHEEL: {
+        POINT pt = { (short)LOWORD(lp), (short)HIWORD(lp) };
+        ScreenToClient(h, &pt);
+        ui_ev_wheel(GET_WHEEL_DELTA_WPARAM(wp), pt.x, pt.y, GetKeyState(VK_CONTROL) < 0);
+        return 0;
+    }
+    case WM_KEYDOWN:
+        ui_ev_key((int)wp, GetKeyState(VK_CONTROL) < 0);
+        return 0;
+    case WM_SYSKEYDOWN:
+        if (wp == VK_F10) { ui_key(VK_F10); return 0; }
+        break;
+    case WM_TIMER:
+        ui_ev_timer((int)wp);
+        return 0;
+    case WM_GETMINMAXINFO: {
+        MINMAXINFO *mm = (MINMAXINFO *)lp;
+        mm->ptMinTrackSize.x = (LONG)(960 * s_dpi);
+        mm->ptMinTrackSize.y = (LONG)(640 * s_dpi);
+        return 0;
+    }
+    case WM_CLOSE:
+        ui_ev_close();
+        DestroyWindow(h);
+        return 0;
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return 0;
+    }
+    return DefWindowProcW(h, m, wp, lp);
+}
+
+int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
+{
+    (void)prev;
+    SetProcessDPIAware();
+    HDC sdc = GetDC(NULL);
+    float dpi = GetDeviceCaps(sdc, LOGPIXELSX) / 96.0f;
+    ReleaseDC(NULL, sdc);
+    ui_ev_start(dpi, cmd);
 
     WNDCLASSEXW wc;
     memset(&wc, 0, sizeof wc);
@@ -1120,3 +1229,4 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     }
     return 0;
 }
+#endif
