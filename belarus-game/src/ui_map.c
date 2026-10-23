@@ -741,7 +741,8 @@ static void map_controls(int x, int y, int w, int h, int large)
         hit(px, by, bs, bs, A_MAP_CAM, A[i]);
     }
     if (large) {
-        const wchar_t *hint = L"Колесо — ближе/дальше · левая кнопка — повернуть и наклонить · правая — сдвинуть · стрелки, +/−, Home";
+        const wchar_t *hint = UI_TOUCH ? L"Палец — сдвинуть · щипок — ближе/дальше · два пальца — повернуть и наклонить · долгое нажатие — приказ армии"
+                                       : L"Колесо — ближе/дальше · левая кнопка — повернуть и наклонить · правая — сдвинуть · стрелки, +/−, Home";
         int tw = d_text_w(hint, F_TINY);
         d_blend(x + SC(8), by + bs / 2 - d_font_h(F_TINY) / 2 - SC(3), tw + SC(12), d_font_h(F_TINY) + SC(6), P.surface, 170);
         d_text(x + SC(14), by + bs / 2 - d_font_h(F_TINY) / 2, hint, F_TINY, P.muted);

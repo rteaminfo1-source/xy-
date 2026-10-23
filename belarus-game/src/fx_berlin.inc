@@ -362,7 +362,7 @@ static void berlin_hud(double t)
     if (!cv_get(&cv)) return;
     px_rrect(&cv, bx, by, bw, bh, SC(8), 0, hover(A_NEXT, FX_SKIP) ? 190 : 120);
     d_text_c(bx, by + (bh - d_font_h(F_BODY_B)) / 2, bw, L"Пропустить  \x203A", F_BODY_B, RGB(255, 255, 255));
-    d_text_c(bx, by + bh + SC(4), bw, L"Esc — закрыть", F_TINY, RGB(200, 204, 214));
+    d_text_c(bx, by + bh + SC(4), bw, ESC_HINT, F_TINY, RGB(200, 204, 214));
     hit(bx, by, bw, bh, A_NEXT, FX_SKIP);
 
     const wchar_t *cap, *sub;

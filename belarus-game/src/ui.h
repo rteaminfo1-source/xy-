@@ -137,6 +137,15 @@ typedef struct {
 void ui_anim_request(void);
 void ui_quit(void);        /* кнопка «Выход»: Windows — закрыть окно, iPhone — сохранить партию */
 
+/* подсказки: на iPhone — про касания, а не про клавиши и мышь */
+#ifdef _WIN32
+#define UI_TOUCH 0
+#define ESC_HINT L"Esc — закрыть"
+#else
+#define UI_TOUCH 1
+#define ESC_HINT L""
+#endif
+
 extern Game G;
 extern UiState U;
 extern HWND g_hwnd;

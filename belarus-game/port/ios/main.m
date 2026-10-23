@@ -8,6 +8,7 @@
 #import <QuartzCore/QuartzCore.h>
 #include "plat_host.h"
 #include <math.h>
+#include <locale.h>
 
 unsigned *d_bits(void);
 
@@ -295,6 +296,9 @@ enum { T_WAIT, T_PAN, T_SCROLL, T_TWO, T_DONE };
 
 int main(int argc, char *argv[])
 {
+    /* swprintf в системной библиотеке Apple проводит строки через многобайтовую кодировку:
+     * без UTF-8 любая кириллица в формате или в %ls обрывает строку */
+    if (!setlocale(LC_CTYPE, "en_US.UTF-8")) setlocale(LC_CTYPE, "UTF-8");
     @autoreleasepool {
         return UIApplicationMain(argc, argv, nil, NSStringFromClass(AppDelegate.class));
     }

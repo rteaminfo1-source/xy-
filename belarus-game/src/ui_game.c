@@ -348,8 +348,9 @@ static void draw_map_panel(int x, int y, int w, int h)
     for (int i = 0; i < 4; i++) { tf = TF[i]; if (d_text_w(ERAS[G.era - 1].polity, tf) <= tw) break; }
     int th = d_font_h(F_ERA_M);
     d_ellipsis(x + pad, y + SC(10) + (th - d_font_h(tf)) / 2, tw, ERAS[G.era - 1].polity, tf, P.ink);
-    static const wchar_t *SUB3D[] = { L"3D-карта: колесо — ближе, мышь — повернуть · флажки — задания",
-                                      L"3D-карта: колесо — ближе, мышь — повернуть", L"колесо — ближе, мышь — повернуть" };
+    static const wchar_t *SUB3D[] = { UI_TOUCH ? L"3D-карта: щипок — ближе, два пальца — повернуть · флажки — задания" : L"3D-карта: колесо — ближе, мышь — повернуть · флажки — задания",
+                                      UI_TOUCH ? L"3D-карта: щипок — ближе, два пальца — повернуть" : L"3D-карта: колесо — ближе, мышь — повернуть",
+                                      UI_TOUCH ? L"щипок — ближе, два пальца — повернуть" : L"колесо — ближе, мышь — повернуть" };
     const wchar_t *sub = map3d_on() ? SUB3D[0] :
                          art_map_available() ? L"3D-карта: постройки появляются у городов · флажки — задания" : L"Карта земель · контур современной границы для ориентира";
     for (int i = 1; map3d_on() && i < 3 && d_text_w(sub, F_TINY) > tw; i++) sub = SUB3D[i];
@@ -458,7 +459,8 @@ static void draw_game(void)
     int sy = g_h - statusH;
     d_grad(0, sy, g_w, statusH, mix(P.surface, P.bg, 60), mix(P.surface, P.bg, 120));
     d_fill(0, sy, g_w, 1, mix(P.line, P.gold, 40));
-    const wchar_t *keys = L"Enter — ход · 1–9 — вкладки · M — карта · Ctrl+S — сохранить · Ctrl+колесо — масштаб · F1 — справка";
+    const wchar_t *keys = UI_TOUCH ? L"Касание — выбрать · долгое нажатие — приказ армии · палец по карте — сдвинуть · щипок — приблизить"
+                                   : L"Enter — ход · 1–9 — вкладки · M — карта · Ctrl+S — сохранить · Ctrl+колесо — масштаб · F1 — справка";
     int kw = d_text_w(keys, F_TINY);
     d_text(g_w - pad - kw, sy + (statusH - d_font_h(F_TINY)) / 2, keys, F_TINY, P.muted);
     wchar_t def[200];
