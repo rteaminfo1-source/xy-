@@ -93,7 +93,7 @@ static int body_event(int x, int y, int w)
             if (ok) hit(x, y, w, h, A_CHOICE, c);
             y += h + SC(10);
         }
-        y += d_wrap(x, y, w, L"Клавиши 1–3 выбирают вариант.", F_TINY, P.muted, 1);
+        y += d_wrap(x, y, w, UI_TOUCH ? L"Коснитесь варианта, чтобы выбрать." : L"Клавиши 1–3 выбирают вариант.", F_TINY, P.muted, 1);
     } else {
         const Choice *ch = &e->ch[U.evChoice];
         wchar_t s[300];
@@ -668,7 +668,7 @@ static void modal_run(int width, int (*body)(int, int, int), int closable)
     d_unclip();
     if (ch > U.modalView) {
         w_scrollbar(mx + mw - SC(12), my + SC(14), mh - SC(28), ch, U.modalView, U.modalScroll);
-        if (U.modalScroll < ch - U.modalView) d_text_c(mx, my + mh - SC(18), mw, L"прокрутите колесом \x2193", F_TINY, P.muted);
+        if (U.modalScroll < ch - U.modalView) d_text_c(mx, my + mh - SC(18), mw, UI_TOUCH ? L"листайте пальцем \x2193" : L"прокрутите колесом \x2193", F_TINY, P.muted);
     }
     if (closable) {
         int bx = mx + mw - SC(42), by = my + SC(10);
