@@ -75,6 +75,9 @@ void fx_ui_hover(int act, int arg, wchar_t *buf, int n);
 int  fx_ui_key(WPARAM vk);                    /* M_LAUNCH открыт: 1 — клавиша обработана */
 int  fx_ui_idle(void);                        /* нет событий и окон: 1 — открыла заставку */
 void fx_ui_hired(int person);                 /* приглашён деятель PEOPLE[person] */
+int  fx_ui_event(const Event *e);             /* перед окном события: 1 — открыта заставка (авария на ЧАЭС) */
+void fx_map_overlay(const MapProj *pj, int interactive, int large);   /* слой карты во время заставки ЧАЭС */
+#define FX_ARG_CHAES 7004                     /* A_NEXT: смотреть заставку «Авария на ЧАЭС» */
 int  fx_person_card(int person, int x, int y, int w);    /* блок в окне деятеля; возвращает высоту (0 — нет) */
 /* пушка у (x, y) — точка опоры колёс; size — длина ствола в пикселях; dir: +1 стреляет вправо, -1 влево;
  * t — время в секундах (выстрел, вспышка, откат, дым — циклом); вызывающий сам просит ui_anim_request() */

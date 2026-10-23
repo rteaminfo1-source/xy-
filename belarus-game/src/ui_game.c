@@ -500,6 +500,7 @@ void ui_after_change(void)
     if (game_pending(&G, &q)) {
         U.modalScroll = 0;
         U.evResult = 0;
+        if (q.type == Q_HIST && fx_ui_event(game_event_ptr(&q))) { ui_invalidate(); return; }   /* сначала заставка (ЧАЭС) */
         if (q.type == Q_HIST || q.type == Q_RAND) { U.modal = M_EVENT; U.evShown = game_event_ptr(&q); }
         else if (q.type == Q_ERA) U.modal = M_ERA;
         else U.modal = M_FINAL;

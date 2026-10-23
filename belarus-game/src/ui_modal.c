@@ -55,6 +55,10 @@ static int body_event(int x, int y, int w)
     d_ornament(x, y, w < SC(260) ? w : SC(260), 2, P.red, mix(P.red, P.surface, 140));
     y += 18 + SC(12);
     y += d_wrap(x, y, w, e->text, F_BODY, P.ink, 1) + SC(18);
+    if (e->id && !strcmp(e->id, "chernobyl")) {          /* анимация аварии (ui_fx.c) */
+        w_button(x, y, SC(340), SC(40), L"Смотреть анимацию: авария на ЧАЭС", B_SECONDARY, 1, A_NEXT, FX_ARG_CHAES);
+        y += SC(40) + SC(16);
+    }
 
     if (!U.evResult) {
         for (int c = 0; c < e->nch; c++) {

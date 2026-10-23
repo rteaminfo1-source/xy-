@@ -12,7 +12,7 @@
 #ifdef ADMIN_BUILD
 
 enum { AD_GOLD1, AD_GOLD10, AD_SCI, AD_IND, AD_CULT, AD_POP, AD_STAB, AD_ECO,
-       AD_TECH, AD_BUILD, AD_PEOPLE, AD_ARMY, AD_WIN, AD_FREE, AD_LAUNCH, AD_METRO, AD_MAP,
+       AD_TECH, AD_BUILD, AD_PEOPLE, AD_ARMY, AD_WIN, AD_FREE, AD_LAUNCH, AD_METRO, AD_MAP, AD_CHAES,
        AD_PPTX, AD_DOCX, AD_YEAR = 100 };
 
 static const int YEARS[] = { 1100, 1250, 1340, 1410, 1517, 1569, 1655, 1772, 1795, 1812, 1863, 1905,
@@ -158,6 +158,7 @@ int admin_click(int arg)
         return 1;
     }
     case AD_MAP: U.modal = M_MAP; return 1;
+    case AD_CHAES: U.modal = M_NONE; ui_click(A_NEXT, FX_ARG_CHAES); return 1;   /* авария на ЧАЭС (ui_fx.c) */
     }
     map_invalidate();
     ui_invalidate();
@@ -215,9 +216,9 @@ int admin_body(int x, int y, int w)
     {
         static const wchar_t *L4[] = { L"Победа в войне сейчас", L"Освободить все области", L"Армия: +5 соединений", L"3D-карта во весь экран",
                                        L"Открыть технологии эпохи", L"Построить всё доступное", L"Пригласить всех деятелей", L"Взлёт ракеты",
-                                       L"Метро Минска" };
-        static const int A4[] = { AD_WIN, AD_FREE, AD_ARMY, AD_MAP, AD_TECH, AD_BUILD, AD_PEOPLE, AD_LAUNCH, AD_METRO };
-        y += buttons(x, y, w, L4, A4, 9, 4, game);
+                                       L"Метро Минска", L"Авария на ЧАЭС" };
+        static const int A4[] = { AD_WIN, AD_FREE, AD_ARMY, AD_MAP, AD_TECH, AD_BUILD, AD_PEOPLE, AD_LAUNCH, AD_METRO, AD_CHAES };
+        y += buttons(x, y, w, L4, A4, 10, 4, game);
     }
     y += SC(6);
     w_button(x + w - SC(140), y, SC(140), SC(40), L"Закрыть", B_PRIMARY, 1, A_CLOSE, 0);

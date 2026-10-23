@@ -20,9 +20,10 @@
 #define T_DIP   0.25    /* затемнение при смене плана */
 
 /* свои аргументы A_NEXT: окно взлёта во весь экран, других областей нажатия в нём нет */
-enum { FX_SKIP = 7001, FX_REPLAY, FX_CLOSE, FX_WATCH = 7100 /* + индекс деятеля */ };
+enum { FX_SKIP = 7001, FX_REPLAY, FX_CLOSE, FX_CHAES_WATCH = FX_ARG_CHAES, FX_WATCH = 7100 /* + индекс деятеля */ };
 #define FX_BOARD (-2)   /* U.launchPerson: стенд с пушками для проверки (сцена 75) */
 #define FX_TROOPS (-3)  /* U.launchPerson: галерея 3D-отрядов (сцена 39) */
+#define FX_CHAES (-4)   /* U.launchPerson: авария на Чернобыльской АЭС (fx_chaes.inc) */
 
 /* небо старта: у каждого полёта своё время суток */
 enum { SKY_GOLDEN, SKY_DUSK, SKY_NIGHT };
@@ -1170,10 +1171,21 @@ static void cannon_board(double now)
 }
 
 /* ---------- заставка целиком ---------- */
+static DWORD s_liveAt;              /* сцена 87: заставка начнётся в этот момент (запуск под Wine долгий) */
 static double launch_time(void)
 {
+    if (s_liveAt) {
+        if ((int)(GetTickCount() - s_liveAt) < 0) return 0;
+        U.animStart = s_liveAt;
+        s_liveAt = 0;
+    }
     return s_devT >= 0 ? s_devT : (GetTickCount() - U.animStart) / 1000.0;
 }
+
+#include "fx_chaes.inc"
+
+/* когда заставка доходит до рассказа (карточки) */
+static double launch_end(void) { return U.launchPerson == FX_CHAES ? CH_END : T_END; }
 
 void fx_launch_draw(void)
 {
@@ -1181,6 +1193,7 @@ void fx_launch_draw(void)
     ui_anim_request();
     double t = launch_time();
     if (U.launchPerson == FX_BOARD) { cannon_board(t); return; }
+    if (U.launchPerson == FX_CHAES) { chaes_draw(t); return; }
     if (U.launchPerson == FX_TROOPS) {
         troops_gallery(t);
         w_button(g_w - SC(184), g_h - SC(56), SC(160), SC(42), L"Закрыть", B_SECONDARY, 1, A_NEXT, FX_CLOSE);
@@ -1218,8 +1231,11 @@ void fx_launch_draw(void)
 /* ---------- открыть и закрыть ---------- */
 static void launch_open(int person)
 {
-    s_back = U.modal == M_PERSON ? M_PERSON : M_NONE;
+    s_back = U.modal == M_PERSON || U.modal == M_EVENT ? U.modal : M_NONE;
     s_backArg = U.modalArg;
+    if (person == FX_CHAES && !s_chCamSaved) {   /* заставка водит камеру карты — потом вернём как было */
+        s_chCam = U.cam; s_chCamInit = U.camInit; s_chCamSaved = 1;
+    }
     U.modal = M_LAUNCH;
     U.launchPerson = person;
     U.animStart = GetTickCount();
@@ -1231,6 +1247,11 @@ static void launch_open(int person)
 static void launch_close(void)
 {
     s_devT = -1;
+    if (s_chCamSaved) {
+        U.cam = s_chCam; U.camInit = s_chCamInit; s_chCamSaved = 0;
+        U.mapFast = 0;
+        map_invalidate();
+    }
     U.modal = s_back;
     U.modalArg = s_backArg;
     U.modalScroll = 0;
@@ -1241,6 +1262,7 @@ static void launch_close(void)
 int fx_ui_click(int act, int arg)
 {
     if (act != A_NEXT || arg < FX_SKIP) return 0;
+    if (arg == FX_CHAES_WATCH) { launch_open(FX_CHAES); return 1; }
     if (arg >= FX_WATCH) {
         if (arg - FX_WATCH >= PEOPLE_COUNT) return 0;
         launch_open(arg - FX_WATCH);
@@ -1248,7 +1270,7 @@ int fx_ui_click(int act, int arg)
     }
     if (arg > FX_CLOSE || U.modal != M_LAUNCH) return 0;
     s_devT = -1;
-    if (arg == FX_SKIP) U.animStart = GetTickCount() - (DWORD)(T_END * 1000);
+    if (arg == FX_SKIP) U.animStart = GetTickCount() - (DWORD)(launch_end() * 1000);
     else if (arg == FX_REPLAY) U.animStart = GetTickCount();
     else launch_close();
     return 1;
@@ -1257,9 +1279,11 @@ int fx_ui_click(int act, int arg)
 void fx_ui_hover(int act, int arg, wchar_t *buf, int n)
 {
     if (n <= 0 || act != A_NEXT || arg < FX_SKIP) return;
+    int ch = U.modal == M_LAUNCH && U.launchPerson == FX_CHAES;
     const wchar_t *s = arg >= FX_WATCH ? L"Посмотреть взлёт ракеты с Байконура и узнать о полёте"
-                     : arg == FX_SKIP ? L"Пропустить взлёт и сразу открыть рассказ о полёте (Пробел или Enter)"
-                     : arg == FX_REPLAY ? L"Посмотреть взлёт ракеты ещё раз"
+                     : arg == FX_CHAES_WATCH ? L"Посмотреть анимацию: авария на Чернобыльской АЭС и облако над Беларусью"
+                     : arg == FX_SKIP ? (ch ? L"Пропустить и сразу открыть рассказ (Пробел или Enter)" : L"Пропустить взлёт и сразу открыть рассказ о полёте (Пробел или Enter)")
+                     : arg == FX_REPLAY ? (ch ? L"Посмотреть анимацию ещё раз" : L"Посмотреть взлёт ракеты ещё раз")
                      : arg == FX_CLOSE ? L"Вернуться к игре (Esc)" : 0;
     if (s) { wcsncpy(buf, s, (size_t)n - 1); buf[n - 1] = 0; }
 }
@@ -1271,7 +1295,7 @@ int fx_ui_key(WPARAM vk)
     double t = launch_time();
     if (vk == VK_ESCAPE) launch_close();
     else if (vk == VK_RETURN || vk == VK_SPACE) {
-        if (U.launchPerson >= 0 && t < T_END) { s_devT = -1; U.animStart = GetTickCount() - (DWORD)(T_END * 1000); }
+        if ((U.launchPerson >= 0 || U.launchPerson == FX_CHAES) && t < launch_end()) { s_devT = -1; U.animStart = GetTickCount() - (DWORD)(launch_end() * 1000); }
         else launch_close();
     } else if (vk == 'R') { s_devT = -1; U.animStart = GetTickCount(); }
     return 1;                              /* остальные клавиши во время заставки ничего не делают */
@@ -1471,6 +1495,20 @@ void fx_dev_scene(int n)
     case 39:                                       /* галерея 3D-отрядов: живая анимация */
         dev_play_until(1943); dev_resolve();
         launch_open(FX_TROOPS);
+        break;
+    case 80: case 81: case 82: case 83: case 84:   /* авария на ЧАЭС: станция, взрыв, пожарные, облако, зона */
+    case 85:                                       /* карточка */
+        dev_play_until(1986);
+        launch_open(FX_CHAES);
+        s_devT = n == 80 ? 1.5 : n == 81 ? CH_BOOM + 0.5 : n == 82 ? CH_FIRE + 1.8 : n == 83 ? CH_FALL + 1.0 : n == 84 ? CH_ZONE + 4.0 : CH_END + 2;
+        break;
+    case 87:                                       /* авария на ЧАЭС целиком, живое время (для записи видео) */
+        dev_play_until(1986);
+        launch_open(FX_CHAES);
+        s_liveAt = GetTickCount() + 16000;
+        break;
+    case 86:                                       /* окно события «Чернобыль» с кнопкой «Смотреть» */
+        dev_play_until(1986);
         break;
     case 79:                                       /* окно деятеля с кнопкой «Смотреть взлёт ракеты» */
         dev_play_until(2024); dev_resolve();

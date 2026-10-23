@@ -555,6 +555,7 @@ static void map_overlays(const MapProj *pj, int interactive, int large)
     int game = U.screen == SCR_GAME;
     int maxPer = large ? (int)(sizeof SLOTS / sizeof SLOTS[0]) : 4;
     states_overlay(pj, interactive, large);      /* исторические государства — под всем (ui_states.c) */
+    fx_map_overlay(pj, interactive, large);      /* заставка ЧАЭС: облако и пятна загрязнения (ui_fx.c) */
     int cx[C_COUNT_], cy[C_COUNT_], vis[C_COUNT_], csz[C_COUNT_], extra[C_COUNT_], avail[C_COUNT_], built[C_COUNT_];
     double cdepth[C_COUNT_];
     static Placed pl[MAX_PROJ];
@@ -838,7 +839,7 @@ static void map_draw_3d(int x, int y, int w, int h, int interactive, int large)
 void map_draw_ex(int x, int y, int w, int h, int interactive, int large)
 {
     if (w < 40 || h < 40) return;
-    if (!large && U.modal == M_MAP && map3d_on()) { d_fill(x, y, w, h, P.surface); return; }   /* под картой во весь экран — не видно */
+    if (!large && (U.modal == M_MAP || U.modal == M_LAUNCH) && map3d_on()) { d_fill(x, y, w, h, P.surface); return; }   /* под картой или заставкой во весь экран — не видно */
     if (map3d_on()) map_draw_3d(x, y, w, h, interactive, large);
     else map_draw_art(x, y, w, h, interactive, large);
 }
