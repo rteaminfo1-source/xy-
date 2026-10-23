@@ -313,7 +313,7 @@ typedef struct {
     int    battleKind;                /* WAR_* (0 — набег или осада) */
     /* --- версия 7: городской транспорт, заставки, армии на карте, железные дороги снабжения --- */
     /* городской транспорт (citynet.c) */
-    struct { unsigned nodes; unsigned long long edges; } nets[MAX_NETS];   /* станции и перегоны */
+    struct { unsigned nodes, nodesHi; unsigned long long edges; } nets[MAX_NETS];   /* станции (младшие и старшие 32 бита) и перегоны */
     /* заставки, которые уже показаны (CS_*): взлёты ракет, приближение к Минску в 1984 */
     unsigned cutscenes;
     /* армии на карте и железные дороги снабжения (front.c) */
@@ -324,6 +324,9 @@ typedef struct {
     signed char   armyPrev[MAX_ARMIES];  /* откуда армия пришла за последний ход (-1 — стояла): для анимации марша */
     int    armyMoveTurn;              /* ход, в начале которого показывать марш (-1 — нет) */
 } Game;
+
+/* версия 8 заняла место выравнивания после nets[].nodes: поля версии 7 остались на своих местах */
+_Static_assert(sizeof(((Game *)0)->nets[0]) == 16, "Game.nets: размер записи как в версии 7");
 
 /* заставки (Game.cutscenes) */
 enum { CS_METRO_MINSK = 1u << 0,      /* 1984: камера летит к Минску, игрок строит метро */
@@ -439,6 +442,6 @@ void quest_describe_reward(int q, wchar_t *buf, int n);             /* «каз�
 int  game_save(const Game *g, FILE *f);
 int  game_load(Game *g, FILE *f);   /* принимает и сохранения версий 3, 4 и 5 */
 
-#define GAME_VERSION 7
+#define GAME_VERSION 8
 
 #endif

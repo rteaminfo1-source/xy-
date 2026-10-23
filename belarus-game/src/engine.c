@@ -1044,8 +1044,8 @@ int game_load(Game *g, FILE *f)
     int from = 0;
     if (sz == sizeof tmp) {
         if (fread(&tmp, sizeof tmp, 1, f) != 1) return 0;
-        if (tmp.version != GAME_VERSION) return 0;
-        from = GAME_VERSION;
+        if (tmp.version != GAME_VERSION && tmp.version != 7) return 0;   /* версия 8 — те же поля, новые станции метро */
+        from = tmp.version;
     } else {
         for (unsigned k = 0; k < sizeof OLD / sizeof OLD[0] && !from; k++)
             if (sz >= OLD[k].size && sz <= OLD[k].size + 8 && sz < sizeof tmp) {
@@ -1077,6 +1077,7 @@ int game_load(Game *g, FILE *f)
                 if (tmp.turn >= TURN_COUNT && !tmp.over) return 0;
             }
         }
+        citynet_upgrade(&tmp, from);          /* версия 8: все станции Минского метро */
     }
     if (tmp.warKind < WAR_NONE || tmp.warKind > WAR_LIBERATION) return 0;
     if (tmp.warKind == WAR_CONQUEST && (tmp.warTarget < 0 || tmp.warTarget >= PROVINCE_COUNT)) return 0;

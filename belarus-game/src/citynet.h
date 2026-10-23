@@ -7,7 +7,7 @@
 
 #include "game.h"
 
-#define NET_MAX_NODES 24        /* узлов на схеме (Game.nets[].nodes — 32 бита) */
+#define NET_MAX_NODES 40        /* узлов на схеме (Game.nets[].nodes и nodesHi — 64 бита) */
 #define NET_MAX_EDGES 48        /* перегонов (Game.nets[].edges — 64 бита) */
 #define NET_MAX_RIVER 16
 #define NET_MAX_LINES 3
@@ -66,7 +66,8 @@ int  citynet_edge_ind(const Game *g, int n, int e);
 int  citynet_build(Game *g, int n, int e);                /* 1 — построено (списывает казну и производство) */
 int  citynet_stations(const Game *g, int n);
 int  citynet_edges_count(const Game *g, int n);           /* построено перегонов */
-unsigned citynet_station_mask(const Game *g, int n);      /* биты узлов со станциями */
+unsigned long long citynet_station_mask(const Game *g, int n);   /* биты узлов со станциями */
+void citynet_upgrade(Game *g, int from);                  /* после загрузки старого сохранения (версия from) */
 void citynet_net_income(const Game *g, int n, double out[R_COUNT]);   /* доход одной сети за ход */
 void citynet_income(const Game *g, double out[R_COUNT]);  /* суммарный доход всех сетей за ход */
 /* построена стройка-первая очередь (из вкладки «Стройки»): её перегоны появляются на схеме,

@@ -410,7 +410,7 @@ static void draw_scheme(int n, const Box *b)
     int st = citynet_state(&G, n);
     double nx[NET_MAX_NODES], ny[NET_MAX_NODES];
     for (int v = 0; v < d->nnodes; v++) node_xy(b, &d->nodes[v], &nx[v], &ny[v]);
-    unsigned stations = citynet_station_mask(&G, n);
+    unsigned long long stations = citynet_station_mask(&G, n);
     int hovE = -1, hovN = -1;
     for (int e = 0; e < d->nedges; e++) if (hover(A_NET_EDGE, e)) hovE = e;
     if (s_devHover >= 0) hovE = s_devHover;
@@ -809,10 +809,10 @@ static void build_edge(int n, int e)
     if (citynet_edge_built(&G, n, e)) { s_selEdge = e; s_sel = -1; return; }
     const wchar_t *why = citynet_cannot_build(&G, n, e);
     if (why) { ui_toast(L"%ls", why); s_selEdge = e; s_sel = -1; return; }
-    unsigned before = citynet_station_mask(&G, n);
+    unsigned long long before = citynet_station_mask(&G, n);
     int projBefore = d->proji >= 0 && G.proj[d->proji];
     if (!citynet_build(&G, n, e)) return;
-    unsigned fresh = citynet_station_mask(&G, n) & ~before;
+    unsigned long long fresh = citynet_station_mask(&G, n) & ~before;
     const NetEdge *ed = &d->edges[e];
     int v = fresh >> ed->b & 1 ? ed->b : fresh >> ed->a & 1 ? ed->a : -1;
     if (d->proji >= 0 && !projBefore && G.proj[d->proji])
@@ -1020,11 +1020,11 @@ void citynet_dev_scene(int n)
         citynet_ui_idle();
         s_flyMs = 2500;
         break;
-    case 61:   /* схема метро в 2006 году: первая линия и часть второй, выбрана «Немига» */
+    case 61:   /* схема метро в 2006 году: первая линия и часть второй, выбрана «Няміга» */
         dev_play_until(2006); dev_resolve();
         dev_grow(metro, 16);
         net_open(metro, 0);
-        s_sel = dev_node(metro, L"Немига");
+        s_sel = dev_node(metro, L"Няміга");
         s_devT = 3.3;
         break;
     case 62:   /* витебский трамвай в 1937 году */

@@ -32,22 +32,22 @@ static int edge_of(int n, const wchar_t *a, const wchar_t *b)
 }
 
 /* связность: перегоны и пересадки от первой станции */
-static int connected_from(const CityNetDef *d, int start, unsigned long long edges, int withXfer)
+static unsigned long long connected_from(const CityNetDef *d, int start, unsigned long long edges, int withXfer)
 {
-    unsigned seen = 1u << start;
+    unsigned long long seen = 1ull << start;
     for (int changed = 1; changed;) {
         changed = 0;
         for (int e = 0; e < d->nedges; e++) {
             if (!(edges >> e & 1)) continue;
-            unsigned a = 1u << d->edges[e].a, b = 1u << d->edges[e].b;
+            unsigned long long a = 1ull << d->edges[e].a, b = 1ull << d->edges[e].b;
             if (((seen & a) || (seen & b)) && (seen | a | b) != seen) { seen |= a | b; changed = 1; }
         }
         for (int k = 0; withXfer && k < d->nxfer; k++) {
-            unsigned a = 1u << d->xfer[k][0], b = 1u << d->xfer[k][1];
+            unsigned long long a = 1ull << d->xfer[k][0], b = 1ull << d->xfer[k][1];
             if (((seen & a) || (seen & b)) && (seen | a | b) != seen) { seen |= a | b; changed = 1; }
         }
     }
-    return (int)seen;
+    return seen;
 }
 
 static void test_data(void)
@@ -64,7 +64,7 @@ static void test_data(void)
         const CityNetDef *d = &CITY_NETS[n];
         CHECK(net_by_id(d->id) == n, "повтор id %s", d->id);
         CHECK(d->city >= 0 && d->city < CITY_COUNT, "%s: город", d->id);
-        CHECK(d->nnodes >= 2 && d->nnodes <= NET_MAX_NODES && d->nnodes <= 32, "%s: узлов %d", d->id, d->nnodes);
+        CHECK(d->nnodes >= 2 && d->nnodes <= NET_MAX_NODES && d->nnodes <= 64, "%s: узлов %d", d->id, d->nnodes);
         CHECK(d->nedges >= 1 && d->nedges <= NET_MAX_EDGES && d->nedges <= 64, "%s: перегонов %d", d->id, d->nedges);
         CHECK(d->nlines >= 1 && d->nlines <= NET_MAX_LINES, "%s: линий %d", d->id, d->nlines);
         CHECK(d->startNode >= 0 && d->startNode < d->nnodes, "%s: первая станция", d->id);
@@ -112,12 +112,12 @@ static void test_data(void)
         for (int k = 0; k < d->nxfer; k++)
             CHECK(d->xfer[k][0] < d->nnodes && d->xfer[k][1] < d->nnodes, "%s: пересадка %d", d->id, k);
         unsigned long long all = d->nedges >= 64 ? ~0ull : (1ull << d->nedges) - 1;
-        CHECK(connected_from(d, d->startNode, all, 1) == (int)((d->nnodes >= 32) ? 0xFFFFFFFFu : (1u << d->nnodes) - 1),
+        CHECK(connected_from(d, d->startNode, all, 1) == (d->nnodes >= 64 ? ~0ull : (1ull << d->nnodes) - 1),
               "%s: схема не связна", d->id);
         if (d->firstEdges) {   /* первая очередь — одна связная линия от первой станции */
             unsigned long long fm = (1ull << d->firstEdges) - 1;
-            int seen = connected_from(d, d->startNode, fm, 0), want = 0;
-            for (int e = 0; e < d->firstEdges; e++) want |= 1 << d->edges[e].a | 1 << d->edges[e].b;
+            unsigned long long seen = connected_from(d, d->startNode, fm, 0), want = 0;
+            for (int e = 0; e < d->firstEdges; e++) want |= 1ull << d->edges[e].a | 1ull << d->edges[e].b;
             CHECK(seen == want, "%s: первая очередь не связана с первой станцией", d->id);
         }
     }
@@ -133,8 +133,24 @@ static void test_data(void)
         CHECK(d->firstEdges == 7, "первая очередь метро — 7 перегонов");
         for (int e = 0; e < d->firstEdges; e++)
             CHECK(d->nodes[d->edges[e].a].year == 1984 && d->nodes[d->edges[e].b].year == 1984, "первая очередь — станции 1984 года");
-        CHECK(edge_of(m, L"Институт культуры", L"Площадь Ленина") >= 0 && edge_of(m, L"Парк Челюскинцев", L"Московская") >= 0, "перегоны первой линии");
-        CHECK(node_by_name(m, L"Немига") >= 0 && node_by_name(m, L"Купаловская") >= 0 && node_by_name(m, L"Вокзальная") >= 0, "станции 2-й и 3-й линий");
+        CHECK(edge_of(m, L"Інстытут культуры", L"Плошча Леніна") >= 0 && edge_of(m, L"Парк Чалюскінцаў", L"Маскоўская") >= 0, "перегоны первой линии");
+        CHECK(node_by_name(m, L"Няміга") >= 0 && node_by_name(m, L"Купалаўская") >= 0 && node_by_name(m, L"Вакзальная") >= 0, "станции 2-й и 3-й линий");
+        /* все настоящие станции: 15 + 14 + 7, названия — только по-белорусски (без русских «и», «щ», «ъ») */
+        CHECK(d->nnodes == 36 && d->nedges == 33, "станций %d и перегонов %d, а не 36 и 33", d->nnodes, d->nedges);
+        int perLine[3] = { 0, 0, 0 };
+        for (int v = 0; v < d->nnodes; v++) {
+            CHECK(!wcspbrk(d->nodes[v].name, L"ИиЩщЪъ"), "«%ls» — не по-белорусски", d->nodes[v].name);
+            CHECK(d->nodes[v].year > 0, "«%ls»: год открытия", d->nodes[v].name);
+            for (int e = 0; e < d->nedges; e++)
+                if (d->edges[e].a == v || d->edges[e].b == v) { perLine[d->edges[e].line]++; break; }
+        }
+        CHECK(perLine[0] == 15 && perLine[1] == 14 && perLine[2] == 7, "станций по линиям %d/%d/%d", perLine[0], perLine[1], perLine[2]);
+        static const wchar_t *MUST[] = { L"Пятроўшчына", L"Міхалова", L"Барысаўскі тракт", L"Кунцаўшчына", L"Спартыўная", L"Маладзёжная",
+                                         L"Пралетарская", L"Партызанская", L"Плошча Францішка Багушэвіча", L"Аэрадромная",
+                                         L"Неморшанскі сад", L"Слуцкі гасцінец" };
+        for (unsigned k = 0; k < sizeof MUST / sizeof MUST[0]; k++) CHECK(node_by_name(m, MUST[k]) >= 0, "нет станции «%ls»", MUST[k]);
+        CHECK(edge_of(m, L"Пятроўшчына", L"Малінаўка") >= 0 && edge_of(m, L"Кунцаўшчына", L"Каменная Горка") >= 0 &&
+              edge_of(m, L"Плошча Францішка Багушэвіча", L"Вакзальная") >= 0 && edge_of(m, L"Барысаўскі тракт", L"Уручча") >= 0, "новые перегоны");
     }
 }
 
@@ -164,8 +180,8 @@ static void test_rules(void)
     g.tech[tm] = 1;
     CHECK(citynet_state(&g, m) == NS_AVAILABLE, "с технологией в 1984 году метро доступно");
 
-    int eFar = edge_of(m, L"Парк Челюскинцев", L"Московская");
-    int eStart = edge_of(m, L"Площадь Ленина", L"Октябрьская");
+    int eFar = edge_of(m, L"Парк Чалюскінцаў", L"Маскоўская");
+    int eStart = edge_of(m, L"Плошча Леніна", L"Кастрычніцкая");
     CHECK(!citynet_can_build(&g, m, eFar), "первый перегон — только от первой станции");
     CHECK(citynet_can_build(&g, m, eStart), "перегон от «Октябрьской» можно строить");
     double gold0 = g.gold, ind0 = g.ind;
@@ -175,14 +191,14 @@ static void test_rules(void)
     CHECK(fabs(g.gold - (gold0 - cg)) < 1e-6 && fabs(g.ind - (ind0 - ci)) < 1e-6, "списаны казна и производство");
     CHECK(citynet_stations(&g, m) == 2 && citynet_edges_count(&g, m) == 1, "две станции после первого перегона");
     CHECK(!citynet_build(&g, m, eStart), "повторно не строится");
-    CHECK(citynet_node_station(&g, m, node_by_name(m, L"Октябрьская")), "станция «Октябрьская»");
-    /* вторая линия — с 1990 года, через пересадку «Октябрьская» — «Купаловская» */
-    int eL2 = edge_of(m, L"Немига", L"Купаловская");
+    CHECK(citynet_node_station(&g, m, node_by_name(m, L"Кастрычніцкая")), "станция «Кастрычніцкая»");
+    /* вторая линия — с 1990 года, через пересадку «Кастрычніцкая» — «Купалаўская» */
+    int eL2 = edge_of(m, L"Няміга", L"Купалаўская");
     CHECK(!citynet_can_build(&g, m, eL2), "вторая линия в 1984 году не строится");
     CHECK(citynet_cannot_build(&g, m, eL2) && wcsstr(citynet_cannot_build(&g, m, eL2), L"1990"), "причина — год линии");
     g.year = 1991; g.era = era_of_year(1991);
     CHECK(citynet_can_build(&g, m, eL2), "в 1991 году — от пересадки");
-    CHECK(!citynet_can_build(&g, m, edge_of(m, L"Пушкинская", L"Фрунзенская")), "оторванный перегон второй линии нельзя");
+    CHECK(!citynet_can_build(&g, m, edge_of(m, L"Маладзёжная", L"Фрунзенская")), "оторванный перегон второй линии нельзя");
     /* поздняя эпоха — дороже */
     int late = citynet_edge_gold(&g, m, eL2);
     g.year = 1984; g.era = era_of_year(1984);
@@ -196,7 +212,7 @@ static void test_rules(void)
     g.difficulty = 1;
     /* денег нет — нет перегона */
     g.gold = 1;
-    int eNext = edge_of(m, L"Октябрьская", L"Площадь Победы");
+    int eNext = edge_of(m, L"Кастрычніцкая", L"Плошча Перамогі");
     CHECK(citynet_can_build(&g, m, eNext) && !citynet_build(&g, m, eNext), "без денег не строится");
     CHECK(citynet_cannot_build(&g, m, eNext) && wcsstr(citynet_cannot_build(&g, m, eNext), L"казны"), "причина — казна");
     g.gold = 100000;
@@ -225,9 +241,9 @@ static void test_rules(void)
     citynet_project_built(&g, p, &rg, &ri);
     CHECK(rg == paid && fabs(g.gold - before - rg) < 1e-6 && ri > 0, "возврат за свой перегон %d (ожидали %d)", rg, paid);
     CHECK(citynet_edge_built(&g, m, eFar) && citynet_stations(&g, m) == 8, "после стройки — 8 станций");
-    CHECK(g.nets[m].nodes == citynet_station_mask(&g, m), "маска станций в сохранении");
+    CHECK((g.nets[m].nodes | (unsigned long long)g.nets[m].nodesHi << 32) == citynet_station_mask(&g, m), "маска станций в сохранении");
     /* старое сохранение со стройкой, но без перегонов: линия всё равно на схеме */
-    g.nets[m].edges = 0; g.nets[m].nodes = 0;
+    g.nets[m].edges = 0; g.nets[m].nodes = g.nets[m].nodesHi = 0;
     CHECK(citynet_stations(&g, m) == 8, "стройка сама даёт первую очередь");
 
     /* Витебский трамвай: 1898, технология «Электрический трамвай» */
@@ -283,10 +299,10 @@ static void test_save(void)
     g.tech[tech_index("metro")] = 1;
     g.tech[tech_index("tram")] = 1;
     int m = net_by_id("minsk_metro"), go = net_by_id("gomel_trolley");
-    citynet_build(&g, m, edge_of(m, L"Площадь Ленина", L"Октябрьская"));
-    citynet_build(&g, m, edge_of(m, L"Октябрьская", L"Площадь Победы"));
-    citynet_build(&g, m, edge_of(m, L"Институт культуры", L"Площадь Ленина"));
-    citynet_build(&g, m, edge_of(m, L"Немига", L"Купаловская"));
+    citynet_build(&g, m, edge_of(m, L"Плошча Леніна", L"Кастрычніцкая"));
+    citynet_build(&g, m, edge_of(m, L"Кастрычніцкая", L"Плошча Перамогі"));
+    citynet_build(&g, m, edge_of(m, L"Інстытут культуры", L"Плошча Леніна"));
+    citynet_build(&g, m, edge_of(m, L"Няміга", L"Купалаўская"));
     citynet_build(&g, go, 0);
     citynet_build(&g, go, 1);
     g.cutscenes |= CS_METRO_MINSK;
@@ -298,10 +314,35 @@ static void test_save(void)
     CHECK(game_load(&h, f), "загрузка");
     fclose(f);
     for (int n = 0; n < MAX_NETS; n++)
-        CHECK(h.nets[n].edges == g.nets[n].edges && h.nets[n].nodes == g.nets[n].nodes, "сеть %d после загрузки", n);
+        CHECK(h.nets[n].edges == g.nets[n].edges && h.nets[n].nodes == g.nets[n].nodes && h.nets[n].nodesHi == g.nets[n].nodesHi,
+              "сеть %d после загрузки", n);
     CHECK(citynet_stations(&h, m) == citynet_stations(&g, m) && citynet_stations(&h, m) >= 4, "станции метро после загрузки");
     CHECK(citynet_stations(&h, go) == 3, "троллейбус Гомеля после загрузки");
     CHECK(h.cutscenes & CS_METRO_MINSK, "заставка 1984 года отмечена");
+
+    /* сохранение версии 7: 24 станции метро, длинные перегоны (Грушаўка — Малінаўка, Каменная Горка — Пушкінская,
+     * Юбілейная плошча — Вакзальная) теперь из нескольких частей — после загрузки достроены все части */
+    setup(&g, 2021);
+    g.tech[tech_index("metro")] = 1;
+    g.nets[m].edges = 1ull << 0 | 1ull << 9 | 1ull << 10 | 1ull << 12 | 1ull << 17 | 1ull << 18 | 1ull << 19;
+    g.nets[m].nodes = 0xFFFFFFFFu; g.nets[m].nodesHi = 0xDEADu;   /* мусор в старом выравнивании */
+    g.version = 7;
+    f = tmpfile();
+    CHECK(f && game_save(&g, f), "сохранение версии 7");
+    if (!f) return;
+    rewind(f);
+    memset(&h, 0, sizeof h);
+    CHECK(game_load(&h, f), "загрузка версии 7");
+    fclose(f);
+    CHECK(h.version == GAME_VERSION, "версия после загрузки");
+    static const wchar_t *OLD7[] = { L"Малінаўка", L"Пятроўшчына", L"Міхалова", L"Грушаўка", L"Каменная Горка", L"Кунцаўшчына",
+                                     L"Спартыўная", L"Пушкінская", L"Маладзёжная", L"Фрунзенская", L"Плошча Францішка Багушэвіча",
+                                     L"Юбілейная плошча", L"Вакзальная" };
+    for (unsigned k = 0; k < sizeof OLD7 / sizeof OLD7[0]; k++)
+        CHECK(citynet_node_station(&h, m, node_by_name(m, OLD7[k])), "после версии 7 нет станции «%ls»", OLD7[k]);
+    CHECK(!citynet_node_station(&h, m, node_by_name(m, L"Уручча")) && !citynet_node_station(&h, m, node_by_name(m, L"Аэрадромная")),
+          "лишние станции после версии 7");
+    CHECK((h.nets[m].nodes | (unsigned long long)h.nets[m].nodesHi << 32) == citynet_station_mask(&h, m), "маска станций пересчитана");
 }
 
 int main(void)
