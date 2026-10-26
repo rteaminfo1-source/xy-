@@ -1,0 +1,4 @@
+# Данные заказов, переписка, ключи Platega — только на сервере
+_orders_data/
+# Ключ связи с rai.rteam.info (define RAI_ADMIN_KEY) — только на сервере
+_rai_key.php
