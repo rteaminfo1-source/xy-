@@ -83,11 +83,21 @@ const Ruler RULERS[] = {
 };
 const int RULER_COUNT = (int)(sizeof RULERS / sizeof RULERS[0]);
 
+/* правитель, чьё правление кончилось в первый год периода, не в нём, если в тот же год уже пришёл другой
+ * (1991: после Горбачёва — Шушкевич и независимая Беларусь) */
+static int left_at_start(int i, int year)
+{
+    if (RULERS[i].to != year || RULERS[i].from == year) return 0;
+    for (int k = 0; k < RULER_COUNT; k++)
+        if (k != i && RULERS[k].from == year) return 1;
+    return 0;
+}
+
 int rulers_in_period(int year, int nextYear, int *out, int max)
 {
     int n = 0;
     for (int i = 0; i < RULER_COUNT && n < max; i++)
-        if (RULERS[i].from < nextYear && RULERS[i].to >= year) out[n++] = i;
+        if (RULERS[i].from < nextYear && RULERS[i].to >= year && !left_at_start(i, year)) out[n++] = i;
     return n;
 }
 
