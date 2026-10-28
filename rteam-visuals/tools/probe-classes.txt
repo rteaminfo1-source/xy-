@@ -129,3 +129,33 @@ com.mojang.math.Matrix4f :: \b(Matrix4f|multiply|copy|setIdentity)\b
 net.minecraft.client.renderer.entity.state.EntityRenderState
 net.minecraft.client.renderer.state.CameraRenderState
 net.minecraft.client.renderer.state.LevelRenderState :: \b(cameraRenderState|lastEntityRenderStateCount|entityRenderStates|gameTime)\b
+
+# ---- round 2: GUI render states (1.21.6+), world submit API (1.21.9+), unobfuscated renames
+pkg net/minecraft/client/renderer/state/gui
+pkg net/minecraft/client/renderer/state/level
+pkg net/minecraft/client/renderer/feature
+pkg com/mojang/renderpearl/api
+pkg com/mojang/renderpearl/api/pipeline
+pkg com/mojang/renderpearl/api/vertex
+net.minecraft.client.gui.render.state.GuiRenderState :: \b(submitGuiElement|submitText|submitItem|up|down|nextStratum|submit\w*|forEachElement)\(
+net.minecraft.client.gui.render.state.GuiElementRenderState
+net.minecraft.client.gui.render.state.ScreenArea
+net.minecraft.client.gui.render.state.ColoredRectangleRenderState
+net.minecraft.client.renderer.state.gui.GuiRenderState :: \b(submitGuiElement|submitText|submitItem|up|down|nextStratum|submit\w*|forEachElement)\(
+net.minecraft.client.renderer.state.gui.GuiElementRenderState
+net.minecraft.client.renderer.state.gui.ScreenArea
+net.minecraft.client.renderer.state.gui.ColoredRectangleRenderState
+net.minecraft.client.gui.render.TextureSetup :: \b(noTexture|singleTexture|doubleTexture)\(
+net.minecraft.client.gui.navigation.ScreenRectangle :: \b(ScreenRectangle|intersection|transformMaxBounds|transformAxisAligned|empty)\(
+net.minecraft.client.renderer.CoreShaders :: \bPOSITION_COLOR\b
+net.minecraft.client.renderer.OrderedSubmitNodeCollector :: \b(submitCustomGeometry|submitShape|submitNameTag|submitText)\(
+net.minecraft.client.renderer.state.level.CameraRenderState :: \b(pos|orientation|blockPos|entityPos|initialized|xRot|yRot|projectionMatrix|viewRotationMatrix)\b
+net.minecraft.client.renderer.state.level.LevelRenderState :: \b(cameraRenderState|gameTime|entityRenderStates)\b
+net.minecraft.client.renderer.Lightmap :: \(
+net.minecraft.client.renderer.LightmapRenderStateExtractor :: \(
+net.minecraft.client.renderer.state.LightmapRenderState
+net.minecraft.client.renderer.feature.FeatureRenderDispatcher :: \b(renderAllFeatures|prepare\w*|render\w*)\(
+net.minecraft.client.renderer.GameRenderer :: \b(getMainCamera|mainCamera|getGameRenderState|gameRenderState|levelRenderState|getLevelRenderState|extract\w*|getSubmitNodeStorage|submitNodeStorage|getFeatureRenderDispatcher)\b
+net.minecraft.client.Camera :: \b(position|getPosition|getXRot|getYRot|rotation|isDetached|getEntity|entity|getMaxZoom|setup|xRot|yRot|move|getLookVector|alignWithEntity|extractRenderState)\b
+net.minecraft.client.renderer.ItemInHandRenderer :: \b(renderArmWithItem|submitArmWithItem|applyItemArmTransform|applyItemArmAttackTransform|renderHandsWithItems|submitHandsWithItems|renderPlayerArm)\(
+net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer :: \b(\w+)\(

@@ -23,8 +23,15 @@ jobs:
           distribution: temurin
           java-version: '25'
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: false
       - name: Dump API
         working-directory: rteam-visuals
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon -q -Pmc=${{ matrix.mc }} :${{ matrix.mc }}:rvDumpApi
+          # maven.fabricmc.net sometimes times out: retry
+          for i in 1 2 3; do
+            if ./gradlew --no-daemon -q -Pmc=${{ matrix.mc }} :${{ matrix.mc }}:rvDumpApi; then exit 0; fi
+            echo "attempt $i failed, retrying"; sleep 15
+          done
+          exit 1
