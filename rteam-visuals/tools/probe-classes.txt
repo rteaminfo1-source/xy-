@@ -159,3 +159,18 @@ net.minecraft.client.renderer.GameRenderer :: \b(getMainCamera|mainCamera|getGam
 net.minecraft.client.Camera :: \b(position|getPosition|getXRot|getYRot|rotation|isDetached|getEntity|entity|getMaxZoom|setup|xRot|yRot|move|getLookVector|alignWithEntity|extractRenderState)\b
 net.minecraft.client.renderer.ItemInHandRenderer :: \b(renderArmWithItem|submitArmWithItem|applyItemArmTransform|applyItemArmAttackTransform|renderHandsWithItems|submitHandsWithItems|renderPlayerArm)\(
 net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer :: \b(\w+)\(
+
+# ---- round 3
+net.minecraft.client.renderer.state.gui.GuiRenderState
+net.minecraft.client.renderer.state.gui.ColoredRectangleRenderState
+com.mojang.blaze3d.platform.InputConstants$Type
+net.minecraft.client.Options :: \b(hide\w*|isHidden\w*|guiHidden)\b
+net.minecraft.client.gui.Gui :: \b(hide\w*|isHidden\w*)\b
+net.minecraft.client.gui.Hud :: \b(hide\w*|isHidden\w*|isVisible)\b
+net.minecraft.client.gui.GuiGraphicsExtractor :: \b(innerFill|submit\w*|addElement|guiRenderState)\b
+net.minecraft.client.renderer.ItemInHandRenderer :: \bapplyItemArmTransform\(
+net.minecraft.client.renderer.state.level.FirstPersonHandsAndItemsRenderState
+net.minecraft.client.renderer.FirstPersonHandsAndItemsRenderer :: \b(apply\w*|submit\w*|render\w*)\(
+com.mojang.blaze3d.systems.RenderSystem :: \b(translatef|scalef|pushMatrix|popMatrix|enableAlphaTest|disableAlphaTest)\(
+net.minecraft.client.multiplayer.ClientLevel :: \b(getDayTime|getTimeOfDay|getSunAngle|getDefaultClockTime|clock\w*)\(
+net.minecraft.world.level.Level :: \b(getDayTime|getTimeOfDay|getSunAngle|getDefaultClockTime|clock\w*|getClock\w*)\(
