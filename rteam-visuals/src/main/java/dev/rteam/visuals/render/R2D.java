@@ -151,14 +151,14 @@ public final class R2D {
 		if (r[2] < r[0]) r[2] = r[0];
 		if (r[3] < r[1]) r[3] = r[1];
 		CLIPS.push(r);
-		Backend2D.setClip(context, r);
+		Backend2D.pushClip(context, r);
 	}
 
 	public static void popClip() {
 		flush();
 		if (CLIPS.isEmpty()) return;
 		CLIPS.pop();
-		Backend2D.setClip(context, currentClip());
+		Backend2D.popClip(context, currentClip());
 	}
 
 	private static float[] currentClip() {
@@ -169,7 +169,14 @@ public final class R2D {
 
 	public static void quad(float x0, float y0, int c0, float x1, float y1, int c1,
 							float x2, float y2, int c2, float x3, float y3, int c3) {
-		QUADS.add(X(x0), Y(y0), 0f, a(c0), X(x1), Y(y1), 0f, a(c1), X(x2), Y(y2), 0f, a(c2), X(x3), Y(y3), 0f, a(c3));
+		// keep the winding of vanilla quads (top-left, bottom-left, bottom-right, top-right)
+		// so nothing gets culled on versions where the GUI pipeline culls back faces
+		float cross = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
+		if (cross > 0f) {
+			QUADS.add(X(x0), Y(y0), 0f, a(c0), X(x3), Y(y3), 0f, a(c3), X(x2), Y(y2), 0f, a(c2), X(x1), Y(y1), 0f, a(c1));
+		} else {
+			QUADS.add(X(x0), Y(y0), 0f, a(c0), X(x1), Y(y1), 0f, a(c1), X(x2), Y(y2), 0f, a(c2), X(x3), Y(y3), 0f, a(c3));
+		}
 	}
 
 	public static void triangle(float x0, float y0, int c0, float x1, float y1, int c1, float x2, float y2, int c2) {

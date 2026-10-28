@@ -34,6 +34,28 @@ public abstract class HudModule extends Module {
 	/** Draws the element with its top-left corner at (0, 0); must set width/height. */
 	protected abstract void draw(float partialTick, boolean editor);
 
+	/** Whether there is something to show right now (outside the HUD editor). */
+	protected boolean visible() {
+		return true;
+	}
+
+	@Override
+	public void onRender2D(float partialTick) {
+		if (dev.rteam.visuals.gui.screen.HudEditor.isOpen() || !visible()) return;
+		renderAt(partialTick, false);
+	}
+
+	public void renderAt(float partialTick, boolean editor) {
+		dev.rteam.visuals.render.R2D.push();
+		dev.rteam.visuals.render.R2D.translate(x(), y());
+		dev.rteam.visuals.render.R2D.scale(scale.f());
+		try {
+			draw(partialTick, editor);
+		} finally {
+			dev.rteam.visuals.render.R2D.pop();
+		}
+	}
+
 	public float width() {
 		return width * scale.f();
 	}

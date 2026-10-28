@@ -153,6 +153,18 @@ public final class Mc {
 		return e.getDeltaMovement();
 	}
 
+	public static net.minecraft.world.entity.player.Inventory inventory(net.minecraft.world.entity.player.Player p) {
+		//#if MC >= 1.17
+		return p.getInventory();
+		//#else
+		return p.inventory;
+		//#endif
+	}
+
+	public static boolean inNether() {
+		return level() != null && level().dimension() == net.minecraft.world.level.Level.NETHER;
+	}
+
 	// ---- effects --------------------------------------------------------------------------------
 
 	public static MobEffect effect(MobEffectInstance inst) {

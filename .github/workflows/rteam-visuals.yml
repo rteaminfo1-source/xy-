@@ -1,0 +1,52 @@
+# Builds RTeam Visuals for every supported Minecraft version (one jar per version).
+name: RTeam Visuals build
+
+on:
+  push:
+    paths:
+      - 'rteam-visuals/**'
+      - '!rteam-visuals/tools/**'
+      - '.github/workflows/rteam-visuals.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        mc: [ '1.16.5', '1.17.1', '1.18.2', '1.19.2', '1.19.3', '1.19.4', '1.20.1', '1.20.2', '1.20.4', '1.20.6',
+              '1.21.1', '1.21.3', '1.21.4', '1.21.5', '1.21.8', '1.21.10', '1.21.11', '26.1.2', '26.2', '26.3' ]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: false
+      - name: Build
+        working-directory: rteam-visuals
+        run: |
+          chmod +x gradlew
+          for i in 1 2 3; do
+            if ./gradlew --no-daemon -Pmc=${{ matrix.mc }} :${{ matrix.mc }}:build > build.log 2>&1; then
+              echo "BUILD OK"; tail -5 build.log; exit 0
+            fi
+            # retry only when the failure was a download problem
+            if grep -qE "Could not (resolve|download|GET|HEAD)|Read timed out|Connection reset|connect timed out" build.log && ! grep -q "Compilation failed" build.log; then
+              echo "network problem, attempt $i, retrying"; sleep 20; continue
+            fi
+            break
+          done
+          echo "=== RV-ERRORS ${{ matrix.mc }} ==="
+          grep -E "\.java:[0-9]+: (error|warning)|error:|FAILURE|What went wrong|> " build.log | grep -v "^\s*$" | head -150
+          echo "=== RV-ERRORS-END ==="
+          exit 1
+      - uses: actions/upload-artifact@v7
+        if: success()
+        with:
+          name: rteam-visuals-${{ matrix.mc }}
+          path: rteam-visuals/build/dist/*.jar
+          if-no-files-found: error
