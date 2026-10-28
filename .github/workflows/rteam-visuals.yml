@@ -41,7 +41,8 @@ jobs:
             break
           done
           echo "=== RV-ERRORS ${{ matrix.mc }} ==="
-          grep -E "\.java:[0-9]+: (error|warning)|error:|FAILURE|What went wrong|> " build.log | grep -v "^\s*$" | head -150
+          grep -E -A4 "\.java:[0-9]+: error" build.log | head -250
+          grep -E "FAILURE|What went wrong|Exception|^> " build.log | grep -v "^> Task" | head -40
           echo "=== RV-ERRORS-END ==="
           exit 1
       - uses: actions/upload-artifact@v7
@@ -49,4 +50,22 @@ jobs:
         with:
           name: rteam-visuals-${{ matrix.mc }}
           path: rteam-visuals/build/dist/*.jar
+          if-no-files-found: error
+
+  # one download with the jars of every version that built
+  bundle:
+    needs: build
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: rteam-visuals-*
+          merge-multiple: true
+          path: jars
+      - run: ls -la jars
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rteam-visuals-all-versions
+          path: jars/*.jar
           if-no-files-found: error

@@ -75,7 +75,11 @@ public final class Keys {
 	public static String name(int key) {
 		if (key < 0) return "-";
 		try {
+			//#if MC >= 26.3
+			String s = InputConstants.Type.KEYBOARD.getOrCreate(key).getDisplayName().getString();
+			//#else
 			String s = InputConstants.Type.KEYSYM.getOrCreate(key).getDisplayName().getString();
+			//#endif
 			if (s != null && !s.isEmpty()) return s.length() > 12 ? s.substring(0, 12) : s;
 		} catch (RuntimeException ignored) {
 		}

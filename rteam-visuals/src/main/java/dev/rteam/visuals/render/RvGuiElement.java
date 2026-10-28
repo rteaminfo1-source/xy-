@@ -44,7 +44,11 @@ public final class RvGuiElement implements GuiElementRenderState {
 			if (b == null) return;
 		}
 		GuiRenderState state = ((GuiGraphicsAccessor) graphics).rv$guiRenderState();
+		//#if MC >= 26.1
+		state.addGuiElement(new RvGuiElement(q.copy(), sc, b));
+		//#else
 		state.submitGuiElement(new RvGuiElement(q.copy(), sc, b));
+		//#endif
 	}
 
 	//#if MC >= 1.21.9

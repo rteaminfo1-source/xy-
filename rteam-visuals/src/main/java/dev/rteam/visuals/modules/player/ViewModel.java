@@ -33,7 +33,11 @@ public final class ViewModel extends Module {
 		if (vm == null || !vm.isEnabled()) return;
 		float side = rightHand ? 1f : -1f;
 		pose.translate(vm.x.f() * side, vm.y.f(), vm.z.f());
-		//#if MC >= 1.19.3
+		//#if MC >= 26.3
+		pose.rotate(Axis.XP.rotationDegrees(vm.rx.f()));
+		pose.rotate(Axis.YP.rotationDegrees(vm.ry.f() * side));
+		pose.rotate(Axis.ZP.rotationDegrees(vm.rz.f() * side));
+		//#elseif MC >= 1.19.3
 		pose.mulPose(Axis.XP.rotationDegrees(vm.rx.f()));
 		pose.mulPose(Axis.YP.rotationDegrees(vm.ry.f() * side));
 		pose.mulPose(Axis.ZP.rotationDegrees(vm.rz.f() * side));
