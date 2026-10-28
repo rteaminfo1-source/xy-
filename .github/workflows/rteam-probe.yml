@@ -1,0 +1,30 @@
+# Prints the Minecraft API (javap) of the classes RTeam Visuals uses, for every supported version.
+name: RTeam Visuals API probe
+
+on:
+  push:
+    paths:
+      - 'rteam-visuals/tools/probe-classes.txt'
+      - '.github/workflows/rteam-probe.yml'
+  workflow_dispatch:
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        mc: [ '1.16.5', '1.17.1', '1.18.2', '1.19.2', '1.19.3', '1.19.4', '1.20.1', '1.20.2', '1.20.4', '1.20.6',
+              '1.21.1', '1.21.3', '1.21.4', '1.21.5', '1.21.8', '1.21.10', '1.21.11', '26.1.2', '26.2', '26.3' ]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Dump API
+        working-directory: rteam-visuals
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon -q -Pmc=${{ matrix.mc }} :${{ matrix.mc }}:rvDumpApi

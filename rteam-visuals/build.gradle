@@ -1,0 +1,172 @@
+import rv.Preprocessor
+
+import java.util.regex.Pattern
+import java.util.spi.ToolProvider
+import java.util.zip.ZipFile
+
+plugins {
+	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" apply false
+	id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
+}
+
+// Every subproject is one Minecraft version (see settings.gradle). All of them compile the same
+// sources from src/, after the //#if preprocessor picked the code for that version.
+subprojects { p ->
+	def mcVersion = p.property('minecraft_version').toString()
+	def mcNum = Preprocessor.parseVersion(mcVersion)
+	// 26.1+ is not obfuscated: no mappings, no remapping.
+	def obf = mcNum < 260000
+	def javaVer = mcNum < 11700 ? 8 : (mcNum < 11800 ? 16 : (mcNum < 12005 ? 17 : (obf ? 21 : 25)))
+	def loaderMin = mcNum < 12005 ? '0.14.0' : (obf ? '0.15.0' : '0.18.4')
+	def modId = rootProject.property('mod_id').toString()
+
+	apply plugin: obf ? 'net.fabricmc.fabric-loom-remap' : 'net.fabricmc.fabric-loom'
+
+	group = rootProject.property('maven_group')
+	version = "${rootProject.property('mod_version')}+mc${mcVersion}"
+	base {
+		archivesName = 'rteam-visuals'
+	}
+
+	java {
+		sourceCompatibility = JavaVersion.toVersion(javaVer)
+		targetCompatibility = JavaVersion.toVersion(javaVer)
+	}
+
+	tasks.withType(JavaCompile).configureEach {
+		options.release = javaVer
+		options.encoding = 'UTF-8'
+	}
+
+	dependencies {
+		minecraft "com.mojang:minecraft:${mcVersion}"
+		if (obf) {
+			mappings loom.officialMojangMappings()
+			modImplementation "net.fabricmc:fabric-loader:${rootProject.property('loader_version')}"
+		} else {
+			implementation "net.fabricmc:fabric-loader:${rootProject.property('loader_version')}"
+		}
+	}
+
+	// ---- preprocessing ---------------------------------------------------------------------
+	def ppDir = p.layout.buildDirectory.dir('rv-pp').get().asFile
+	def ppJava = new File(ppDir, 'java')
+	def ppRes = new File(ppDir, 'resources')
+	def srcJava = rootProject.file('src/main/java')
+	def srcRes = rootProject.file('src/main/resources')
+	def mixinPackage = 'dev.rteam.visuals.mixin'
+	def templateValues = [
+			version   : p.version.toString(),
+			mc_range  : p.property('mc_range').toString(),
+			mc_version: mcVersion,
+			java_min  : javaVer.toString(),
+			loader_min: loaderMin,
+	]
+
+	def preprocess = tasks.register('rvPreprocess') {
+		group = 'rteam'
+		description = "Picks the code for Minecraft ${mcVersion} out of src/."
+		inputs.dir(srcJava).withPropertyName('srcJava')
+		inputs.dir(srcRes).withPropertyName('srcRes')
+		inputs.property('templateValues', templateValues)
+		inputs.property('javaVer', javaVer)
+		outputs.dir(ppDir)
+		doLast {
+			p.delete(ppDir)
+			def vars = [MC: mcNum, JAVA: javaVer, OBF: obf ? 1 : 0]
+			def pre = new Preprocessor(vars)
+			pre.processTree(srcJava.toPath(), ppJava.toPath(), templateValues)
+			pre.processTree(srcRes.toPath(), ppRes.toPath(), templateValues)
+			def mixins = Preprocessor.findMixins(ppJava.toPath(), mixinPackage)
+			Preprocessor.writeMixinConfig(new File(ppRes, "${modId}.mixins.json").toPath(), mixinPackage, javaVer, mixins)
+		}
+	}
+
+	sourceSets {
+		main {
+			java.srcDirs = [ppJava]
+			resources.srcDirs = [ppRes]
+		}
+	}
+
+	tasks.named('compileJava') { dependsOn preprocess }
+	tasks.named('processResources') { dependsOn preprocess }
+
+	// ---- output ----------------------------------------------------------------------------
+	def finalJar = obf ? 'remapJar' : 'jar'
+	def dist = tasks.register('rvDist', Copy) {
+		group = 'rteam'
+		from(tasks.named(finalJar))
+		into(rootProject.layout.buildDirectory.dir('dist'))
+	}
+	tasks.named('build') { finalizedBy dist }
+
+	// ---- API probe: prints signatures of the Minecraft classes listed in tools/probe-classes.txt
+	tasks.register('rvDumpApi') {
+		group = 'rteam'
+		doLast {
+			def cpFiles = p.sourceSets.main.compileClasspath.files.findAll { it.exists() }
+			def cp = cpFiles.collect { it.absolutePath }.join(File.pathSeparator)
+			def mcJars = cpFiles.findAll { it.name.endsWith('.jar') }.findAll { f ->
+				def z = new ZipFile(f)
+				try {
+					return z.getEntry('net/minecraft/client/Minecraft.class') != null || z.getEntry('net/minecraft/world/level/Level.class') != null
+				} finally {
+					z.close()
+				}
+			}
+			def javap = ToolProvider.findFirst('javap').orElseThrow()
+			println "=== RV-DUMP-BEGIN ${mcVersion} (mc jars: ${mcJars*.name})"
+			rootProject.file('tools/probe-classes.txt').readLines().each { raw ->
+				def line = raw.trim()
+				if (line.isEmpty() || line.startsWith('#')) return
+				if (line.startsWith('pkg ')) {
+					def pkg = line.substring(4).trim()
+					def names = new TreeSet<String>()
+					mcJars.each { f ->
+						def z = new ZipFile(f)
+						try {
+							z.entries().each { e ->
+								def n = e.name
+								if (n.startsWith(pkg + '/') && n.endsWith('.class')) {
+									def rest = n.substring(pkg.length() + 1, n.length() - 6)
+									if (!rest.contains('/') && !rest.contains('$')) names << rest
+								}
+							}
+						} finally {
+							z.close()
+						}
+					}
+					println "@@ pkg ${pkg}: ${names.join(' ')}"
+					return
+				}
+				def parts = line.split('::', 2)
+				def cls = parts[0].trim()
+				def filter = parts.length > 1 ? Pattern.compile(parts[1].trim()) : null
+				def sw = new StringWriter()
+				def pw = new PrintWriter(sw)
+				javap.run(pw, pw, '-cp', cp, '-p', cls)
+				pw.flush()
+				def out = sw.toString().readLines()
+				if (out.any { it.contains('class not found') }) {
+					println "@@ ${cls} MISSING"
+					return
+				}
+				println "@@ ${cls}"
+				out.each { l ->
+					def t = l.trim()
+					if (t.isEmpty() || t == '}' || t.startsWith('Compiled from')) return
+					if (filter == null || t.endsWith('{') || filter.matcher(t).find()) println "  ${t}"
+				}
+			}
+			println "=== RV-DUMP-END ${mcVersion}"
+		}
+	}
+}
+
+// ./gradlew buildAll  -> jars for every version in build/dist
+tasks.register('buildAll') {
+	group = 'rteam'
+	description = 'Builds the mod for every Minecraft version in versions/.'
+	dependsOn subprojects.collect { "${it.path}:build" }
+}

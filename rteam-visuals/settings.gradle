@@ -1,0 +1,32 @@
+pluginManagement {
+	repositories {
+		maven {
+			name = 'Fabric'
+			url = 'https://maven.fabricmc.net/'
+		}
+		mavenCentral()
+		gradlePluginPortal()
+	}
+}
+
+rootProject.name = 'rteam-visuals'
+
+// Every folder in versions/ is one Minecraft version.
+// Build only some of them with -Pmc=1.20.1,1.21.4 (or the RV_MC environment variable).
+def available = new File(settingsDir, 'versions').listFiles()
+		.findAll { it.isDirectory() && new File(it, 'gradle.properties').exists() }
+		.collect { it.name }
+		.sort()
+def requested = (startParameter.projectProperties.get('mc') ?: System.getenv('RV_MC') ?: '')
+		.split(',')
+		.collect { it.trim() }
+		.findAll { !it.isEmpty() }
+def unknown = requested.findAll { !available.contains(it) }
+if (!unknown.isEmpty()) {
+	throw new GradleException("Unknown Minecraft version(s): ${unknown}. Available: ${available}")
+}
+
+(requested.isEmpty() ? available : requested).each { v ->
+	include(":$v")
+	project(":$v").projectDir = new File(settingsDir, "versions/$v")
+}

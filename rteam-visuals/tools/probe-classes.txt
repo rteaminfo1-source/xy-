@@ -1,0 +1,131 @@
+# API probe for CI: ./gradlew -Pmc=<v> :<v>:rvDumpApi
+# "pkg a/b/c" lists classes of a package; "Class :: regex" keeps only matching member lines.
+
+pkg net/minecraft/client
+pkg net/minecraft/client/gui
+pkg net/minecraft/client/gui/render
+pkg net/minecraft/client/gui/render/state
+pkg net/minecraft/client/gui/components
+pkg net/minecraft/client/input
+pkg net/minecraft/client/renderer
+pkg net/minecraft/client/renderer/rendertype
+pkg net/minecraft/client/renderer/state
+pkg net/minecraft/client/renderer/fog
+pkg net/minecraft/client/renderer/texture
+pkg com/mojang/blaze3d/vertex
+pkg com/mojang/blaze3d/systems
+pkg com/mojang/blaze3d/platform
+pkg com/mojang/blaze3d/pipeline
+pkg com/mojang/blaze3d
+pkg net/minecraft/resources
+pkg com/mojang/math
+
+# ---- client core
+net.minecraft.client.Minecraft :: \b(getInstance|player|level|screen|options|font|gameMode|gameRenderer|levelRenderer|particleEngine|getWindow|fps|getFps|setScreen|getDeltaFrameTime|getFrameTime|getTimer|timer|getDeltaTracker|deltaTracker|getCurrentServer|getConnection|isPaused|getTextureManager|getEntityRenderDispatcher|getItemRenderer|crosshairPickEntity|hitResult|gui|hud|renderBuffers|mouseHandler|keyboardHandler|getCameraEntity|textInputManager|onTextInputFocusChange|getMainRenderTarget|isWindowActive|tick|runTick|gameDirectory|getUser|getSingleplayerServer|isLocalServer|getSoundManager|stop|getLanguageManager|getBlockEntityRenderDispatcher|getEntityModels|getFramerateLimitTracker|isSameThread|execute|getProfiler)\b
+net.minecraft.client.gui.Gui
+net.minecraft.client.gui.Hud
+net.minecraft.client.gui.GuiGraphics
+net.minecraft.client.gui.GuiGraphicsExtractor
+net.minecraft.client.gui.GuiComponent
+net.minecraft.client.gui.screens.Screen
+net.minecraft.client.gui.components.events.GuiEventListener
+net.minecraft.client.gui.components.Renderable
+net.minecraft.client.gui.Font :: \b(draw|drawShadow|drawInBatch|width|lineHeight|split|plainSubstrByWidth|wordWrapHeight|isBidirectional|DisplayMode|prepareText)\b
+net.minecraft.client.gui.components.PlayerFaceRenderer
+net.minecraft.network.chat.Component :: \b(literal|nullToEmpty|translatable|getString|empty|getVisualOrderText)\b
+net.minecraft.network.chat.TextComponent :: TextComponent
+net.minecraft.util.FormattedCharSequence :: \b(forward|composite|codepoint)\b
+com.mojang.blaze3d.platform.InputConstants :: \b(isKeyDown|getKey|UNKNOWN|KEY_ESCAPE|KEY_RSHIFT|KEY_LSHIFT|KEY_BACKSPACE|KEY_RETURN|KEY_DELETE|KEY_LEFT|KEY_RIGHT|KEY_C|KEY_A|KEY_V|KEY_LCONTROL|KEY_RCONTROL|MOUSE_BUTTON_LEFT|MOUSE_BUTTON_RIGHT|MOUSE_BUTTON_MIDDLE|Type|Key)\b
+com.mojang.blaze3d.platform.InputConstants$Key :: \b(getName|getDisplayName|getValue|getType)\b
+com.mojang.blaze3d.platform.Window :: \b(getWindow|handle|getGuiScaledWidth|getGuiScaledHeight|getGuiScale|getWidth|getHeight|getScreenWidth|getScreenHeight|getFramebufferWidth|getFramebufferHeight|isFullscreen)\b
+net.minecraft.client.MouseHandler :: \b(xpos|ypos|isLeftPressed|isRightPressed|isMiddlePressed|onPress|onButton|onScroll|getScaledXPos|getScaledYPos|isMouseGrabbed|turnPlayer|handleAccumulatedMovement)\b
+net.minecraft.client.KeyboardHandler :: \b(keyPress|charTyped|setup)\b
+net.minecraft.client.input.KeyEvent
+net.minecraft.client.input.MouseButtonEvent
+net.minecraft.client.input.MouseButtonInfo
+net.minecraft.client.input.CharacterEvent
+net.minecraft.client.Options :: \b(gamma|fov|getCameraType|setCameraType|keyAttack|keyUse|keyUp|keyDown|keyLeft|keyRight|keyJump|keySprint|keyShift|keyZoom|hideGui|renderDebug|bobView|guiScale|sensitivity|smoothCamera|getFov|fovEffectScale)\b
+net.minecraft.client.OptionInstance :: \b(get|set|value)\b
+net.minecraft.client.KeyMapping :: \b(isDown|getKey|key|consumeClick|matches|matchesMouse|setDown|getName|clickCount)\b
+net.minecraft.client.CameraType
+net.minecraft.client.Camera
+net.minecraft.client.DeltaTracker
+net.minecraft.client.Timer
+
+# ---- rendering
+com.mojang.blaze3d.systems.RenderSystem :: \b(enableBlend|disableBlend|defaultBlendFunc|blendFunc|blendFuncSeparate|setShader|setShaderColor|color4f|enableDepthTest|disableDepthTest|depthMask|depthFunc|disableCull|enableCull|lineWidth|enableTexture|disableTexture|setShaderTexture|getModelViewStack|getModelViewMatrix|getProjectionMatrix|setProjectionMatrix|applyModelViewMatrix|enableScissor|disableScissor|getDevice|backupProjectionMatrix|restoreProjectionMatrix|pushMatrix|popMatrix|multMatrix|shadeModel|enableAlphaTest|disableAlphaTest|getDynamicUniforms|bindDefaultUniforms|getProjectionType|getShaderLights|setShaderFogStart|setShaderFogEnd|getShaderFog|setShaderFog|bindTexture|activeTexture|getProjectionMatrixBuffer|outputColorTextureOverride)\b
+com.mojang.blaze3d.vertex.PoseStack
+com.mojang.blaze3d.vertex.PoseStack$Pose
+com.mojang.blaze3d.vertex.VertexConsumer
+com.mojang.blaze3d.vertex.BufferBuilder :: \b(begin|end|build|buildOrThrow|vertex|addVertex|color|setColor|endVertex|BufferBuilder|isBuilding|clear|discard)\b
+com.mojang.blaze3d.vertex.Tesselator
+com.mojang.blaze3d.vertex.BufferUploader
+com.mojang.blaze3d.vertex.MeshData :: \b(close|drawState|vertexBuffer)\b
+com.mojang.blaze3d.vertex.DefaultVertexFormat :: \b(POSITION_COLOR|POSITION_TEX_COLOR|POSITION_COLOR_NORMAL|POSITION_TEX|POSITION_COLOR_LIGHTMAP|POSITION_COLOR_NORMAL_LINE_WIDTH)\b
+com.mojang.blaze3d.vertex.VertexFormat$Mode
+com.mojang.blaze3d.PrimitiveTopology
+net.minecraft.client.renderer.RenderType :: \b(debugQuads|lines|lineStrip|debugLineStrip|debugFilledBox|debugStructureQuads|gui|guiOverlay|textBackground|LINES|LINE_STRIP|create|guiTextured|guiTexturedOverlay|debugSectionQuads|lightning|translucent|secondaryBlockOutline|draw|SMALL_BUFFER_SIZE|TRANSIENT_BUFFER_SIZE|debugTriangleFan|linesTranslucent|debugQuadsThroughWalls|endBatch|setupRenderState|clearRenderState|format|mode|bufferSize|getRenderPipeline|pipeline|outputTarget|sortOnUpload)\b
+net.minecraft.client.renderer.rendertype.RenderType :: \b(debugQuads|lines|lineStrip|debugLineStrip|debugFilledBox|LINES|create|draw|SMALL_BUFFER_SIZE|TRANSIENT_BUFFER_SIZE|format|mode|bufferSize|pipeline|getRenderPipeline|outputTarget)\b
+net.minecraft.client.renderer.rendertype.RenderTypes :: \b(debugQuads|lines|lineStrip|debugLineStrip|debugFilledBox|lightning|debugQuadsThroughWalls|linesTranslucent|textBackground|gui|guiTextured|LINES|debugTriangleFan|secondaryBlockOutline|translucent)\b
+net.minecraft.client.renderer.RenderPipelines :: \b(DEBUG_QUADS|DEBUG_FILLED_BOX|DEBUG_FILLED_SNIPPET|LINES|LINE_STRIP|DEBUG_LINE_STRIP|GUI|GUI_TEXTURED|GUI_TEXTURED_PREMULTIPLIED_ALPHA|LIGHTNING|register|DEBUG_TRIANGLE_FAN|POSITION_COLOR|LINES_TRANSLUCENT|GUI_INVERT|GUI_TEXT_HIGHLIGHT)\b
+com.mojang.blaze3d.pipeline.RenderPipeline :: \b(builder|getLocation|getVertexFormat|getVertexFormatMode|getPrimitiveTopology)\b
+net.minecraft.client.renderer.MultiBufferSource
+net.minecraft.client.renderer.MultiBufferSource$BufferSource
+net.minecraft.client.renderer.RenderBuffers
+net.minecraft.client.renderer.SubmitNodeCollector :: \b(submitCustomGeometry|submitShape|submit\w*)\b
+net.minecraft.client.renderer.SubmitNodeCollector$CustomGeometryRenderer
+net.minecraft.client.renderer.GameRenderer :: \b(bobHurt|bobView|getFov|renderLevel|render|getProjectionMatrix|pick|getMainCamera|getRenderDistance|resetProjectionMatrix|renderItemInHand|getDepthFar|getPositionColorShader|getPositionTexColorShader|getPositionTexShader|getRendertypeLinesShader|lightTexture|itemInHandRenderer|mainRenderTarget|getMinecraft|close|extract\w*|getLevelRenderState|guiRenderer|fogRenderer|getGameRenderState|zoom|zoomX|zoomY|getNightVisionScale|minecraft|levelProjectionMatrixBuffer|hudProjectionMatrixBuffer|submitNodeStorage|featureRenderDispatcher|getFeatureRenderDispatcher|getSubmitNodeStorage)\b
+net.minecraft.client.renderer.LevelRenderer :: \b(renderLevel|render|renderHitOutline|renderTargetBlockOutline|renderLineBox|renderShape|addMainPass|lambda\$\w+|renderBuffers|renderSectionLayer|renderEntities|renderEntity|extract\w*|submit\w*|level|minecraft|levelRenderState|renderBlockOutline|finalizeLevelRender|renderSky|renderClouds|renderSnowAndRain|renderWeather|getCloudsTarget)\b
+net.minecraft.client.renderer.ItemInHandRenderer :: \b(renderArmWithItem|applyItemArmTransform|applyItemArmAttackTransform|renderHandsWithItems|renderItem|renderPlayerArm|submit\w*|extract\w*|mainHandHeight|offHandHeight|swingArm|applyEatTransform)\b
+net.minecraft.client.renderer.LightTexture :: \b(updateLightTexture|update|tick|getBrightness|calculateDarknessScale|turnOnLightLayer|getDarknessGamma|notGamma)\b
+net.minecraft.client.renderer.Lightmap :: \b(update\w*|tick|getBrightness|render|extract\w*)\b
+net.minecraft.client.renderer.ScreenEffectRenderer :: \b(renderFire|renderScreenEffect|renderTex|renderWater|submit\w*|extract\w*|render\w*)\b
+net.minecraft.client.renderer.FogRenderer :: \b(setupFog|setupColor|levelFogColor|setupNoFog|computeFogColor|getFogColor|setupFogColor)\b
+net.minecraft.client.renderer.fog.FogRenderer :: \b(setupFog|setupColor|computeFogColor|getBuffer|updateBuffer|setupFogColor|computeFogColorWithoutTint)\b
+net.minecraft.client.renderer.texture.OverlayTexture
+net.minecraft.client.renderer.texture.DynamicTexture
+net.minecraft.client.renderer.texture.AbstractTexture :: \b(getId|bind|setFilter|getTexture|getTextureView|sampler|setClamp|close)\b
+net.minecraft.client.renderer.texture.TextureManager :: \b(register|getTexture|bindForSetup|release)\b
+com.mojang.blaze3d.platform.NativeImage :: \b(NativeImage|setPixelRGBA|setPixel|setPixelABGR|getPixelRGBA|getPixel|close|upload)\b
+net.minecraft.resources.ResourceLocation :: \b(ResourceLocation|fromNamespaceAndPath|withDefaultNamespace|tryParse|parse|of|tryBuild)\b
+net.minecraft.resources.Identifier :: \b(Identifier|fromNamespaceAndPath|withDefaultNamespace|tryParse|parse|of|tryBuild)\b
+net.minecraft.client.renderer.entity.ItemRenderer :: \b(renderAndDecorateItem|renderGuiItemDecorations|renderGuiItem|renderStatic|blitOffset)\b
+net.minecraft.client.renderer.entity.LivingEntityRenderer :: \b(getOverlayCoords|setupRotations|scale|getWhiteOverlayProgress|render|submit|extractRenderState|getModelTint|isBodyVisible)\b
+net.minecraft.client.renderer.entity.EntityRenderDispatcher :: \b(render|submit|distanceToSqr|camera|getRenderer|shouldRender|setRenderShadow|cameraOrientation|extractEntity|setRenderHitBoxes)\b
+net.minecraft.client.renderer.entity.EntityRenderer :: \b(render|submit|shouldShowName|renderNameTag|submitNameTag|extractRenderState|getRenderOffset)\b
+net.minecraft.client.particle.ParticleEngine :: \b(createTrackingEmitter|createParticle|add|crack|destroy)\b
+net.minecraft.core.particles.ParticleTypes :: \b(CRIT|ENCHANTED_HIT|HEART|TOTEM_OF_UNDYING|TOTEM|FLAME|END_ROD|SOUL_FIRE_FLAME|ELECTRIC_SPARK|DAMAGE_INDICATOR|CLOUD|FIREWORK|SNOWFLAKE|GLOW|ANGRY_VILLAGER|HAPPY_VILLAGER|WITCH|DRAGON_BREATH|NOTE|PORTAL|SCRAPE|WAX_ON|WAX_OFF|SWEEP_ATTACK|SMOKE|LARGE_SMOKE|SOUL|CHERRY_LEAVES|EXPLOSION)\b
+net.minecraft.client.Screenshot :: \b(grab|takeScreenshot)\b
+
+# ---- world / entities
+net.minecraft.client.multiplayer.ClientLevel :: \b(getSkyColor|getDayTime|getTimeOfDay|getRainLevel|getThunderLevel|getCloudColor|entitiesForRendering|players|getStarBrightness|getSkyDarken|effects|getGameTime|clientLevelData|levelData|getLevelData|setDayTime|getSkyFlashTime|environmentAttributes)\b
+net.minecraft.client.multiplayer.ClientLevel$ClientLevelData
+net.minecraft.world.level.Level :: \b(getRainLevel|getThunderLevel|isRaining|isThundering|getDayTime|getTimeOfDay|getGameTime|dimensionType|getSunAngle|isClientSide|isClientSide\w*|getLevelData|levelData|players|rainLevel|thunderLevel|getDefaultClockTime|environmentAttributes)\b
+net.minecraft.world.level.storage.LevelData :: \b(getDayTime|getGameTime|isRaining|isThundering)\b
+net.minecraft.client.multiplayer.MultiPlayerGameMode :: \b(attack|getPlayerMode|startDestroyBlock|useItem)\b
+net.minecraft.client.player.LocalPlayer :: \b(connection|input|aiStep|tick|swing|getFieldOfViewModifier|isMovingSlowly|hurtTime)\b
+net.minecraft.client.player.AbstractClientPlayer :: \b(getSkinTextureLocation|getSkin|getPlayerInfo|getFieldOfViewModifier|isCapeLoaded|getCloakTextureLocation)\b
+net.minecraft.world.entity.LivingEntity :: \b(jumpFromGround|getHealth|getMaxHealth|getAbsorptionAmount|hurtTime|deathTime|getActiveEffects|getArmorValue|getArmorSlots|getItemBySlot|getMainHandItem|getOffhandItem|getCurrentSwingDuration|swingTime|swinging|attackAnim|getAttackAnim|isFallFlying|getUseItem|isBlocking|getLastHurtByMob|getLastHurtMob|hurtDuration|invulnerableTime|getEffect|hasEffect|yBodyRot|yHeadRot|getScale|isBaby|onGround|isDeadOrDying|getJumpPower|walkAnimation)\b
+net.minecraft.world.entity.Entity :: \b(getX|getY|getZ|xo|yo|zo|xOld|yOld|zOld|getBbWidth|getBbHeight|position|getEyeHeight|onGround|isOnGround|getDeltaMovement|getYRot|getXRot|tickCount|getBoundingBox|distanceTo|getName|getDisplayName|isAlive|level|getCommandSenderWorld|getLevel|isInvisible|isSpectator|getId|getUUID|isShiftKeyDown|isCrouching|isSprinting|isSwimming|isPassenger|getVehicle|getTeamColor|getEyePosition|getViewVector|xRotO|yRotO|isRemoved|blockPosition|walkDist|getType|isInWater|isOnFire|getScoreboardName|isCurrentlyGlowing|getPosition|getRotationVector|getYHeadRot|position|oldPosition|getPositionOld|trackingPosition)\b
+net.minecraft.world.entity.player.Player :: \b(getInventory|inventory|getGameProfile|isCreative|isSpectator|getAttackStrengthScale|getCooldowns|getFoodData|experienceLevel|getAbilities|abilities|getMainArm|isLocalPlayer|getArmorSlots|getName|displayName)\b
+net.minecraft.world.entity.player.Inventory :: \b(getItem|getContainerSize|armor|items|getSelected|selected|getArmor|getSelectedItem|getSelectedSlot|offhand|getNonEquipmentItems|INVENTORY_SIZE|SLOT_OFFHAND|getFreeSlot)\b
+net.minecraft.world.entity.EquipmentSlot
+net.minecraft.world.item.ItemStack :: \b(isEmpty|getCount|getDamageValue|getMaxDamage|isDamageableItem|getHoverName|getItem|isDamaged|getBarWidth|getBarColor|getDisplayName|EMPTY|getItemName)\b
+net.minecraft.world.effect.MobEffectInstance :: \b(getEffect|getDuration|getAmplifier|isAmbient|isVisible|showIcon|getDescriptionId|isInfiniteDuration|endsWithin)\b
+net.minecraft.world.effect.MobEffect :: \b(getColor|getDisplayName|getDescriptionId|isBeneficial|getCategory)\b
+net.minecraft.world.effect.MobEffectUtil :: \b(formatDuration)\b
+net.minecraft.core.Holder :: \b(value|unwrapKey|is)\b
+net.minecraft.client.multiplayer.ClientPacketListener :: \b(getPlayerInfo|getOnlinePlayers|getServerData|serverBrand|getLevel|getConnection)\b
+net.minecraft.client.multiplayer.PlayerInfo :: \b(getLatency|getSkinLocation|getSkin|getProfile|getGameMode|getTabListDisplayName)\b
+net.minecraft.client.multiplayer.ServerData :: \b(ip|name|ping)\b
+net.minecraft.client.resources.PlayerSkin :: \b(texture|body|textureUrl)\b
+net.minecraft.world.entity.player.PlayerSkin :: \b(texture|body|textureUrl)\b
+net.minecraft.world.phys.Vec3 :: \b(Vec3|x|y|z|add|subtract|scale|length|distanceTo|lerp|ZERO|horizontalDistance)\b
+net.minecraft.util.Mth :: \b(lerp|clamp|sin|cos|wrapDegrees|floor|sqrt|rotLerp|frac|PI|DEG_TO_RAD|hsvToRgb|abs)\b
+net.minecraft.world.phys.EntityHitResult :: \b(getEntity)\b
+com.mojang.math.Axis
+com.mojang.math.Vector3f :: \b(XP|YP|ZP|rotation|rotationDegrees)\b
+com.mojang.math.Matrix4f :: \b(Matrix4f|multiply|copy|setIdentity)\b
+net.minecraft.client.renderer.entity.state.EntityRenderState
+net.minecraft.client.renderer.state.CameraRenderState
+net.minecraft.client.renderer.state.LevelRenderState :: \b(cameraRenderState|lastEntityRenderStateCount|entityRenderStates|gameTime)\b

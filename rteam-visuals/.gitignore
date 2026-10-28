@@ -1,0 +1,16 @@
+.gradle/
+build/
+buildSrc/.gradle/
+buildSrc/build/
+versions/*/build/
+versions/*/.gradle/
+run/
+versions/*/run/
+out/
+*.iml
+.idea/
+.vscode/
+.classpath
+.project
+.settings/
+bin/

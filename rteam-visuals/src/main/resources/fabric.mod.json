@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "rteamvisuals",
+  "version": "${version}",
+  "name": "RTeam Visuals",
+  "description": "Visuals mod: HUD, world effects and a beautiful menu (Right Shift). Built for Minecraft ${mc_version}.",
+  "authors": ["RTeam"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/rteamvisuals/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["dev.rteam.visuals.RteamVisuals"]
+  },
+  "mixins": ["rteamvisuals.mixins.json"],
+  "depends": {
+    "fabricloader": ">=${loader_min}",
+    "minecraft": "${mc_range}",
+    "java": ">=${java_min}"
+  }
+}
